@@ -15,3 +15,15 @@ None. The file tree correctly maps all internal python and C++ modules. There ar
 1. Open `CompanionOS/python/companion_controller.py`.
 2. Locate the Spotify Playback state loop (around Line 140).
 3. Modify the lyrics network payload to slice the array: `send_udp(f"LYRICS:{json.dumps(lyrics[:2])}")` so only the first two functional lines are transmitted across the UDP socket, ensuring the packet stays well beneath the 511-byte hardware cap.
+
+[AUDIT OBSERVATIONS - 2026-03-20]
+1. **Touchscreen vs Sensors Integration**: 
+   - Capacitive Touch Sensors (`TOUCH_LEFT`, `TOUCH_RIGHT`) are fully configured in `touch.h` to cycle `changePage()` on the ESP8266.
+   - Touchscreen (`XPT2046`) is partially implemented: tapping the screen triggers play/pause/prev/next inside `STATE_SPOTIFY` and cycles animations in `STATE_EYES`. 
+   - **Missing**: Swipe-to-change-page gestures are not implemented in `touch.h`. Page navigation relies entirely on the external hardware pins.
+2. **Lyrics Dual-Line Processing Bug**:
+   - In `network.h`, the `LYRICS:` UDP packet is parsed into a JSON array, but the Arduino only extracts `array[0].as<String>()` and assigns it to `currentLyrics`. The second active line sent by Python is silently dropped, preventing multi-line lyrics rendering in `pages.h`.
+3. **Visualizer Rendering Bug**:
+   - In `pages.h` -> `updateVisualizer()`, the screen rendering logic draws vertical cyan rectangles for the faux-EQ but only ever erases a 10px strip (`tft.fillRect(20, 80, 200, 10, COLOR_BG);`). This will cause the display to quickly fill up with a solid cyan block that never decays back to black.
+4. **Debounce Blocking Loop**:
+   - `touch.h` calls `delay(300)` when a touch button is pressed. This completely halts the `loop()` thread, freezing all animations (like eye blinking) and blocking UDP packet listening for 300ms causing potential missed data.

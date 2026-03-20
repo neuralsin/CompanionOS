@@ -9,6 +9,7 @@
 extern String currentTrack;
 extern String currentArtist;
 extern String currentLyrics;
+extern String currentLyricsLine2;
 extern int playProgress;
 extern int playDuration;
 extern bool isPlaying;
@@ -34,7 +35,8 @@ void redrawSpotifyPartial() {
   
   // Lyrics
   tft.setTextColor(TFT_LIGHTGREY);
-  tft.drawCentreString(currentLyrics.substring(0, 25), SCREEN_W/2, 215, 2);
+  tft.drawCentreString(currentLyrics.substring(0, 25), SCREEN_W/2, 205, 2);
+  tft.drawCentreString(currentLyricsLine2.substring(0, 25), SCREEN_W/2, 220, 2);
   
   // Progress Bar
   tft.drawRect(20, 240, 200, 10, TFT_WHITE);
@@ -230,8 +232,8 @@ void updateVisualizer() {
   
   // Draw new peak
   tft.fillRect(x, 260 - mappedHeight, 15, mappedHeight, TFT_CYAN);
-  // Erase top slightly to simulate gravity drop
-  tft.fillRect(20, 80, 200, 10, COLOR_BG); 
+  // Erase trail above peak directly to simulate gravity drop decay
+  tft.fillRect(x, 80, 15, 180 - mappedHeight, COLOR_BG); 
 }
 
 #endif

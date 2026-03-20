@@ -1,0 +1,9 @@
+{
+    "python.defaultInterpreterPath": "C:\\Users\\shaan\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+    "python.analysis.extraPaths": [
+        "./CompanionOS/python"
+    ],
+    "python.autoComplete.extraPaths": [
+        "./CompanionOS/python"
+    ]
+}

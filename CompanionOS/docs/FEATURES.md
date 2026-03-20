@@ -38,7 +38,7 @@ You can cycle through these pages using the physical Left/Right capacitive touch
 - **Top Bar:** "Spotify Player".
 - **Album Art (Y: 40-160):** A 120x120 pixel perfectly mapped RGB565 canvas. The Python controller downloads the image and chunks it out to the ESP8266 where it is painted pixel-by-pixel.
 - **Track Metadata (Y: 170-200):** Centered text displaying the current Track Name (Green) and Artist Name (White).
-- **Synchronized Lyrics (Y: 215):** The active line of the song parsed from Musixmatch (Light Grey).
+- **Synchronized Lyrics (Y: 215):** The active line of the song parsed from the local Spotify Lyrics proxy (Light Grey).
 - **Progress Bar (Y: 240):** A live-updating horizontal bar mapping current millisecond progress against total track duration.
 - **Transport Controls (Y: 270):** Three distinct touch targets (Prev, Play/Pause, Next).
 

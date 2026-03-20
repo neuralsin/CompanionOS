@@ -34,7 +34,7 @@
 
 ### PART 4: PYTHON CONTROLLER
 4.1 Python Environment Setup  
-4.2 Getting API Keys (Spotify, GitHub, Musixmatch)  
+4.2 Getting API Keys (Spotify, GitHub)  
 4.3 Configuration Files  
 4.4 Running the Controller  
 

@@ -19,6 +19,7 @@ String pcIPStr = DEFAULT_PC_IP; // Fallback
 String currentTrack = "";
 String currentArtist = "";
 String currentLyrics = "";
+String currentLyricsLine2 = "";
 int playProgress = 0;
 int playDuration = 100;
 bool isPlaying = false;
@@ -134,8 +135,14 @@ void handleCommand(String msg) {
         JsonArray array = doc.as<JsonArray>();
         if (array.size() > 0) {
           currentLyrics = array[0].as<String>();
+          if (array.size() > 1) {
+            currentLyricsLine2 = array[1].as<String>();
+          } else {
+            currentLyricsLine2 = "";
+          }
         } else {
           currentLyrics = "♪ Instrumental ♪";
+          currentLyricsLine2 = "";
         }
         redrawSpotifyPartial();
       }

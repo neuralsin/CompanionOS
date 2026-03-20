@@ -54,12 +54,18 @@ void setup() {
 }
 
 void loop() {
+  // Unthrottled IO for precise touch and zero-latency UDP
   handleNetwork();
   handleTouch();
-  if (currentState == STATE_EYES) {
-    updateEyes();
-  } else if (currentState == STATE_VISUALIZER) {
-    updateVisualizer();
+  
+  // Non-blocking UI Frame Timer (~20 FPS)
+  static unsigned long lastFrameTime = 0;
+  if (millis() - lastFrameTime >= 50) {
+    lastFrameTime = millis();
+    if (currentState == STATE_EYES) {
+      updateEyes();
+    } else if (currentState == STATE_VISUALIZER) {
+      updateVisualizer();
+    }
   }
-  delay(50); 
 }

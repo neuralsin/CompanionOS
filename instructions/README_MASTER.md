@@ -125,13 +125,13 @@ A **fully functional desk companion** with:
 ✓ Virtual environment setup
 ✓ Package installation (pip requirements)
 ✓ Getting Spotify API keys (with screenshots)
-✓ Getting Musixmatch API keys
 ✓ Getting GitHub tokens
 ✓ Complete config.json template
 ✓ Full Python controller code (800+ lines)
-✓ Spotify integration (OAuth, track info)
-✓ Lyrics fetching (Musixmatch)
-✓ Album art processing (RGB565 conversion)
+✓ Spotify integration (OAuth, track info, playback controls)
+  - Album art processing (RGB565 conversion)
+  - Lyrics fetching (local proxy API)
+  - Desktop notifications
 ✓ UDP communication
 ✓ GitHub API integration
 ✓ Running and testing
@@ -140,11 +140,11 @@ A **fully functional desk companion** with:
 **Sections:**
 - 4.1 Python Installation (every step)
 - 4.2 Setting Up Project Folder
-- 4.3 Creating Virtual Environment
-- 4.4 Installing Required Packages
-- 4.5 Getting API Keys (detailed screenshots)
-  - Spotify Developer Dashboard
-  - Musixmatch Developer Portal
+  - Set up Python virtual environment
+  - Install dependencies via pip
+  - Get API keys (Spotify, GitHub) (detailed screenshots)
+  - Spotify Developer Portal
+  - GitHub Developer Settings
   - GitHub Personal Access Tokens
 - 4.6 Creating Configuration File
 - 4.7 Companion Controller - Complete Code

@@ -6,12 +6,12 @@ Lyrics are fetched from a local Spotify Lyrics API proxy (akashrchandran/spotify
 
 import os
 import sys
-import requests
+import requests  # type: ignore
 import json
 from io import BytesIO
-from PIL import Image
-import spotipy
-from spotipy.oauth2 import SpotifyOAuth
+from PIL import Image  # type: ignore
+import spotipy  # type: ignore
+from spotipy.oauth2 import SpotifyOAuth  # type: ignore
 
 
 class SpotifyIntegration:
@@ -108,10 +108,10 @@ class SpotifyIntegration:
 
     def get_lyrics(
         self, track_name: str, artist_name: str, track_id: str | None = None
-    ) -> list[str]:
+    ) -> list[dict]:
         """Fetch lyrics from a local spotify-lyrics-api proxy (akashrchandran/spotify-lyrics-api)."""
         if not self.lyrics_enabled or not track_id:
-            return ["♪ Lyrics unavailable ♪ (Disabled or Missing ID)"]
+            return [{"time": 0, "words": "♪ Lyrics unavailable ♪ (Disabled or Missing ID)"}]
 
         try:
             url = "http://localhost:8080/"
@@ -123,15 +123,28 @@ class SpotifyIntegration:
                 if not data.get("error"):
                     lines = data.get("lines", [])
                     if lines:
-                        return [
-                            line.get("words", "")
-                            for line in lines
-                            if line.get("words")
-                        ]
-            return ["♪ Instrumental ♪"]
+                        parsed = []
+                        for l in lines:
+                            words = l.get("words", "").strip()
+                            if words:
+                                time_tag = l.get("timeTag", "00:00.00")
+                                try:
+                                    m, s = time_tag.split(":")
+                                    sec = s
+                                    ms_val = 0
+                                    if "." in s:
+                                        sec, ms_str = s.split(".")
+                                        ms_val = int(ms_str.ljust(3, "0")[:3])
+                                    time_ms = int(m) * 60000 + int(sec) * 1000 + ms_val
+                                    parsed.append({"time": time_ms, "words": words})
+                                except Exception:
+                                    parsed.append({"time": 0, "words": words})
+                        if parsed:
+                            return parsed
+            return [{"time": 0, "words": "♪ Instrumental ♪"}]
         except Exception as e:
             print(f"Lyrics Engine (Local API) Error: {e}")
-            return ["♪ Lyrics unavailable ♪"]
+            return [{"time": 0, "words": "♪ Lyrics unavailable ♪"}]
 
     def process_album_art(self, image_url: str, size: int = 120) -> bytes | None:
         try:

@@ -138,7 +138,6 @@ CompanionOS/
 {
   "spotify_client_id": "your_id",
   "spotify_client_secret": "your_secret",
-  "musixmatch_api_key": "your_key",
   "github_token": "your_token",
   "esp_ip": "192.168.1.123"
 }

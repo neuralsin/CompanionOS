@@ -17,14 +17,14 @@ import socket
 from datetime import datetime
 import threading
 
-import dotenv
+import dotenv  # type: ignore
 dotenv.load_dotenv()
 
 # Ensure local modules are importable
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from spotify_integration import SpotifyIntegration  # noqa: E402
-from github_integration import GitHubIntegration  # noqa: E402
+from spotify_integration import SpotifyIntegration  # type: ignore # noqa: E402
+from github_integration import GitHubIntegration  # type: ignore # noqa: E402
 
 CONFIG_FILE = "config.json"
 
@@ -110,6 +110,8 @@ def main():
     print("Monitoring playback & connections...")
     
     current_track_id = None
+    current_lyrics = []
+    last_sent_lyrics = None
     last_github_check: float = 0.0
     last_notes_check: float = 0.0
     last_notes_content = []
@@ -173,10 +175,11 @@ def main():
                     send_udp(f"TRACK:{json.dumps(info)}")
                     
                     if spotify_service.lyrics_enabled:
-                        lyrics = spotify_service.get_lyrics(track['name'], track['artist'], track['id'])
-                        # Fix UDP Overflow: Only send the active synchronized lines, not the whole sheet
-                        send_udp(f"LYRICS:{json.dumps(lyrics[:2])}")
-                    
+                        current_lyrics = spotify_service.get_lyrics(track['name'], track['artist'], track['id'])
+                        last_sent_lyrics = None
+                    else:
+                        current_lyrics = []
+                        last_sent_lyrics = None
                     if track['album_art_url']:
                         art_data = spotify_service.process_album_art(track['album_art_url'])
                         if art_data:
@@ -194,6 +197,25 @@ def main():
                 if track:
                     state = {'playing': track['is_playing'], 'progress': track['progress_ms']}
                     send_udp(f"STATE:{json.dumps(state)}")
+                    
+                    if spotify_service.lyrics_enabled and current_lyrics:
+                        active_lines = []
+                        for idx, line in enumerate(current_lyrics):
+                            if line['time'] > track['progress_ms']:
+                                start_idx = max(0, idx - 1)
+                                end_idx = min(len(current_lyrics), start_idx + 2)
+                                active_lines = [current_lyrics[i]['words'] for i in range(start_idx, end_idx)]  # type: ignore
+                                break
+                        else:
+                            start_idx = max(0, len(current_lyrics) - 2)
+                            active_lines = [current_lyrics[i]['words'] for i in range(start_idx, len(current_lyrics))]  # type: ignore
+                            
+                        if not active_lines:
+                            active_lines = ["♪ Instrumental ♪"]
+                            
+                        if active_lines != last_sent_lyrics:
+                            last_sent_lyrics = active_lines
+                            send_udp(f"LYRICS:{json.dumps(active_lines)}")
             
             time.sleep(SPOTIFY_POLL)
             
