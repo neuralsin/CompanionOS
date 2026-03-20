@@ -1,0 +1,37 @@
+{
+  "_comment": "Companion OS Configuration - Edit with your keys",
+  
+  "spotify": {
+    "client_id": "abc123def456ghi789jkl012mno345pq",
+    "client_secret": "pqr678stu901vwx234yz567abc890def",
+    "redirect_uri": "http://localhost:8888/callback",
+    "scope": "user-read-playback-state user-modify-playback-state"
+  },
+  
+  "musixmatch": {
+    "api_key": "1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p"
+  },
+  
+  "github": {
+    "username": "yourusername",
+    "token": "ghp_abc123def456ghi789jkl012mno345pqr678"
+  },
+  
+  "network": {
+    "esp_ip": "192.168.1.123",
+    "esp_port_rx": 8888,
+    "esp_port_tx": 8889,
+    "pc_port_rx": 8889
+  },
+  
+  "features": {
+    "spotify_enabled": true,
+    "github_enabled": true,
+    "lyrics_enabled": true
+  },
+  
+  "update_intervals": {
+    "spotify_poll_seconds": 1,
+    "github_refresh_minutes": 60
+  }
+}
