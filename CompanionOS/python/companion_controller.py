@@ -2,10 +2,10 @@
 """
 ═══════════════════════════════════════════════════════════
   COMPANION OS - Python Controller v2.0 (MODULAR)
-  
-  Controls ESP8266 desk companion
-  Integrates Spotify, GitHub, and Musixmatch APIs
-  Uses modular architecture and dotenv for secure secrets.
+
+  Controls ESP8266 desk companion.
+  Integrates Spotify, GitHub, and a local Lyrics API proxy.
+  Uses modular architecture and python-dotenv for secure secrets.
 ═══════════════════════════════════════════════════════════
 """
 
@@ -17,15 +17,14 @@ import socket
 from datetime import datetime
 import threading
 
-# Use python-dotenv to override config with secure local overrides
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
+import dotenv
+dotenv.load_dotenv()
 
-from spotify_integration import SpotifyIntegration
-from github_integration import GitHubIntegration
+# Ensure local modules are importable
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from spotify_integration import SpotifyIntegration  # noqa: E402
+from github_integration import GitHubIntegration  # noqa: E402
 
 CONFIG_FILE = "config.json"
 
@@ -43,8 +42,6 @@ SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID", config['spotify']['client_id'
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", config['spotify']['client_secret'])
 SPOTIFY_REDIRECT_URI = config['spotify']['redirect_uri']
 SPOTIFY_SCOPE = config['spotify']['scope']
-
-MUSIXMATCH_KEY = os.getenv("MUSIXMATCH_KEY", config['musixmatch']['api_key'])
 
 GITHUB_USERNAME = os.getenv("GITHUB_USERNAME", config['github']['username'])
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", config['github'].get('token', ''))
@@ -68,7 +65,6 @@ spotify_service = SpotifyIntegration(
     client_secret=SPOTIFY_CLIENT_SECRET,
     redirect_uri=SPOTIFY_REDIRECT_URI,
     scope=SPOTIFY_SCOPE,
-    musixmatch_key=MUSIXMATCH_KEY,
     lyrics_enabled=config['features']['lyrics_enabled']
 )
 
@@ -114,10 +110,10 @@ def main():
     print("Monitoring playback & connections...")
     
     current_track_id = None
-    last_github_check = 0
-    last_notes_check = 0
+    last_github_check: float = 0.0
+    last_notes_check: float = 0.0
     last_notes_content = []
-    last_time_sync = 0
+    last_time_sync: float = 0.0
     
     notes_file = os.path.join(os.path.dirname(__file__), "notes.txt")
     if not os.path.exists(notes_file):
@@ -139,7 +135,13 @@ def main():
                 last_notes_check = now
                 try:
                     with open(notes_file, "r") as f:
-                        lines = [l.strip() for l in f.readlines() if l.strip()][:4]
+                        lines_raw = f.readlines()
+                        lines = []
+                        for l in lines_raw:
+                            if l.strip():
+                                lines.append(l.strip())
+                                if len(lines) == 4:
+                                    break
                         if lines != last_notes_content:
                             last_notes_content = lines
                             send_udp(f"NOTES:{json.dumps(lines)}")
@@ -171,7 +173,7 @@ def main():
                     send_udp(f"TRACK:{json.dumps(info)}")
                     
                     if spotify_service.lyrics_enabled:
-                        lyrics = spotify_service.get_lyrics(track['name'], track['artist'])
+                        lyrics = spotify_service.get_lyrics(track['name'], track['artist'], track['id'])
                         # Fix UDP Overflow: Only send the active synchronized lines, not the whole sheet
                         send_udp(f"LYRICS:{json.dumps(lyrics[:2])}")
                     

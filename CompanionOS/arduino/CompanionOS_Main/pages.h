@@ -123,17 +123,15 @@ void completeAlbumArt() {
 void drawEyesPage() {
   drawEyes();
   drawTopBar("Companion OS");
-  drawPageIndicator(0, 4);
+  drawPageIndicator(0, 6);
 }
 
 void drawSpotifyPage() {
   tft.fillScreen(COLOR_BG);
   drawTopBar("Spotify Player");
-  drawPageIndicator(1, 4);
+  drawPageIndicator(1, 6);
 
-  // Blank art box
   tft.drawRect(artX - 1, artY - 1, 122, 122, TFT_DARKGREY);
-
   redrawSpotifyPartial();
 
   drawButton(20, 270, 60, 40, "Prev", TFT_DARKGREY);
@@ -144,21 +142,62 @@ void drawSpotifyPage() {
 void drawGithubPage() {
   tft.fillScreen(COLOR_BG);
   drawTopBar("GitHub Stats");
-  drawPageIndicator(2, 4);
+  drawPageIndicator(2, 6);
   redrawGithubPartial();
 }
 
 void drawNotesPage() {
   tft.fillScreen(COLOR_BG);
   drawTopBar("Quick Notes");
-  drawPageIndicator(3, 4);
-
-  tft.setTextColor(TFT_YELLOW);
-  tft.drawString("* Stay hydrated", 10, 50, 2);
-  tft.drawString("* Check emails", 10, 80, 2);
-  tft.drawString("* Fix bugs", 10, 110, 2);
-  tft.drawString("* Call mom", 10, 140, 2);
+  drawPageIndicator(3, 6);
+  redrawNotesPartial();
 }
+
+// ── NEW: AUDIO VISUALIZER ────────────────────────────────
+void drawVisualizerPage() {
+  tft.fillScreen(COLOR_BG);
+  drawTopBar("Audio Visualizer");
+  drawPageIndicator(4, 6);
+  
+  // Draw base frequency lines
+  for (int i=0; i<10; i++) {
+    int x = 20 + (i * 20);
+    tft.fillRect(x, 260, 15, 4, TFT_DARKGREY);
+  }
+}
+
+void drawSettingsPage() {
+  tft.fillScreen(COLOR_BG);
+  drawTopBar("System Monitor");
+  drawPageIndicator(5, 6);
+  
+  tft.setTextColor(TFT_WHITE);
+  tft.drawString("Network IP:", 20, 60, 2);
+  tft.setTextColor(TFT_GREEN);
+  tft.drawString(WiFi.localIP().toString(), 20, 80, 4);
+
+  tft.setTextColor(TFT_WHITE);
+  tft.drawString("Free Memory (RAM):", 20, 130, 2);
+  tft.setTextColor(TFT_CYAN);
+  tft.drawNumber(ESP.getFreeHeap(), 20, 150, 4);
+  
+  tft.setTextColor(TFT_WHITE);
+  tft.drawString("System Uptime:", 20, 200, 2);
+  
+  unsigned long secs = millis() / 1000;
+  int h = secs / 3600;
+  int m = (secs % 3600) / 60;
+  int s = secs % 60;
+  char upBuf[16];
+  sprintf(upBuf, "%02dh %02dm %02ds", h, m, s);
+  
+  tft.setTextColor(TFT_YELLOW);
+  tft.drawString(upBuf, 20, 220, 4);
+}
+
+// ═══════════════════════════════════════════════════════════
+// STATE ORCHESTRATION
+// ═══════════════════════════════════════════════════════════
 
 void renderCurrentPage() {
   switch(currentState) {
@@ -166,15 +205,33 @@ void renderCurrentPage() {
     case STATE_SPOTIFY: drawSpotifyPage(); break;
     case STATE_GITHUB: drawGithubPage(); break;
     case STATE_NOTES: drawNotesPage(); break;
+    case STATE_VISUALIZER: drawVisualizerPage(); break;
+    case STATE_SETTINGS: drawSettingsPage(); break;
   }
 }
 
 void changePage(int direction) {
   int next = (int)currentState + direction;
-  if (next >= 4) next = 0;
-  if (next < 0) next = 3;
+  if (next >= 6) next = 0;
+  if (next < 0) next = 5;
   currentState = (AppState)next;
   renderCurrentPage();
+}
+
+// Visualizer continuous loop called from main sketch
+void updateVisualizer() {
+  int sample = analogRead(MIC_PIN);
+  int mappedHeight = map(sample, 0, 1024, 0, 180);
+  if (mappedHeight < 0) mappedHeight = 0;
+  
+  // Randomly distribute to create a fake EQ since we don't have FFT
+  int bar = random(0, 10);
+  int x = 20 + (bar * 20);
+  
+  // Draw new peak
+  tft.fillRect(x, 260 - mappedHeight, 15, mappedHeight, TFT_CYAN);
+  // Erase top slightly to simulate gravity drop
+  tft.fillRect(20, 80, 200, 10, COLOR_BG); 
 }
 
 #endif

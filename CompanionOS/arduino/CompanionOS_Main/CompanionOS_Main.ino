@@ -58,6 +58,8 @@ void loop() {
   handleTouch();
   if (currentState == STATE_EYES) {
     updateEyes();
+  } else if (currentState == STATE_VISUALIZER) {
+    updateVisualizer();
   }
   delay(50); 
 }

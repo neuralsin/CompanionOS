@@ -19,7 +19,9 @@ enum AppState {
   STATE_EYES,
   STATE_SPOTIFY,
   STATE_GITHUB,
-  STATE_NOTES
+  STATE_NOTES,
+  STATE_VISUALIZER,
+  STATE_SETTINGS
 };
 
 extern AppState currentState;
