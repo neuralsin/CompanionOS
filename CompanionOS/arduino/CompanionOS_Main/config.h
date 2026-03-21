@@ -9,6 +9,10 @@
 // If it fails to connect, it will create an Access Point called "CompanionOS-Setup".
 // Connect to that AP to configure your WiFi network securely, eliminating placeholders.
 
+// Hardcoded WiFi Credentials
+const char* WIFI_SSID = "stuart";
+const char* WIFI_PASS = "12345678";
+
 // Network Settings
 // Broadcast UDP will be used initially, or you can supply the PC IP directly if stable.
 const char* DEFAULT_PC_IP = "192.168.1.100";  
@@ -28,8 +32,8 @@ const int UDP_PORT_TX = 8889;
 #define ENABLE_MIC true
 
 // Display constants
-#define SCREEN_W 240
-#define SCREEN_H 320
+#define SCREEN_W 320
+#define SCREEN_H 240
 
 // Colors
 #define COLOR_BG 0x0000      // Black

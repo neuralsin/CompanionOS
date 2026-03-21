@@ -368,9 +368,9 @@ Note: Premium recommended for full API access, but Free works for basic features
    App name: Desk Companion
    App description: Personal desk companion system
    Website: http://localhost (or leave blank)
-   Redirect URI: http://localhost:8888/callback
+   Redirect URI: http://127.0.0.1:8888/callback
    
-   ⚠️ Redirect URI must be EXACTLY: http://localhost:8888/callback
+   ⚠️ Redirect URI must be EXACTLY: http://127.0.0.1:8888/callback
    
    Which API/SDKs are you planning to use?
    [✓] Web API
@@ -400,7 +400,7 @@ Note: Premium recommended for full API access, but Free works for basic features
    - We'll use these shortly
    
 6. Scroll down to "Redirect URIs"
-7. Verify it shows: http://localhost:8888/callback
+7. Verify it shows: http://127.0.0.1:8888/callback
 8. If not, click "Edit Settings" and add it
 ```
 
@@ -555,7 +555,7 @@ In python\ folder, create file: config.json
   "spotify": {
     "client_id": "abc123def456ghi789jkl012mno345pq",
     "client_secret": "pqr678stu901vwx234yz567abc890def",
-    "redirect_uri": "http://localhost:8888/callback",
+    "redirect_uri": "http://127.0.0.1:8888/callback",
     "scope": "user-read-playback-state user-modify-playback-state"
   },
   
@@ -1150,7 +1150,7 @@ Monitoring Spotify playback...
 ```
 1. Verify Client ID and Secret are correct
 2. No extra spaces in config.json
-3. Redirect URI must be: http://localhost:8888/callback
+3. Redirect URI must be: http://127.0.0.1:8888/callback
 4. Check caps lock (credentials are case-sensitive)
 ```
 

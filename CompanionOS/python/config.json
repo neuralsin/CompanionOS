@@ -4,7 +4,7 @@
   "spotify": {
     "client_id": "abc123def456ghi789jkl012mno345pq",
     "client_secret": "pqr678stu901vwx234yz567abc890def",
-    "redirect_uri": "http://localhost:8888/callback",
+    "redirect_uri": "http://127.0.0.1:8888/callback",
     "scope": "user-read-playback-state user-modify-playback-state"
   },
   

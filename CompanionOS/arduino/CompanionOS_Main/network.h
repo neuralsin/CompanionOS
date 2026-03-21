@@ -1,11 +1,13 @@
 #ifndef NETWORK_H
 #define NETWORK_H
 
-#include "globals.h"
 #include <ESP8266WiFi.h>
+// ⚠️ WiFiManager MUST be included BEFORE globals.h/TFT_eSPI to prevent the FS_NO_GLOBALS bug in the ESP8266 3.1.2 core!
 #include <WiFiManager.h>
 #include <WiFiUdp.h>
-#include <ArduinoJson.h> // REQUIRED NOW for safe parsing
+#include <ArduinoJson.h> 
+
+#include "globals.h"
 #include "eyes.h"
 
 // ═══════════════════════════════════════════════════════════
@@ -45,14 +47,11 @@ void setupWiFi() {
   tft.setTextColor(TFT_WHITE);
   tft.drawCentreString("Connecting WiFi...", SCREEN_W/2, SCREEN_H/2, 2);
   
-  WiFiManager wifiManager;
-  wifiManager.setDebugOutput(false);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
   
-  if (!wifiManager.autoConnect("CompanionOS-Setup")) {
-    Serial.println("Failed to connect and hit timeout. Rebooting...");
-    delay(3000);
-    ESP.restart();
-    delay(5000);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
   }
 
   Serial.println(F(" OK"));
@@ -82,9 +81,23 @@ void sendCommand(String cmd) {
   Serial.println(cmd);
 }
 
+bool pcFound = false;
+unsigned long lastDiscoveryShout = 0;
+
 void handleNetwork() {
+  // If we haven't found the PC yet, shout an automated Discovery Packet every 3 seconds
+  if (!pcFound && millis() - lastDiscoveryShout > 3000) {
+    udp.beginPacket("255.255.255.255", UDP_PORT_TX);
+    const char* hello = "HELLO_COMPANION";
+    udp.write(hello, strlen(hello));
+    udp.endPacket();
+    lastDiscoveryShout = millis();
+  }
+
   int packetSize = udp.parsePacket();
   if (packetSize) {
+    pcFound = true; // The moment we hear from Python, we stop shouting permanently!
+    
     IPAddress remoteIP = udp.remoteIP();
     pcIPStr = remoteIP.toString();
     

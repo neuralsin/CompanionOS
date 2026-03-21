@@ -30,9 +30,9 @@ enum Emotion {
 extern Emotion currentEmotion;
 
 // ── Layout Constants ─────────────────────────────────────
-#define EYE_Y        155
-#define LEFT_EYE_X   70
-#define RIGHT_EYE_X  170
+#define EYE_Y        120  // Centered on 240px vertical
+#define LEFT_EYE_X   100  // Spread on 320px horizontal
+#define RIGHT_EYE_X  220  // Spread on 320px horizontal
 #define EYE_RX       38   // Horizontal radius
 #define EYE_RY       46   // Vertical radius
 #define PUPIL_R      12

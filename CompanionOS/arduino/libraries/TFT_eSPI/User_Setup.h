@@ -82,7 +82,7 @@
 
 // ─── Colour Depth & Order ──────────────────────────────────────────────
 // 16-bit RGB565 format
-#define TFT_RGB_ORDER TFT_RGB          // RGB pixel order (try TFT_BGR if colors wrong)
+#define TFT_RGB_ORDER TFT_BGR          // Changed to BGR to fix inverted color bug
 
 // ─── Font Support ──────────────────────────────────────────────────────
 // Load fonts needed for the companion interface

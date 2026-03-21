@@ -183,7 +183,7 @@ def main():
                     if track['album_art_url']:
                         art_data = spotify_service.process_album_art(track['album_art_url'])
                         if art_data:
-                            chunk_size = 400
+                            chunk_size = 200 # Fixed: Max 512 byte ESP Buffer. 200 bytes = 400 hex chars + headers = ~415 bytes.
                             total_chunks = (len(art_data) + chunk_size - 1) // chunk_size
                             send_udp(f"ART_START:{total_chunks}")
                             time.sleep(0.02)

@@ -26,25 +26,25 @@ void redrawSpotifyPartial() {
   if (currentState != STATE_SPOTIFY) return;
   
   // Clear the text area below the album art
-  tft.fillRect(0, 170, SCREEN_W, 85, COLOR_BG);
+  tft.fillRect(0, 145, SCREEN_W, 95, COLOR_BG);
   
   tft.setTextColor(TFT_GREEN);
-  tft.drawCentreString(currentTrack.substring(0, 20), SCREEN_W/2, 170, 2);
+  tft.drawCentreString(currentTrack.substring(0, 20), SCREEN_W/2, 145, 2);
   tft.setTextColor(TFT_WHITE);
-  tft.drawCentreString(currentArtist.substring(0, 20), SCREEN_W/2, 190, 2);
+  tft.drawCentreString(currentArtist.substring(0, 20), SCREEN_W/2, 160, 2);
   
   // Lyrics
   tft.setTextColor(TFT_LIGHTGREY);
-  tft.drawCentreString(currentLyrics.substring(0, 25), SCREEN_W/2, 205, 2);
-  tft.drawCentreString(currentLyricsLine2.substring(0, 25), SCREEN_W/2, 220, 2);
+  tft.drawCentreString(currentLyrics.substring(0, 25), SCREEN_W/2, 175, 2);
+  tft.drawCentreString(currentLyricsLine2.substring(0, 25), SCREEN_W/2, 190, 2);
   
   // Progress Bar
-  tft.drawRect(20, 240, 200, 10, TFT_WHITE);
+  tft.drawRect(60, 205, 200, 10, TFT_WHITE);
   if (playDuration > 0) {
     int w = map(playProgress, 0, playDuration, 0, 196);
     if (w < 0) w = 0;
     if (w > 196) w = 196;
-    tft.fillRect(22, 242, w, 6, TFT_GREEN);
+    tft.fillRect(62, 207, w, 6, TFT_GREEN);
   }
 }
 
@@ -82,7 +82,7 @@ void redrawNotesPartial() {
 
 bool receivingArt = false;
 int artX = (SCREEN_W - 120) / 2;
-int artY = 40;
+int artY = 20;
 
 void prepareAlbumArt() {
   if (currentState == STATE_SPOTIFY) {
@@ -136,9 +136,9 @@ void drawSpotifyPage() {
   tft.drawRect(artX - 1, artY - 1, 122, 122, TFT_DARKGREY);
   redrawSpotifyPartial();
 
-  drawButton(20, 270, 60, 40, "Prev", TFT_DARKGREY);
-  drawButton(90, 270, 60, 40, "Play", TFT_GREEN);
-  drawButton(160, 270, 60, 40, "Next", TFT_DARKGREY);
+  drawButton(60, 218, 60, 20, "Prev", TFT_DARKGREY);
+  drawButton(130, 218, 60, 20, "Play", TFT_GREEN);
+  drawButton(200, 218, 60, 20, "Next", TFT_DARKGREY);
 }
 
 void drawGithubPage() {
@@ -163,8 +163,8 @@ void drawVisualizerPage() {
   
   // Draw base frequency lines
   for (int i=0; i<10; i++) {
-    int x = 20 + (i * 20);
-    tft.fillRect(x, 260, 15, 4, TFT_DARKGREY);
+    int x = 30 + (i * 26);
+    tft.fillRect(x, 220, 15, 4, TFT_DARKGREY);
   }
 }
 

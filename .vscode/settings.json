@@ -5,5 +5,7 @@
     ],
     "python.autoComplete.extraPaths": [
         "./CompanionOS/python"
-    ]
+    ],
+    "python.terminal.useEnvFile": true,
+    "python.envFile": "${workspaceFolder}/CompanionOS/python/.env"
 }
