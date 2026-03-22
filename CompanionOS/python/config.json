@@ -12,7 +12,7 @@
   },
   "weather": {
     "api_key": "6de5bf77b8e74ae2a71171844260101",
-    "city": "auto:ip",
+    "city": "Chennai, Tamil Nadu",
     "units": "metric"
   },
   "network": {

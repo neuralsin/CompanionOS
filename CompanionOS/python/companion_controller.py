@@ -98,6 +98,51 @@ def send_udp_bytes(packet):
     except Exception as e:
         pass
 
+current_lyrics = []  # Make global so background thread can update it
+last_sent_lyrics = None
+
+def fetch_heavy_assets(track_name, artist_name, track_id, album_art_url):
+    """Background thread to process lyrics and album art without blocking UDP STATE updates."""
+    global current_lyrics
+    
+    # 1. Fetch Lyrics (Slow HTTP Call to LRCLib)
+    if spotify_service.lyrics_enabled:
+        current_lyrics = spotify_service.get_lyrics(track_name, artist_name, track_id)
+    else:
+        current_lyrics = []
+        
+    # 2. Fetch and Process Album Art (Slow HTTP Image CDN + Resize Array Math)
+    if album_art_url:
+        try:
+            album_size = 96
+            pixels = spotify_service.process_album_art(album_art_url, size=album_size)
+            if not pixels: return
+            
+            send_udp("ART_START:")
+            time.sleep(0.05)   # Allow ESP memory clear margin
+            
+            pixels_per_chunk = album_size * 2 # EXACTLY 2 full visual rows of pixels
+            
+            # Convert normal RGB565 to raw byte array
+            flat_bytes = []
+            for c in pixels:
+                flat_bytes.append((c >> 8) & 0xFF) # High byte
+                flat_bytes.append(c & 0xFF)        # Low byte
+            byte_array = bytes(flat_bytes)
+            
+            for i in range(0, len(byte_array), pixels_per_chunk * 2):
+                chunk_data = byte_array[i:i+(pixels_per_chunk*2)]  # type: ignore
+                idx = i // (pixels_per_chunk * 2)
+                
+                # Custom Binary Packet Header: 0xFE identifies raw binary over UDP
+                packet = bytes([0xFE, (idx >> 8) & 0xFF, idx & 0xFF]) + chunk_data
+                send_udp_bytes(packet)
+                time.sleep(0.005)  
+                
+            send_udp("ART_COMPLETE:")
+        except Exception as e:
+            print(f"Album art transmission error: {e}")
+
 
 def fetch_weather():
     """Fetch weather from weatherapi.com"""
@@ -350,8 +395,8 @@ def main():
     threading.Thread(target=start_notes_server, daemon=True).start()
     print("Monitoring playback & connections...")
     
+    global current_lyrics
     current_track_id = None
-    current_lyrics = []
     last_sent_lyrics = None
     last_github_check: float = 0.0
     last_notes_check: float = 0.0
@@ -486,42 +531,15 @@ def main():
                     }
                     send_udp(f"TRACK:{json.dumps(info)}")
                     
-                    if spotify_service.lyrics_enabled:
-                        current_lyrics = spotify_service.get_lyrics(track['name'], track['artist'], track['id'])
-                        last_sent_lyrics = None
-                    else:
-                        current_lyrics = []
-                        last_sent_lyrics = None
-                    
-                    if track['album_art_url']:
-                        try:
-                            hex_pixels = spotify_service.process_album_art(track['album_art_url'])
-                            send_udp("ART_START:")
-                            time.sleep(0.05)   # Allow ESP memory clear margin
-                            
-                            pixels = [p[0] for p in hex_pixels]
-                            album_size = 96
-                            pixels_per_chunk = album_size * 2 # EXACTLY 2 full visual rows of pixels
-                            
-                            # Convert normal RGB565 to raw byte array
-                            flat_bytes = []
-                            for c in pixels:
-                                flat_bytes.append((c >> 8) & 0xFF) # High byte
-                                flat_bytes.append(c & 0xFF)        # Low byte
-                            byte_array = bytes(flat_bytes)
-                            
-                            for i in range(0, len(byte_array), pixels_per_chunk * 2):
-                                chunk_data = byte_array[i:i+(pixels_per_chunk*2)]  # type: ignore
-                                idx = i // (pixels_per_chunk * 2)
-                                
-                                # Custom Binary Packet Header: 0xFE identifies raw binary over UDP
-                                packet = bytes([0xFE, (idx >> 8) & 0xFF, idx & 0xFF]) + chunk_data
-                                send_udp_bytes(packet)  # type: ignore
-                                time.sleep(0.005)  
-                                
-                            send_udp("ART_COMPLETE:")
-                        except Exception as e:
-                            print(f"Album art transmission error: {e}")
+
+                    # Fire-and-forget background thread for slow LRCLib and Image CDN fetches!
+                    # This prevents the 20-30 second delay where the progress bar freezes waiting for downloads.
+                    current_lyrics = []  # Instantly wipe old lyrics from screen during transition
+                    threading.Thread(
+                        target=fetch_heavy_assets, 
+                        args=(track['name'], track['artist'], track['id'], track['album_art_url']),
+                        daemon=True
+                    ).start()
                 
                 if track:
                     state = {'playing': track['is_playing'], 'progress': track['progress_ms']}

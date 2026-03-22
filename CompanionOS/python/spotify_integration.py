@@ -149,21 +149,21 @@ class SpotifyIntegration:
             print(f"Lyrics Engine (LRCLIB) Error: {e}")
             return [{"time": 0, "words": "♪ Lyrics unavailable ♪"}]
 
-    def process_album_art(self, image_url: str, size: int = 120) -> str | None:
-        """Returns a hex string where every 4 chars = one RGB565 pixel."""
+    def process_album_art(self, image_url: str, size: int = 96) -> list[int] | None:
+        """Returns a list of RGB565 integer pixels."""
         try:
             response = requests.get(image_url, timeout=10)
             img = Image.open(BytesIO(response.content))
             img = img.resize((size, size), Image.Resampling.LANCZOS)
             img = img.convert("RGB")
 
-            hex_str: str = ""
+            pixels = []
             for y in range(size):
                 for x in range(size):
                     r, g, b = img.getpixel((x, y))  # type: ignore
                     rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
-                    hex_str += f"{rgb565:04X}"  # type: ignore
-            return hex_str
+                    pixels.append(rgb565)
+            return pixels
         except Exception as e:
             print(f"Album Art Processing Error: {e}")
             return None
