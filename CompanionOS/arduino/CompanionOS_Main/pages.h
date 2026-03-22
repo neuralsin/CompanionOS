@@ -262,40 +262,33 @@ void redrawSpotifyPartial() {
     
     int yC = cardY + 35;
     
-    auto drawLyricWrapped = [&](String text, int x, int &y_cursor, uint16_t color) {
-      if (text.length() == 0) return;
-      tft.setTextColor(color, 0x0821);
-      int start = 0;
-      int maxLen = 15; 
-      while (start < (int)text.length()) {
-        int end = start + maxLen;
-        if (end > (int)text.length()) {
-          end = text.length();
-        } else {
-          int lastSpace = text.lastIndexOf(' ', end);
-          if (lastSpace > start + 3) end = lastSpace; // Wrap at space if reasonable
-        }
-        tft.drawString(text.substring(start, end), x, y_cursor, 2);
-        y_cursor += 16;
-        start = end;
-        while(start < (int)text.length() && text[start] == ' ') start++;
-      }
-      y_cursor += 4; // Margin below block
-    };
-    
     // Previous lyric (dim)
     if (prevLyricsLine.length() > 0) {
-      drawLyricWrapped(prevLyricsLine, cardX + 8, yC, 0x4208);
+      tft.setTextColor(0x4208, 0x0821);
+      String p1 = prevLyricsLine.substring(0, 12);
+      String p2 = prevLyricsLine.length() > 12 ? prevLyricsLine.substring(12, 24) : "";
+      tft.drawString(p1, cardX + 8, yC, 2); yC += 16;
+      if (p2.length() > 0) { tft.drawString(p2, cardX + 8, yC, 2); yC += 16; }
+      yC += 8; // Margin
     } else {
       yC += 24; // Empty line padding
     }
     
     // Current lyric (bright, bold substitute)
-    drawLyricWrapped(currentLyrics, cardX + 8, yC, TFT_WHITE);
+    tft.setTextColor(TFT_WHITE, 0x0821); // Bright white
+    String c1 = currentLyrics.substring(0, 12);
+    String c2 = currentLyrics.length() > 12 ? currentLyrics.substring(12, 24) : "";
+    tft.drawString(c1, cardX + 8, yC, 2); yC += 16;
+    if (c2.length() > 0) { tft.drawString(c2, cardX + 8, yC, 2); yC += 16; }
+    yC += 8; // Margin
     
     // Next lyric (dimming)
     if (currentLyricsLine2.length() > 0) {
-      drawLyricWrapped(currentLyricsLine2, cardX + 8, yC, 0x4208);
+      tft.setTextColor(0x4208, 0x0821); // Dim gray again
+      String n1 = currentLyricsLine2.substring(0, 12);
+      String n2 = currentLyricsLine2.length() > 12 ? currentLyricsLine2.substring(12, 24) : "";
+      tft.drawString(n1, cardX + 8, yC, 2); yC += 16;
+      if (n2.length() > 0) tft.drawString(n2, cardX + 8, yC, 2);
     }
     
     // Assign tracker states to prevent re-rendering when unnecessary

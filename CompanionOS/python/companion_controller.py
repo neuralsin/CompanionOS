@@ -382,8 +382,8 @@ def main():
                 force_resync = False
                 print("🔄 Triggered full state resync!")
             
-            # --- Time Sync (every 5s for high accuracy) ---
-            if now - last_time_sync > 5 or last_time_sync == 0:
+            # --- Time Sync (every 60s) ---
+            if now - last_time_sync > 60 or last_time_sync == 0:
                 last_time_sync = now
                 dt = datetime.now()
                 # ESP expects {"time": "HH:MM"}
@@ -499,10 +499,7 @@ def main():
                             send_udp("ART_START:")
                             time.sleep(0.05)   # Allow ESP memory clear margin
                             
-                            # hex_pixels is a gigantic string like "F80007E0..."
-                            # We must extract 4 chars per RGB565 pixel and cast to integer
-                            pixels = [int(hex_pixels[i:i+4], 16) for i in range(0, len(hex_pixels), 4)]
-                            
+                            pixels = [p[0] for p in hex_pixels]
                             album_size = 96
                             pixels_per_chunk = album_size * 2 # EXACTLY 2 full visual rows of pixels
                             
