@@ -311,16 +311,28 @@ def command_listener():
             active_esp_ip = addr[0]
             command = data.decode().strip()
             
-            if command == "HELLO_COMPANION":
+            msg = data.decode('utf-8').strip()
+            
+            if msg == "HELLO_COMPANION":
                 print(f"👋 Companion Device Discovered at {active_esp_ip}!")
                 force_resync = True
+            elif msg == "RESYNC":
+                print(f"🔄 Resync requested by device at {active_esp_ip}!")
+                force_resync = True
             else:
-                print(f"← [{addr[0]}] {command}")
-                if command in ["PLAY_PAUSE", "NEXT", "PREV"]:
-                    spotify_service.control_playback(command)
-                elif command.startswith("VOLUME:") or command.startswith("SEEK:"):
-                    spotify_service.control_playback(command)
-                elif command == "SHUFFLE:TOGGLE":
+                print(f"← [{addr[0]}] {msg}")
+                if msg.startswith("PLAY_PAUSE"):
+                    spotify_service.control_playback("PLAY_PAUSE")
+                    fast_poll_now = True
+                elif msg.startswith("NEXT"):
+                    spotify_service.control_playback("NEXT")
+                    fast_poll_now = True
+                elif msg.startswith("PREV"):
+                    spotify_service.control_playback("PREV")
+                    fast_poll_now = True
+                elif msg.startswith("VOLUME:") or msg.startswith("SEEK:"):
+                    spotify_service.control_playback(msg)
+                elif msg == "SHUFFLE:TOGGLE":
                     try:
                         state = spotify_service.client.current_playback()
                         if state:
@@ -328,7 +340,7 @@ def command_listener():
                             print(f"🔀 Shuffle {'ON' if not state['shuffle_state'] else 'OFF'}")
                     except Exception as e:
                         print(f"Shuffle error: {e}")
-                elif command == "REPEAT:TOGGLE":
+                elif msg == "REPEAT:TOGGLE":
                     try:
                         state = spotify_service.client.current_playback()
                         if state:
@@ -338,7 +350,7 @@ def command_listener():
                             print(f"🔁 Repeat {states[idx].upper()}")
                     except Exception as e:
                         print(f"Repeat error: {e}")
-                elif command == "LIKE:TOGGLE":
+                elif msg == "LIKE:TOGGLE":
                     try:
                         track = spotify_service.get_current_track()
                         if track and track.get('id'):
@@ -351,7 +363,7 @@ def command_listener():
                                 print(f"❤️ Saved {track['name']}")
                     except Exception as e:
                         print(f"Like toggle error: {e}")
-                elif command == "POMO:START":
+                elif msg == "POMO:START":
                     pomodoro_active = True
                     pomodoro_last_tick = time.time()
                     if not pomodoro_is_break: # If starting work, reset remaining
@@ -359,10 +371,10 @@ def command_listener():
                     else: # If starting break, reset remaining
                         pomodoro_remaining = pomodoro_break_duration
                     print("🍅 Pomodoro started!")
-                elif command == "POMO:PAUSE":
+                elif msg == "POMO:PAUSE":
                     pomodoro_active = False
                     print("🍅 Pomodoro paused")
-                elif command == "POMO:SKIP":
+                elif msg == "POMO:SKIP":
                     if pomodoro_is_break:
                         pomodoro_is_break = False
                         pomodoro_remaining = pomodoro_duration
@@ -373,7 +385,7 @@ def command_listener():
                         pomodoro_last_tick = time.time()
                         pomodoro_sessions += 1  # type: ignore
                     print(f"🍅 Skipped to {'break' if pomodoro_is_break else 'work'}")
-                elif command == "NOTIF:CLEAR":
+                elif msg == "NOTIF:CLEAR":
                     notifications.clear()
                     notif_file = os.path.join(SCRIPT_DIR, "notifications.json")
                     with open(notif_file, 'w') as f:
@@ -395,7 +407,8 @@ def main():
     threading.Thread(target=start_notes_server, daemon=True).start()
     print("Monitoring playback & connections...")
     
-    global current_lyrics
+    global current_lyrics, fast_poll_now
+    fast_poll_now = False
     current_track_id = None
     last_sent_lyrics = None
     last_github_check: float = 0.0
@@ -417,6 +430,9 @@ def main():
         try:
             now = time.time()
             
+            if force_resync or fast_poll_now:
+                fast_poll_now = False
+                
             if force_resync:
                 current_track_id = None
                 last_sent_lyrics = None

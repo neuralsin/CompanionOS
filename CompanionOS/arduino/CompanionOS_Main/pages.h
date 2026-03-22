@@ -113,6 +113,7 @@ String lastArtist = "";
 String lastLyric1 = "";
 String lastLyric2 = "";
 String lastPrevLyric = "";
+bool artDrawn = false;
 
 void redrawSpotifyPartial() {
   if (currentState != STATE_SPOTIFY) return;
@@ -121,6 +122,19 @@ void redrawSpotifyPartial() {
   int infoY = ALBUM_Y + ALBUM_SIZE + 10;
   String title = currentTrack.substring(0, 12);
   String artist = currentArtist.substring(0, 14);
+  
+  if (!artDrawn && albumArtReady) {
+    tft.pushImage(ALBUM_X, ALBUM_Y, ALBUM_SIZE, ALBUM_SIZE, albumArt);
+    
+    // Repaint the shadow wrap since we just pasted the square
+    int blurRadius = 4;
+    for (int i = 1; i <= blurRadius; i++) {
+      uint16_t shadeColor = (i == 1) ? 0x1042 : (i == 2) ? 0x0821 : 0x0000;
+      tft.drawFastHLine(ALBUM_X + i, ALBUM_Y + ALBUM_SIZE + i - 1, ALBUM_SIZE, shadeColor);
+      tft.drawFastVLine(ALBUM_X + ALBUM_SIZE + i - 1, ALBUM_Y + i, ALBUM_SIZE, shadeColor);
+    }
+    artDrawn = true;
+  }
   
   if (title != lastTrackTitle) {
     tft.fillRect(ALBUM_X, infoY, 110, 20, COLOR_BG);
@@ -305,6 +319,7 @@ void resetSpotifyDrawState() {
   lastLyric1 = "";
   lastLyric2 = "";
   lastPrevLyric = "";
+  artDrawn = false;
 }
 
 // ═══════════════════════════════════════════════════════════

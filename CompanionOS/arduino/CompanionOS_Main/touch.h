@@ -61,6 +61,10 @@ void handleTouch() {
     int x = map(p.x, 200, 3800, SCREEN_W, 0);
     int y = map(p.y, 200, 3800, SCREEN_H, 0);
     
+    // Hardware auto-calibration compensation for resistive drift
+    x += 30;
+    y -= 15;
+    
     if (x >= 0 && x <= SCREEN_W && y >= 0 && y <= SCREEN_H) {
       lastTouchX = x;
       lastTouchY = y;
@@ -95,13 +99,16 @@ void handleTouch() {
         if (millis() - lastTouchTime > 300) {
           
           if (currentState == STATE_SPOTIFY) {
-            // Playback controls row (Y: 110-145 — matches updated layout)
-            if (lastTouchY > 110 && lastTouchY < 145) {
-              if (lastTouchX > 110 && lastTouchX < 130) sendCommand("SHUFFLE:TOGGLE");
-              else if (lastTouchX >= 130 && lastTouchX < 153) sendCommand("PREV");
-              else if (lastTouchX >= 153 && lastTouchX < 185) sendCommand("PLAY_PAUSE");
-              else if (lastTouchX >= 185 && lastTouchX < 200) sendCommand("NEXT");
-              else if (lastTouchX >= 200 && lastTouchX < 215) sendCommand("REPEAT:TOGGLE");
+            // Top Row (Y: 100-130) -> Prev, Play, Next
+            if (lastTouchY > 100 && lastTouchY < 130) {
+              if (lastTouchX >= 115 && lastTouchX < 145) sendCommand("PREV");
+              else if (lastTouchX >= 145 && lastTouchX < 175) sendCommand("PLAY_PAUSE");
+              else if (lastTouchX >= 175 && lastTouchX < 205) sendCommand("NEXT");
+            }
+            // Bottom Row (Y: 130-148) -> Shuffle, Repeat
+            else if (lastTouchY >= 130 && lastTouchY < 148) {
+              if (lastTouchX >= 120 && lastTouchX < 160) sendCommand("SHUFFLE:TOGGLE");
+              else if (lastTouchX >= 160 && lastTouchX < 200) sendCommand("REPEAT:TOGGLE");
             }
             // Progress bar seek zone (Y: 148-175)
             else if (lastTouchY >= 148 && lastTouchY <= 175) {

@@ -25,6 +25,7 @@ extern String prevLyricsLine;
 int playProgress = 0;
 int playDuration = 100;
 bool isPlaying = false;
+extern bool artDrawn; // Added this line
 
 String currentNotes[4] = {"", "", "", ""};
 
@@ -35,7 +36,6 @@ extern void redrawPomodoroPartial();
 extern void redrawNotificationsPartial();
 extern void redrawSettingsPartial();
 extern void drawStatusBar();
-extern void prepareAlbumArt();
 extern void processArtChunk(int chunkIdx, String hexData);
 extern void completeAlbumArt();
 extern void showFlashNotification(String text);
@@ -151,9 +151,10 @@ void handleNetwork() {
         uint16_t* dest = albumArt + startPixel;
         unsigned char* src = (unsigned char*)(udpBuffer + 3);
         
-        // Fast direct memory alignment to RGB565 struct array
-        for (int i = 0; i < pixelsInChunk && (startPixel + i) < 9216; i++) {
-          dest[i] = (src[i*2] << 8) | src[i*2 + 1]; 
+        // Unpack RGB565 with Native Endianness Flipping (L, H)
+        for (int i = 0; i < pixelsInChunk; i++) {
+          int offset = 3 + (i * 2);
+          dest[i] = udpBuffer[offset] | (udpBuffer[offset+1] << 8); 
         }
         
         // Instant Progressive Hardware Rendering straight onto the physical display
@@ -201,6 +202,11 @@ void handleCommand(String msg) {
         musicPlaying = true;
         redrawSpotifyPartial();
       }
+    }
+    else if (msg.startsWith("ART_START:")) {
+      receivingArt = true;
+      albumArtReady = false;
+      artDrawn = false;
     }
     else if (msg.startsWith("STATE:")) {
       String json = msg.substring(6);
