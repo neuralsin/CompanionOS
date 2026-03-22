@@ -41,6 +41,8 @@ class SpotifyIntegration:
 
     def setup_client(self) -> None:
         try:
+            import os
+            cache_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.cache')
             sp = spotipy.Spotify(
                 auth_manager=SpotifyOAuth(
                     client_id=self.client_id,
@@ -48,6 +50,7 @@ class SpotifyIntegration:
                     redirect_uri=self.redirect_uri,
                     scope=self.scope,
                     open_browser=False,
+                    cache_path=cache_path
                 )
             )
             sp.current_user()
@@ -62,7 +65,7 @@ class SpotifyIntegration:
             return None
         try:
             current = self.client.current_playback()
-            if not current or not current.get("item") or not current["is_playing"]:
+            if not current or not current.get("item"):
                 return None
             track = current["item"]
             return {
@@ -101,6 +104,9 @@ class SpotifyIntegration:
             elif command.startswith("VOLUME:"):
                 volume = int(command.split(":")[1])
                 self.client.volume(volume)
+            elif command.startswith("SEEK:"):
+                pos_ms = int(command.split(":")[1])
+                self.client.seek_track(pos_ms)
             return True
         except Exception as e:
             print(f"Spotify Playback Control Error: {e}")
@@ -109,58 +115,55 @@ class SpotifyIntegration:
     def get_lyrics(
         self, track_name: str, artist_name: str, track_id: str | None = None
     ) -> list[dict]:
-        """Fetch lyrics from a local spotify-lyrics-api proxy (akashrchandran/spotify-lyrics-api)."""
-        if not self.lyrics_enabled or not track_id:
-            return [{"time": 0, "words": "♪ Lyrics unavailable ♪ (Disabled or Missing ID)"}]
-
+        """Fetch lyrics dynamically from the public LRCLIB network."""
         try:
-            url = "http://localhost:8080/"
-            params = {"trackid": track_id, "format": "lrc"}
+            url = "https://lrclib.net/api/get"
+            params = {"track_name": track_name, "artist_name": artist_name}
             response = requests.get(url, params=params, timeout=5)
 
             if response.status_code == 200:
                 data = response.json()
-                if not data.get("error"):
-                    lines = data.get("lines", [])
-                    if lines:
-                        parsed = []
-                        for l in lines:
-                            words = l.get("words", "").strip()
+                synced = data.get("syncedLyrics")
+                if synced:
+                    parsed = []
+                    lines = synced.split("\n")
+                    for l in lines:
+                        if l.startswith("[") and "]" in l:
+                            parts = l.split("]", 1)
+                            time_str = parts[0][1:]
+                            words = parts[1].strip()
                             if words:
-                                time_tag = l.get("timeTag", "00:00.00")
                                 try:
-                                    m, s = time_tag.split(":")
-                                    sec = s
-                                    ms_val = 0
-                                    if "." in s:
-                                        sec, ms_str = s.split(".")
-                                        ms_val = int(ms_str.ljust(3, "0")[:3])
-                                    time_ms = int(m) * 60000 + int(sec) * 1000 + ms_val
+                                    m, s = time_str.split(":")
+                                    sec, ms_val = s.split(".") if "." in s else (s, "0")
+                                    time_ms = int(m)*60000 + int(sec)*1000 + int(str(ms_val).ljust(3, "0")[:3])  # type: ignore
                                     parsed.append({"time": time_ms, "words": words})
                                 except Exception:
-                                    parsed.append({"time": 0, "words": words})
-                        if parsed:
-                            return parsed
+                                    pass
+                    if parsed:
+                        return parsed
+                elif data.get("plainLyrics"):
+                    return [{"time": 0, "words": "♪ Unsynced lyrics available ♪"}]
             return [{"time": 0, "words": "♪ Instrumental ♪"}]
         except Exception as e:
-            print(f"Lyrics Engine (Local API) Error: {e}")
+            print(f"Lyrics Engine (LRCLIB) Error: {e}")
             return [{"time": 0, "words": "♪ Lyrics unavailable ♪"}]
 
-    def process_album_art(self, image_url: str, size: int = 120) -> bytes | None:
+    def process_album_art(self, image_url: str, size: int = 120) -> str | None:
+        """Returns a hex string where every 4 chars = one RGB565 pixel."""
         try:
             response = requests.get(image_url, timeout=10)
             img = Image.open(BytesIO(response.content))
             img = img.resize((size, size), Image.Resampling.LANCZOS)
             img = img.convert("RGB")
 
-            pixels: list[int] = []
+            hex_str: str = ""
             for y in range(size):
                 for x in range(size):
-                    r, g, b = img.getpixel((x, y))
+                    r, g, b = img.getpixel((x, y))  # type: ignore
                     rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
-                    pixels.append(rgb565 >> 8)
-                    pixels.append(rgb565 & 0xFF)
-            return bytes(pixels)
+                    hex_str += f"{rgb565:04X}"  # type: ignore
+            return hex_str
         except Exception as e:
             print(f"Album Art Processing Error: {e}")
             return None

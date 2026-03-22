@@ -6,41 +6,43 @@
 #include "network.h"
 
 // ═══════════════════════════════════════════════════════════
-// TOUCH & GESTURE INPUT
+// TOUCH & GESTURE INPUT V3
+// Fixed debouncing for GPIO0/GPIO2 capacitive sensors
 // ═══════════════════════════════════════════════════════════
 
+// Capacitive sensors need extra debounce because GPIO0/GPIO2 are boot pins
+unsigned long lastLeftTrigger = 0;
+unsigned long lastRightTrigger = 0;
+#define CAP_DEBOUNCE_MS 400  // Much longer debounce for noisy caps
+
+bool lastLeftState = LOW;
+bool lastRightState = LOW;
+
 void checkPhysicalSensors() {
-  static bool lastLeftState = LOW;
-  static bool lastRightState = LOW;
-  static unsigned long lastSensorDebounce = 0;
+  unsigned long now = millis();
   
   bool currentLeft = digitalRead(TOUCH_LEFT);
   bool currentRight = digitalRead(TOUCH_RIGHT);
   
-  if (millis() - lastSensorDebounce > 50) {  
-    // Trigger only on RISING edge (went from LOW to HIGH)
-    if (currentLeft == HIGH && lastLeftState == LOW) {
-      if (currentState == STATE_SPOTIFY) sendCommand("PREV");
-      else changePage(-1);
-
-      setEmotion(EMO_EXCITED);
-      lastSensorDebounce = millis();
-    }
-    
-    if (currentRight == HIGH && lastRightState == LOW) {
-      if (currentState == STATE_SPOTIFY) sendCommand("NEXT");
-      else changePage(1);
-
-      setEmotion(EMO_HAPPY);
-      lastSensorDebounce = millis();
-    }
+  // Left sensor: only trigger on HIGH transition with long debounce
+  if (currentLeft == HIGH && lastLeftState == LOW && (now - lastLeftTrigger > CAP_DEBOUNCE_MS)) {
+    lastLeftTrigger = now;
+    if (currentState == STATE_SPOTIFY) sendCommand("PREV");
+    else changePage(-1);
+  }
+  
+  // Right sensor: same
+  if (currentRight == HIGH && lastRightState == LOW && (now - lastRightTrigger > CAP_DEBOUNCE_MS)) {
+    lastRightTrigger = now;
+    if (currentState == STATE_SPOTIFY) sendCommand("NEXT");
+    else changePage(1);
   }
   
   lastLeftState = currentLeft;
   lastRightState = currentRight;
 }
 
-// Swipe gesture tracking
+// Touchscreen gesture tracking
 bool isTouching = false;
 int touchStartX = 0;
 int touchStartY = 0;
@@ -49,61 +51,94 @@ int lastTouchY = 0;
 unsigned long lastTouchTime = 0;
 unsigned long lastRealContactTime = 0;
 
+extern int settingsScrollY;
+
 void handleTouch() {
   checkPhysicalSensors();
   
   if (ts.touched()) {
     TS_Point p = ts.getPoint();
-    int x = map(p.x, 200, 3800, SCREEN_W, 0); // Inverted X Axis to match hardware
-    int y = map(p.y, 200, 3800, SCREEN_H, 0); // Inverted Y Axis to match hardware
+    int x = map(p.x, 200, 3800, SCREEN_W, 0);
+    int y = map(p.y, 200, 3800, SCREEN_H, 0);
     
-    // Valid point constraints to avoid spurious noise spikes
     if (x >= 0 && x <= SCREEN_W && y >= 0 && y <= SCREEN_H) {
       lastTouchX = x;
       lastTouchY = y;
       lastRealContactTime = millis();
       
-      // Record start of touch for swipe gestures
       if (!isTouching) {
         isTouching = true;
         touchStartX = x;
         touchStartY = y;
       }
-      
-      // Debounced UI Taps (instead of delay(300))
-      if (millis() - lastTouchTime > 300) {
-        if (currentState == STATE_SPOTIFY) {
-          if (y > 200 && y < 240) {
-            if (x > 60 && x < 120) sendCommand("PREV");
-            else if (x > 130 && x < 190) sendCommand("TOGGLE_PLAY");
-            else if (x > 200 && x < 260) sendCommand("NEXT");
-            
-            lastTouchTime = millis();
-          }
-        } 
-        else if (currentState == STATE_EYES) {
-            setEmotion((Emotion)((currentEmotion + 1) % EMO_COUNT));
-            lastTouchTime = millis();
-        }
-      }
     }
   } else {
-    // Touch released - Evaluate Swipe Gesture ONLY if physical contact dropped for >150ms
-    if (isTouching && (millis() - lastRealContactTime > 150)) {
+    if (isTouching && (millis() - lastRealContactTime > 50)) {
       isTouching = false;
       int deltaX = lastTouchX - touchStartX;
       int deltaY = lastTouchY - touchStartY;
       
-      // Only process swipe if it's mostly horizontal and large enough
-      if (abs(deltaX) > 60 && abs(deltaX) > abs(deltaY) * 2) {
-        if (deltaX > 0) {
-          changePage(-1); // Swipe Right -> Go back
-        } else {
-          changePage(1);  // Swipe Left -> Go forward
+      // SWIPE detection
+      if (abs(deltaX) > 50 && abs(deltaX) > abs(deltaY)) {
+        if (deltaX > 0) changePage(-1);
+        else changePage(1);
+      }
+      // VERTICAL SWIPE on settings page (scroll)
+      else if (abs(deltaY) > 30 && abs(deltaY) > abs(deltaX) && currentState == STATE_SETTINGS) {
+        settingsScrollY += (deltaY < 0) ? 40 : -40;
+        if (settingsScrollY < 0) settingsScrollY = 0;
+        if (settingsScrollY > 200) settingsScrollY = 200;
+        redrawSettingsPartial();
+      }
+      // TAP detection - wider threshold for noisy touchscreens
+      else if (abs(deltaX) < 25 && abs(deltaY) < 25) {
+        if (millis() - lastTouchTime > 300) {
+          
+          if (currentState == STATE_SPOTIFY) {
+            // Playback controls row (Y: 110-145 — matches updated layout)
+            if (lastTouchY > 110 && lastTouchY < 145) {
+              if (lastTouchX > 110 && lastTouchX < 130) sendCommand("SHUFFLE:TOGGLE");
+              else if (lastTouchX >= 130 && lastTouchX < 153) sendCommand("PREV");
+              else if (lastTouchX >= 153 && lastTouchX < 185) sendCommand("PLAY_PAUSE");
+              else if (lastTouchX >= 185 && lastTouchX < 200) sendCommand("NEXT");
+              else if (lastTouchX >= 200 && lastTouchX < 215) sendCommand("REPEAT:TOGGLE");
+            }
+            // Progress bar seek zone (Y: 148-175)
+            else if (lastTouchY >= 148 && lastTouchY <= 175) {
+              if (lastTouchX < 115) sendCommand("LIKE:TOGGLE");
+              else if (lastTouchX >= 118 && lastTouchX <= 208 && playDuration > 0) {
+                int seekPos = map(lastTouchX, 118, 208, 0, playDuration);
+                char seekCmd[32];
+                sprintf(seekCmd, "SEEK:%d", seekPos);
+                sendCommand(seekCmd);
+                playProgress = seekPos;
+                redrawSpotifyPartial();
+              }
+            }
+          }
+          else if (currentState == STATE_EYES) {
+            setEmotion((Emotion)((currentEmotion + 1) % EMO_COUNT));
+          }
+          else if (currentState == STATE_POMODORO) {
+            // ANY tap on the Pomodoro page toggles start/pause
+            // The whole screen is the timer — no Y-zone restriction needed
+            if (pomoActive) sendCommand("POMO:PAUSE");
+            else sendCommand("POMO:START");
+          }
+          else if (currentState == STATE_NOTIFICATIONS) {
+            if (lastTouchY > SCREEN_H - 40) {
+              flashNotifEnabled = !flashNotifEnabled;
+              redrawNotificationsPartial();
+            }
+            else if (lastTouchY > SCREEN_H - 60 && lastTouchY <= SCREEN_H - 40) {
+              sendCommand("NOTIF:CLEAR");
+            }
+          }
+          
+          lastTouchTime = millis();
         }
       }
     }
   }
 }
-
 #endif

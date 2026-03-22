@@ -2,42 +2,69 @@
 #define NETWORK_H
 
 #include <ESP8266WiFi.h>
-// ⚠️ WiFiManager MUST be included BEFORE globals.h/TFT_eSPI to prevent the FS_NO_GLOBALS bug in the ESP8266 3.1.2 core!
 #include <WiFiManager.h>
 #include <WiFiUdp.h>
-#include <ArduinoJson.h> 
+#include <ArduinoJson.h>
 
 #include "globals.h"
 #include "eyes.h"
 
 // ═══════════════════════════════════════════════════════════
-// NETWORK FUNCTIONS
+// NETWORK FUNCTIONS V3
 // ═══════════════════════════════════════════════════════════
 
 extern char udpBuffer[512];
-String pcIPStr = DEFAULT_PC_IP; // Fallback
+String pcIPStr = DEFAULT_PC_IP;
 
 // Global data states
 String currentTrack = "";
 String currentArtist = "";
-String currentLyrics = "";
-String currentLyricsLine2 = "";
+extern String currentLyrics;
+extern String currentLyricsLine2;
+extern String prevLyricsLine;
 int playProgress = 0;
 int playDuration = 100;
 bool isPlaying = false;
 
-String ghUser = "";
-String ghRepos = "";
-String ghFollowers = "";
-
 String currentNotes[4] = {"", "", "", ""};
 
 extern void redrawSpotifyPartial();
-extern void redrawGithubPartial();
 extern void redrawNotesPartial();
+extern void redrawWeatherPartial();
+extern void redrawPomodoroPartial();
+extern void redrawNotificationsPartial();
+extern void redrawSettingsPartial();
+extern void drawStatusBar();
 extern void prepareAlbumArt();
 extern void processArtChunk(int chunkIdx, String hexData);
 extern void completeAlbumArt();
+extern void showFlashNotification(String text);
+
+// Weather data (defined in pages.h, declared here)
+extern String weatherCondition;
+extern int weatherTemp;
+extern int weatherFeels;
+extern int weatherHumidity;
+extern int weatherWind;
+extern int weatherHigh;
+extern int weatherLow;
+extern String weatherCity;
+extern String weatherSunrise;
+extern String weatherSunset;
+extern int weatherCode;
+
+// Pomodoro data
+extern int pomoRemaining;
+extern int pomoTotal;
+extern bool pomoIsBreak;
+extern int pomoSessions;
+extern bool pomoActive;
+
+// Notification data
+extern String notifApps[3];
+extern String notifTitles[3];
+extern String notifTimes[3];
+extern int notifTotal;
 
 void handleCommand(String msg);
 
@@ -49,24 +76,34 @@ void setupWiFi() {
   
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   
-  while (WiFi.status() != WL_CONNECTED) {
+  int timeout = 0;
+  // Increase timeout to 60 to allow 30 seconds for slower routers to handshake
+  while (WiFi.status() != WL_CONNECTED && timeout < 60) {
     delay(500);
     Serial.print(".");
+    timeout++;
   }
 
-  Serial.println(F(" OK"));
-  Serial.print(F("IP: "));
-  Serial.println(WiFi.localIP());
-  
-  tft.fillScreen(COLOR_BG);
-  tft.setTextColor(TFT_GREEN);
-  tft.drawCentreString("WiFi Connected!", SCREEN_W/2, SCREEN_H/2 - 20, 2);
-  tft.drawCentreString(WiFi.localIP().toString(), SCREEN_W/2, SCREEN_H/2 + 10, 2);
+  if (WiFi.status() == WL_CONNECTED) {
+    wifiConnected = true;
+    Serial.println(F(" OK"));
+    Serial.print(F("IP: "));
+    Serial.println(WiFi.localIP());
+    
+    tft.fillScreen(COLOR_BG);
+    tft.setTextColor(TFT_GREEN);
+    tft.drawCentreString("WiFi Connected!", SCREEN_W/2, SCREEN_H/2 - 20, 2);
+    tft.drawCentreString(WiFi.localIP().toString(), SCREEN_W/2, SCREEN_H/2 + 10, 2);
+  } else {
+    Serial.println(F(" FAILED"));
+    tft.setTextColor(TFT_RED);
+    tft.drawCentreString("WiFi Failed!", SCREEN_W/2, SCREEN_H/2 - 20, 2);
+  }
   
   udp.begin(UDP_PORT_RX);
   delay(1500);
 
-  // Network Auto-Discovery Handshake (Fixes Chicken & Egg bug)
+  // Auto-discovery handshake
   udp.beginPacket("255.255.255.255", UDP_PORT_TX);
   const char* hello = "HELLO_COMPANION";
   udp.write(hello, strlen(hello));
@@ -85,7 +122,7 @@ bool pcFound = false;
 unsigned long lastDiscoveryShout = 0;
 
 void handleNetwork() {
-  // If we haven't found the PC yet, shout an automated Discovery Packet every 3 seconds
+  // Auto-discovery
   if (!pcFound && millis() - lastDiscoveryShout > 3000) {
     udp.beginPacket("255.255.255.255", UDP_PORT_TX);
     const char* hello = "HELLO_COMPANION";
@@ -96,19 +133,50 @@ void handleNetwork() {
 
   int packetSize = udp.parsePacket();
   if (packetSize) {
-    pcFound = true; // The moment we hear from Python, we stop shouting permanently!
-    
+    pcFound = true;
     IPAddress remoteIP = udp.remoteIP();
     pcIPStr = remoteIP.toString();
     
-    // We allocated 512, ensure we don't overflow
     int readLen = min(packetSize, 511);
     int len = udp.read(udpBuffer, readLen);
+    
+    // ── V4 OPTIMIZATION: BARE-METAL BINARY PACKET SNIFFING ──
+    // If the first byte is 0xFE, this is a raw structured image packet, bypassing String handling entirely
+    if (len > 3 && (unsigned char)udpBuffer[0] == 0xFE) {
+      int chunkIdx = ((unsigned char)udpBuffer[1] << 8) | ((unsigned char)udpBuffer[2]);
+      int pixelsInChunk = (len - 3) / 2;
+      int startPixel = chunkIdx * 192; // Python packs exactly 192 pixels (2 visual rows) per chunk
+      
+      if (startPixel < 9216) {
+        uint16_t* dest = albumArt + startPixel;
+        unsigned char* src = (unsigned char*)(udpBuffer + 3);
+        
+        // Fast direct memory alignment to RGB565 struct array
+        for (int i = 0; i < pixelsInChunk && (startPixel + i) < 9216; i++) {
+          dest[i] = (src[i*2] << 8) | src[i*2 + 1]; 
+        }
+        
+        // Instant Progressive Hardware Rendering straight onto the physical display
+        if (currentState == STATE_SPOTIFY) {
+          int yStart = startPixel / 96; // 96 is ALBUM_SIZE
+          int maxRows = pixelsInChunk / 96;
+          if (maxRows > 0 && yStart + maxRows <= 96) {
+             tft.pushImage(10, 25 + yStart, 96, maxRows, dest); // ALBUM_X=10, ALBUM_Y=25
+          }
+        }
+      }
+      return; // Bypass the expensive String payload parsing
+    }
+    
+    // Standard string packet fallback logic
     udpBuffer[len] = 0;
     String msg = String(udpBuffer);
     
     handleCommand(msg);
   }
+  
+  // Update WiFi status for status bar
+  wifiConnected = (WiFi.status() == WL_CONNECTED);
 }
 
 void handleCommand(String msg) {
@@ -121,6 +189,7 @@ void handleCommand(String msg) {
       else if (emo == "SLEEPY") setEmotion(EMO_SLEEPY);
       else if (emo == "ANGRY") setEmotion(EMO_ANGRY);
       else if (emo == "SURPRISED") setEmotion(EMO_SURPRISED);
+      else if (emo == "NEUTRAL") setEmotion(EMO_NEUTRAL);
     }
     else if (msg.startsWith("TRACK:")) {
       String json = msg.substring(6);
@@ -129,6 +198,7 @@ void handleCommand(String msg) {
         currentTrack = doc["track"].as<String>();
         currentArtist = doc["artist"].as<String>();
         playDuration = doc["duration"].as<int>();
+        musicPlaying = true;
         redrawSpotifyPartial();
       }
     }
@@ -138,6 +208,7 @@ void handleCommand(String msg) {
       if (!deserializeJson(doc, json)) {
         playProgress = doc["progress"].as<int>();
         isPlaying = doc["playing"].as<bool>();
+        musicPlaying = isPlaying;
         redrawSpotifyPartial();
       }
     }
@@ -146,28 +217,76 @@ void handleCommand(String msg) {
       DynamicJsonDocument doc(1024);
       if (!deserializeJson(doc, json)) {
         JsonArray array = doc.as<JsonArray>();
-        if (array.size() > 0) {
+        if (array.size() >= 3) {
+          prevLyricsLine = array[0].as<String>();
+          currentLyrics = array[1].as<String>();
+          currentLyricsLine2 = array[2].as<String>();
+        } else if (array.size() > 0) {
           currentLyrics = array[0].as<String>();
-          if (array.size() > 1) {
-            currentLyricsLine2 = array[1].as<String>();
-          } else {
-            currentLyricsLine2 = "";
-          }
+          currentLyricsLine2 = (array.size() > 1) ? array[1].as<String>() : "";
+          prevLyricsLine = "";
         } else {
-          currentLyrics = "♪ Instrumental ♪";
+          currentLyrics = "Instrumental";
           currentLyricsLine2 = "";
+          prevLyricsLine = "";
         }
         redrawSpotifyPartial();
       }
     }
-    else if (msg.startsWith("GITHUB:")) {
-      String json = msg.substring(7);
+    else if (msg.startsWith("WEATHER:")) {
+      String json = msg.substring(8);
       DynamicJsonDocument doc(1024);
       if (!deserializeJson(doc, json)) {
-        ghUser = doc["username"].as<String>();
-        ghRepos = doc["repos"].as<String>();
-        ghFollowers = doc["followers"].as<String>();
-        redrawGithubPartial();
+        weatherTemp = doc["temp"].as<int>();
+        weatherFeels = doc["feels"].as<int>();
+        weatherHumidity = doc["humidity"].as<int>();
+        weatherCondition = doc["condition"].as<String>();
+        weatherCode = doc["code"].as<int>();
+        weatherWind = doc["wind"].as<int>();
+        weatherSunrise = doc["sunrise"].as<String>();
+        weatherSunset = doc["sunset"].as<String>();
+        weatherHigh = doc["high"].as<int>();
+        weatherLow = doc["low"].as<int>();
+        weatherCity = doc["city"].as<String>();
+        redrawWeatherPartial();
+      }
+    }
+    else if (msg.startsWith("POMO:")) {
+      String json = msg.substring(5);
+      DynamicJsonDocument doc(512);
+      if (!deserializeJson(doc, json)) {
+        pomoRemaining = doc["remaining"].as<int>();
+        pomoTotal = doc["total"].as<int>();
+        pomoIsBreak = doc["is_break"].as<bool>();
+        pomoSessions = doc["sessions"].as<int>();
+        pomoActive = doc["active"].as<bool>();
+        redrawPomodoroPartial();
+      }
+    }
+    else if (msg.startsWith("NOTIF:")) {
+      String json = msg.substring(6);
+      DynamicJsonDocument doc(1024);
+      if (!deserializeJson(doc, json)) {
+        JsonArray array = doc.as<JsonArray>();
+        notifTotal = array.size();
+        notifCount = notifTotal;  // For status bar icon
+        for (int i = 0; i < 3; i++) {
+          if (i < (int)array.size()) {
+            notifApps[i] = array[i]["app"].as<String>();
+            notifTitles[i] = array[i]["title"].as<String>();
+            notifTimes[i] = array[i]["time"].as<String>();
+          } else {
+            notifApps[i] = "";
+            notifTitles[i] = "";
+            notifTimes[i] = "";
+          }
+        }
+        redrawNotificationsPartial();
+        
+        // Flash notification on eyes page
+        if (notifTotal > 0 && currentState == STATE_EYES) {
+          showFlashNotification(notifTitles[0]);
+        }
       }
     }
     else if (msg.startsWith("NOTES:")) {
@@ -175,34 +294,22 @@ void handleCommand(String msg) {
       DynamicJsonDocument doc(1024);
       if (!deserializeJson(doc, json)) {
         JsonArray array = doc.as<JsonArray>();
-        for(int i=0; i<4; i++) {
-          if (i < array.size()) currentNotes[i] = array[i].as<String>();
+        for(int i = 0; i < 4; i++) {
+          if (i < (int)array.size()) currentNotes[i] = array[i].as<String>();
           else currentNotes[i] = "";
         }
         redrawNotesPartial();
       }
     }
-    else if (msg.startsWith("ART_START:")) {
-      prepareAlbumArt();
-    }
-    else if (msg.startsWith("ART_CHUNK:")) {
-      int firstColon = msg.indexOf(':', 10);
-      int chunkIdx = msg.substring(10, firstColon).toInt();
-      String hexData = msg.substring(firstColon + 1);
-      processArtChunk(chunkIdx, hexData);
-    }
-    else if (msg.startsWith("ART_COMPLETE")) {
-      completeAlbumArt();
-    }
     else if (msg.startsWith("TIME:")) {
       String json = msg.substring(5);
       DynamicJsonDocument doc(256);
-      if (!deserializeJson(doc, json)) {
-        displayHour = doc["h"].as<int>();
-        displayMinute = doc["m"].as<int>();
-        bootMillis = millis();
-        timeReceived = true;
-        if (currentState == STATE_EYES) drawTimeDisplay();
+      deserializeJson(doc, json);
+      if (doc.containsKey("time")) {
+        String t = doc["time"]; // HH:MM
+        updateTimeFromUDP(t);
+        // Force status bar update immediately so clock appears without waiting for a page change
+        drawStatusBar();
       }
     }
 }
