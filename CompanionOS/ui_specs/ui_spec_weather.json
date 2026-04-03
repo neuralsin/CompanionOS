@@ -1,0 +1,43 @@
+{
+  "weather_screen": {
+    "identity": "Atmosphere Dashboard",
+    "purpose": "Ambient readout of current local weather conditions and forecast.",
+    "layout": {
+      "main_condition": "Top center (300x120): Large weather icon (left) paired with massive temperature text (right). City string below.",
+      "details_bar": "Middle (300x40): Horizontal split of Humidity, Wind, and UV index values.",
+      "forecast": "Bottom (300x60): Row of 3 mini vertical cards showing next 3 hours."
+    },
+    "typography": {
+      "temp_huge": "Regular or Light, 48px, text_primary",
+      "city_label": "Regular, 14px, text_secondary",
+      "detail_val": "Bold, 14px, text_primary",
+      "detail_label": "Regular, 10px, text_secondary",
+      "forecast_time": "Regular, 10px, text_secondary"
+    },
+    "colors": {
+      "background": "dynamic (based on weather: dark grey for clouds, deep midnight blue for clear night)",
+      "sunny_yellow": "#FBBF24",
+      "rain_blue": "#3B82F6",
+      "cloud_grey": "#9CA3AF"
+    },
+    "icons": ["sun_large", "cloud_large", "rain_large", "wind_mini", "drop_mini", "sun_mini"],
+    "data_schema": {
+      "city": "Tokyo, JP",
+      "temp_c": 14,
+      "condition": "Cloudy",
+      "humidity_pct": 65,
+      "wind_kph": 12,
+      "uv_index": 2,
+      "forecast": [
+        {"time": "19:00", "temp": 13, "icon": "cloud"},
+        {"time": "20:00", "temp": 12, "icon": "rain"},
+        {"time": "21:00", "temp": 11, "icon": "rain"}
+      ]
+    },
+    "motion": "Ambient background particles (e.g., slow falling raindrops or drifting clouds). Very subtle so it doesn't distract.",
+    "interactions": "Tap screen to toggle C/F temperature units.",
+    "rendering_notes": "Weather icons should be cached in PROGMEM. Background rendering must be optimized; particle effects must compute fast (integer math) and clear dirty rects before redrawing over the dark bg.",
+    "prompt": "An elegant, dark-mode weather dashboard on a 320x240 screen. A large stylized graphic of a cloud and moon dominantly pairs with a huge '14°' text. Below, a clean horizontal bar shows humidity and wind stats. At the very bottom, three mini hourly forecast blocks show dropping temperatures. It looks like a high-end ambient smart display.",
+    "motion_prompt": "Slow, ethereal translucent clouds drift right-to-left in the background behind the crisp white weather data. Numbers fade softly when data updates."
+  }
+}

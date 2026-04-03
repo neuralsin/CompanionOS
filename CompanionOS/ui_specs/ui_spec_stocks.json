@@ -1,0 +1,47 @@
+{
+  "stocks_screen": {
+    "identity": "Financial Dashboard",
+    "purpose": "High-clarity stock tracking, showing primary ticker details and a mini watchlist.",
+    "layout": {
+      "top_bar": "Market open/close status and time",
+      "primary_ticker": "Left side (160x120): Large ticker symbol, huge price, positive/negative delta pill",
+      "chart_area": "Bottom left (160x80): Line graph of day performance",
+      "watchlist": "Right side (140x220): Stacked 3-item list. Each item has symbol (left), price/delta (right)"
+    },
+    "typography": {
+      "ticker_large": "Bold, 24px, text_primary",
+      "price_large": "Monospace, 32px, text_primary",
+      "delta": "Bold, 14px",
+      "watchlist_symbol": "Regular, 14px, text_primary",
+      "watchlist_price": "Monospace, 14px"
+    },
+    "colors": {
+      "background": "#07080A",
+      "up_green": "#22C55E",
+      "down_red": "#EF4444",
+      "chart_line": "dynamic (based on up/down)",
+      "list_bg": "surface"
+    },
+    "icons": ["arrow_up_solid", "arrow_down_solid"],
+    "data_schema": {
+      "primary": {
+        "symbol": "NVDA",
+        "price": "875.24",
+        "change": "+12.45",
+        "pct_change": "+1.4%",
+        "is_up": true,
+        "history": [860, 865, 862, 870, 875]
+      },
+      "watchlist": [
+        {"symbol": "AAPL", "price": "172.50", "is_up": false},
+        {"symbol": "MSFT", "price": "410.22", "is_up": true},
+        {"symbol": "TSLA", "price": "175.34", "is_up": false}
+      ]
+    },
+    "motion": "Price flashes slightly green/red on update payload. Chart line draws incrementally left to right. Watchlist numbers cross-fade on update.",
+    "interactions": "Tap watchlist item to set as primary ticker.",
+    "rendering_notes": "Chart uses TFT_eSPI drawLine from mapped coords, clear previous lines by drawing overlapping black rects. Price updates require fixed-width fonts to prevent jitter.",
+    "prompt": "A mini stock market dashboard on a 320x240 dark display. The left half focuses on one stock (like NVDA) with a massive price font, a green positive percentage pill, and a minimal green line chart spanning the bottom. The right half features a column of 3 smaller watchlist items with their tickers and prices. The aesthetic is Bloomberg terminal meets ultra-modern clean dark mode.",
+    "motion_prompt": "When stock data updates, the massive price number quickly flashes a subtle green backdrop and the line chart smoothly extends its path to the right."
+  }
+}

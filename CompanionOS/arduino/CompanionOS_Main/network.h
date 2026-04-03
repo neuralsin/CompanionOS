@@ -35,6 +35,10 @@ extern void redrawWeatherPartial();
 extern void redrawPomodoroPartial();
 extern void redrawNotificationsPartial();
 extern void redrawSettingsPartial();
+extern void redrawStocksPartial();
+extern void redrawGamingPartial();
+extern void redrawSocialPartial();
+extern void redrawProductivityPartial();
 extern void drawStatusBar();
 extern void processArtChunk(int chunkIdx, String hexData);
 extern void completeAlbumArt();
@@ -152,9 +156,10 @@ void handleNetwork() {
         unsigned char* src = (unsigned char*)(udpBuffer + 3);
         
         // Unpack RGB565 with Native Endianness Flipping (L, H)
+        // V4 FIX: Explicit (unsigned char) cast to prevent sign extension on bytes > 127
         for (int i = 0; i < pixelsInChunk; i++) {
           int offset = 3 + (i * 2);
-          dest[i] = udpBuffer[offset] | (udpBuffer[offset+1] << 8); 
+          dest[i] = (unsigned char)udpBuffer[offset] | ((unsigned char)udpBuffer[offset+1] << 8); 
         }
         
         // Instant Progressive Hardware Rendering straight onto the physical display
@@ -190,7 +195,35 @@ void handleCommand(String msg) {
       else if (emo == "SLEEPY") setEmotion(EMO_SLEEPY);
       else if (emo == "ANGRY") setEmotion(EMO_ANGRY);
       else if (emo == "SURPRISED") setEmotion(EMO_SURPRISED);
+      else if (emo == "HORNY") setEmotion(EMO_HORNY);
       else if (emo == "NEUTRAL") setEmotion(EMO_NEUTRAL);
+    }
+    // ── V4: Antigravity Agent Status ──────────────────
+    else if (msg.startsWith("AGENT:")) {
+      String json = msg.substring(6);
+      DynamicJsonDocument doc(512);
+      if (!deserializeJson(doc, json)) {
+        agentStatus = doc["status"].as<String>();
+        agentStatusText = doc["text"].as<String>();
+        agentStatusStart = millis();
+        agentOverlayActive = true;
+        lastInteractionTime = millis();  // Pet interaction reset
+        
+        // Emotion sync based on agent state
+        if (agentStatus == "thinking") setEmotion(EMO_EXCITED);
+        else if (agentStatus == "done") setEmotion(EMO_HAPPY);
+        else if (agentStatus == "error") setEmotion(EMO_SAD);
+      }
+    }
+    // ── V4: Exotic Mode Toggle via network ────────────
+    else if (msg == "EXOTIC:TOGGLE") {
+      exoticMode = !exoticMode;
+      extern void saveExoticMode();
+      saveExoticMode();
+      extern void showLoadingScreen(const char*);
+      showLoadingScreen(exoticMode ? "Exotic Mode ON" : "Legacy Mode");
+      extern void renderCurrentPage();
+      renderCurrentPage();
     }
     else if (msg.startsWith("TRACK:")) {
       String json = msg.substring(6);
@@ -314,8 +347,85 @@ void handleCommand(String msg) {
       if (doc.containsKey("time")) {
         String t = doc["time"]; // HH:MM
         updateTimeFromUDP(t);
-        // Force status bar update immediately so clock appears without waiting for a page change
         drawStatusBar();
+      }
+    }
+    // ═══════════════════════════════════════════════════════
+    // V6: New Page Data Handlers
+    // ═══════════════════════════════════════════════════════
+    else if (msg.startsWith("STOCKS:")) {
+      String json = msg.substring(7);
+      DynamicJsonDocument doc(1024);
+      if (!deserializeJson(doc, json)) {
+        // Primary ticker
+        if (doc.containsKey("symbol")) strncpy(stockSymbol, doc["symbol"].as<const char*>(), 7);
+        if (doc.containsKey("price"))  strncpy(stockPrice, doc["price"].as<const char*>(), 11);
+        if (doc.containsKey("delta"))  strncpy(stockDelta, doc["delta"].as<const char*>(), 11);
+        if (doc.containsKey("pct"))    strncpy(stockPctChg, doc["pct"].as<const char*>(), 9);
+        if (doc.containsKey("up"))     stockIsUp = doc["up"].as<bool>();
+        
+        // Sparkline history
+        if (doc.containsKey("hist")) {
+          JsonArray hist = doc["hist"];
+          stockHistoryLen = min((int)hist.size(), 40);
+          for (int i = 0; i < stockHistoryLen; i++) {
+            stockHistory[i] = hist[i].as<int16_t>();
+          }
+        }
+        
+        // Watchlist
+        if (doc.containsKey("wl")) {
+          JsonArray wl = doc["wl"];
+          for (int i = 0; i < min((int)wl.size(), 3); i++) {
+            strncpy(wlSymbol[i], wl[i]["s"].as<const char*>(), 7);
+            strncpy(wlPrice[i], wl[i]["p"].as<const char*>(), 11);
+            strncpy(wlDelta[i], wl[i]["d"].as<const char*>(), 9);
+            wlIsUp[i] = wl[i]["u"].as<bool>();
+          }
+        }
+        
+        redrawStocksPartial();
+      }
+    }
+    else if (msg.startsWith("GAMING:")) {
+      String json = msg.substring(7);
+      DynamicJsonDocument doc(512);
+      if (!deserializeJson(doc, json)) {
+        if (doc.containsKey("title"))   strncpy(gameTitle, doc["title"].as<const char*>(), 23);
+        if (doc.containsKey("session")) strncpy(sessionTime, doc["session"].as<const char*>(), 11);
+        if (doc.containsKey("achieve")) achievePct = doc["achieve"].as<uint8_t>();
+        if (doc.containsKey("friends")) friendsOnline = doc["friends"].as<uint8_t>();
+        if (doc.containsKey("active"))  gameActive = doc["active"].as<bool>();
+        if (doc.containsKey("status"))  strncpy(gameStatus, doc["status"].as<const char*>(), 15);
+        redrawGamingPartial();
+      }
+    }
+    else if (msg.startsWith("SOCIAL:")) {
+      String json = msg.substring(7);
+      DynamicJsonDocument doc(512);
+      if (!deserializeJson(doc, json)) {
+        if (doc.containsKey("user"))     strncpy(socialUser, doc["user"].as<const char*>(), 15);
+        if (doc.containsKey("app"))      strncpy(socialApp, doc["app"].as<const char*>(), 11);
+        if (doc.containsKey("body"))     strncpy(socialBody, doc["body"].as<const char*>(), 79);
+        if (doc.containsKey("time"))     strncpy(socialTime, doc["time"].as<const char*>(), 7);
+        if (doc.containsKey("likes"))    socialLikes = doc["likes"].as<uint16_t>();
+        if (doc.containsKey("comments")) socialComments = doc["comments"].as<uint16_t>();
+        redrawSocialPartial();
+      }
+    }
+    else if (msg.startsWith("TASKS:")) {
+      String json = msg.substring(6);
+      DynamicJsonDocument doc(1024);
+      if (!deserializeJson(doc, json)) {
+        if (doc.containsKey("current"))      strncpy(taskCurrent, doc["current"].as<const char*>(), 31);
+        if (doc.containsKey("current_time")) strncpy(taskCurrentTime, doc["current_time"].as<const char*>(), 19);
+        if (doc.containsKey("next1"))        strncpy(taskNext1, doc["next1"].as<const char*>(), 31);
+        if (doc.containsKey("next1_time"))   strncpy(taskNext1Time, doc["next1_time"].as<const char*>(), 15);
+        if (doc.containsKey("next2"))        strncpy(taskNext2, doc["next2"].as<const char*>(), 31);
+        if (doc.containsKey("next2_time"))   strncpy(taskNext2Time, doc["next2_time"].as<const char*>(), 15);
+        if (doc.containsKey("active"))       taskActive = doc["active"].as<bool>();
+        if (doc.containsKey("progress"))     taskProgressPct = doc["progress"].as<uint8_t>();
+        redrawProductivityPartial();
       }
     }
 }

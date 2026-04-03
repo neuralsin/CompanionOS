@@ -1,0 +1,38 @@
+{
+  "social_screen": {
+    "identity": "Social Dashboard",
+    "purpose": "Display rich social media feeds or notifications in a premium card format.",
+    "layout": {
+      "container": "290x200 centered surface card with rounded corners (10px radius)",
+      "header": "Top 40px: 24x24 avatar (circle or rounded rect), Username text at x=40, Timestamp text at right aligned x=280",
+      "media_viewer": "Center 120px height: Image placeholder or large text quote block with subtle inner shadow",
+      "footer": "Bottom 30px: 3 interaction icons (heart, comment, share) spaced evenly on the left, action count on the right"
+    },
+    "typography": {
+      "username": "Bold, 14px, text_primary",
+      "timestamp": "Regular, 10px, text_secondary",
+      "content": "Regular, 14px, text_primary, max 3 lines with ellipsis overflow"
+    },
+    "colors": {
+      "background": "bg_dark",
+      "card_bg": "surface",
+      "card_border": "surface_highlight",
+      "like_active": "accent_red"
+    },
+    "icons": ["avatar_mask", "heart_outline", "heart_filled", "comment", "share"],
+    "data_schema": {
+      "platform": "twitter",
+      "username": "@johndoe",
+      "time_ago": "2h",
+      "body": "Just finished wiring up the new ESP8266 display. Looking slick!",
+      "has_image": true,
+      "likes": 42
+    },
+    "motion": "Slide-in from right on page load. Pulse animation on like icon tap. Partial screen update for body text.",
+    "interactions": "Tap card center to expand reading mode. Swipe left/right for page change.",
+    "rendering_notes": "If image is provided, decode RGB565 over serial block-by-block directly to screen to save RAM. Draw rounded borders using drawRoundRect over the bitmap.",
+    "assets": ["heart_bmp", "comment_bmp", "share_bmp", "default_avatar_bmp"],
+    "prompt": "A modern, dark-themed social media post displayed on a 320x240 landscape digital display. The layout features a single elegant card on a charcoal background. The card has a user avatar, username, a text caption, and a central image area. At the bottom of the card are minimalist icons for like, comment, and share. The design is highly legible, high-contrast, and looks like a premium embedded desk dashboard.",
+    "motion_prompt": "Animate the social post card sliding into view smoothly from the right, with a subtle ease-out deceleration. When the like button is tapped, a small red heart scales up elastically and settles back down."
+  }
+}

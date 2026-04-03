@@ -13,6 +13,7 @@ import sys
 import json
 import time
 import socket
+import subprocess
 from datetime import datetime
 import threading
 import struct
@@ -23,6 +24,9 @@ sys.path.insert(0, SCRIPT_DIR)
 
 from spotify_integration import SpotifyIntegration  # type: ignore # noqa: E402
 from github_integration import GitHubIntegration  # type: ignore # noqa: E402
+from steam_tracker import SteamTracker  # type: ignore # noqa: E402
+from google_cal import GoogleCalendar, LocalTaskList  # type: ignore # noqa: E402
+from stock_manager import StockManager  # type: ignore # noqa: E402
 
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
 
@@ -59,6 +63,7 @@ WEATHER_REFRESH = config.get('update_intervals', {}).get('weather_refresh_minute
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 active_esp_ip = ESP_IP if "192.168.1" not in ESP_IP else None
 force_resync = False
+fast_poll_now = False
 
 # Timer state
 pomodoro_active = False
@@ -70,7 +75,7 @@ pomodoro_last_tick = 0.0
 pomodoro_sessions = 0
 
 # Notification storage
-from typing import List, Dict, Any
+from typing import List, Dict, Any, cast
 notifications: List[Dict[str, Any]] = []
 
 spotify_service = SpotifyIntegration(
@@ -82,6 +87,22 @@ spotify_service = SpotifyIntegration(
 )
 
 github_service = GitHubIntegration(username=GITHUB_USERNAME, token=GITHUB_TOKEN)
+
+# ── V6: New service instances ──────────────────────────
+gaming_cfg = config.get('gaming', {})
+steam_service = SteamTracker(
+    steam_api_key=gaming_cfg.get('steam_api_key', ''),
+    steam_id=gaming_cfg.get('steam_id', '')
+)
+
+prod_cfg = config.get('productivity', {})
+gcal_creds = prod_cfg.get('google_credentials', '')
+if gcal_creds and os.path.exists(os.path.join(SCRIPT_DIR, gcal_creds)):
+    productivity_service = GoogleCalendar(os.path.join(SCRIPT_DIR, gcal_creds))
+else:
+    productivity_service = LocalTaskList()
+
+stock_service = StockManager()
 
 
 def send_udp(message):
@@ -177,36 +198,86 @@ def fetch_weather():
 
 
 def capture_windows_notifications():
-    """Capture Windows notifications using PowerShell"""
-    # This thread polls the Windows Action Center
-    # For now, we use a simpler approach - monitor a notifications file
+    """V4: Capture Windows 10/11 toast notifications using PowerShell"""
     notif_file = os.path.join(SCRIPT_DIR, "notifications.json")
-    last_mod = 0.0
+    
+    # PowerShell script to extract toast notifications from Action Center
+    ps_script = r'''
+    try {
+        [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+        [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+        $notifications = [Windows.UI.Notifications.ToastNotificationManager]::History.GetHistory()
+        $results = @()
+        foreach ($n in $notifications) {
+            if ($n.AppId -eq $null) { continue }
+            $texts = $n.Content.GetElementsByTagName('text')
+            if ($texts.Count -eq 0 -or $texts[0].InnerText -eq $null) { continue }
+            $results += @{
+                app = $n.AppId.Substring(0, [Math]::Min($n.AppId.Length, 15))
+                title = $texts[0].InnerText.Substring(0, [Math]::Min($texts[0].InnerText.Length, 30))
+                time = $n.ExpirationTime.ToString('HH:mm')
+            }
+        }
+        $results | ConvertTo-Json -Compress
+    } catch {
+        '[]'
+    }
+    '''
     
     while True:
         try:
-            if os.path.exists(notif_file):
-                mod_time = os.path.getmtime(notif_file)
-                if mod_time > last_mod:
-                    last_mod = mod_time
-                    with open(notif_file, 'r') as f:
-                        notifs = json.load(f)
-                    if notifs:
-                        global notifications
-                        notifications = notifs[-10:]  # Keep last 10
+            result = subprocess.run(
+                ['powershell', '-Command', ps_script],
+                capture_output=True, text=True, timeout=15
+            )
+            if result.stdout.strip():
+                try:
+                    notifs = json.loads(result.stdout.strip())
+                    if isinstance(notifs, dict):  # Single notification comes as dict
+                        notifs = [notifs]
+                    if notifs and isinstance(notifs, list):
+                        notifications.clear()
+                        # Use cast and type ignore to satisfy picky linter for slicing dynamic JSON
+                        notifications.extend(cast(List[Dict[str, Any]], notifs[-10:]))  # type: ignore
+                        
+                        # Write to file for persistence
+                        with open(notif_file, 'w') as f:
+                            json.dump(list(notifications), f)
+                        
                         # Send to ESP
                         summary = []
-                        for n in notifications[:3]:  # type: ignore
+                        # Cast and type ignore for slicing with static analysis
+                        for n in list(notifications)[:3]:  # type: ignore
                             summary.append({
                                 'app': str(n.get('app', '?'))[:10],  # type: ignore
                                 'title': str(n.get('title', ''))[:20],  # type: ignore
                                 'time': str(n.get('time', ''))
                             })
                         send_udp(f"NOTIF:{json.dumps(summary)}")
-                        print(f"📬 Forwarded {len(summary)} notifications")
-            time.sleep(3)
+                        print(f"📬 Scraped {len(notifs)} Windows notifications")
+                except json.JSONDecodeError:
+                    pass
+            time.sleep(10)  # Poll every 10 seconds
+        except subprocess.TimeoutExpired:
+            time.sleep(15)
         except Exception as e:
-            time.sleep(5)
+            # Fallback to file-based method if PowerShell fails
+            try:
+                if os.path.exists(notif_file):
+                    with open(notif_file, 'r') as f:
+                        notifs = json.load(f)
+                    if notifs:
+                        summary = []
+                        for n in list(notifs)[-3:]:  # type: ignore
+                            summary.append({
+                                'app': str(n.get('app', '?'))[:10],  # type: ignore
+                                'title': str(n.get('title', ''))[:20],  # type: ignore
+                                'time': str(n.get('time', ''))
+                            })
+                        send_udp(f"NOTIF:{json.dumps(summary)}")
+            except Exception:
+                pass
+            time.sleep(10)
 
 
 def start_notes_server():
@@ -289,7 +360,74 @@ def start_notes_server():
                 return {'status': 'ok'}
             return {'status': 'error'}, 400
         
+        # V4: Antigravity Agent Status Webhook
+        @app.route('/api/agent', methods=['POST'])
+        def api_agent():
+            """Receives AI agent status and forwards to ESP"""
+            data = request.get_json()
+            if data:
+                status = data.get('status', 'thinking')  # thinking, done, error
+                text = data.get('text', '')[:60]  # Truncate for ESP display
+                agent_payload = json.dumps({'status': status, 'text': text})
+                send_udp(f"AGENT:{agent_payload}")
+                print(f"🤖 Agent: [{status}] {text[:40]}")
+                return {'status': 'ok'}
+            return {'status': 'error'}, 400
+        
+        # V4: Gallery Image Push
+        @app.route('/api/gallery', methods=['POST'])
+        def api_gallery():
+            """Receives image upload, processes to 96x96 RGB565, streams to ESP"""
+            try:
+                from PIL import Image  # type: ignore
+                import io
+                
+                if 'image' not in request.files:
+                    return {'status': 'error', 'msg': 'No image file'}, 400
+                
+                file = request.files['image']
+                img = Image.open(io.BytesIO(file.read()))
+                img = img.resize((96, 96), Image.LANCZOS)
+                img = img.convert('RGB')
+                
+                pixels = []
+                for y in range(96):
+                    for x in range(96):
+                        r, g, b = img.getpixel((x, y))
+                        rgb565 = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
+                        pixels.append(rgb565)
+                
+                # Stream using same binary protocol as album art  
+                send_udp("ART_START:")
+                time.sleep(0.05)
+                
+                pixels_per_chunk = 96 * 2
+                flat_bytes = []
+                for c in pixels:
+                    flat_bytes.append((c >> 8) & 0xFF)
+                    flat_bytes.append(c & 0xFF)
+                byte_array = bytes(flat_bytes)
+                
+                # Use bytearray and type ignore for slicing in static analysis
+                raw_bytes = bytearray(byte_array)
+                for i in range(0, len(raw_bytes), pixels_per_chunk * 2):
+                    chunk_data = raw_bytes[i:i+(pixels_per_chunk*2)]  # type: ignore
+                    idx = i // (pixels_per_chunk * 2)
+                    packet = bytes([0xFE, (idx >> 8) & 0xFF, idx & 0xFF]) + chunk_data
+                    send_udp_bytes(packet)
+                    time.sleep(0.005)
+                
+                send_udp("ART_COMPLETE:")
+                print(f"🖼️ Gallery image pushed to ESP")
+                return {'status': 'ok'}
+            except ImportError:
+                return {'status': 'error', 'msg': 'PIL not installed'}, 500
+            except Exception as e:
+                return {'status': 'error', 'msg': str(e)}, 500
+        
         print(f"📝 Notes web server starting on http://0.0.0.0:{port}")
+        print(f"  🤖 Agent webhook: POST /api/agent")
+        print(f"  🖼️ Gallery push:  POST /api/gallery")
         app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
     except ImportError:
         print("⚠️ Flask not installed. Run: pip install flask")
@@ -300,6 +438,7 @@ def start_notes_server():
 def command_listener():
     global active_esp_ip, force_resync, pomodoro_active, pomodoro_remaining
     global pomodoro_is_break, pomodoro_sessions, pomodoro_last_tick
+    global fast_poll_now
     
     listen_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listen_sock.bind(('0.0.0.0', PC_PORT_RX))
@@ -390,21 +529,133 @@ def command_listener():
                     notif_file = os.path.join(SCRIPT_DIR, "notifications.json")
                     with open(notif_file, 'w') as f:
                         json.dump([], f)
-                    send_udp('NOTIF:[]')  # type: ignore  # type: ignore
+                    send_udp('NOTIF:[]')  # type: ignore
                     print("🔔 Notifications cleared")
+                # ── V6: New page commands ──────────────────
+                elif msg.startswith("STOCK:SET:"):
+                    new_ticker = msg.split(":")[2].strip()
+                    if new_ticker:
+                        stock_service.set_primary(new_ticker)
+                        print(f"📊 Primary ticker → {new_ticker}")
+                elif msg == "SOCIAL:LIKE":
+                    print("❤️ Social like from device")
+                elif msg == "TASK:DONE":
+                    print("✅ Task marked done from device")
         except Exception as e:
             print(f"Command error: {e}")
 
 
+# ═══════════════════════════════════════════════════════════
+# V6: DATA FEED LOOPS (run as daemon threads)
+# ═══════════════════════════════════════════════════════════
+
+def stock_feed_loop():
+    """Periodically fetch stock data and send to ESP."""
+    interval = config.get('stocks', {}).get('update_interval_seconds', 60)
+    # Initial delay to let network settle
+    time.sleep(8)
+    while True:
+        try:
+            payload = stock_service.get_esp_payload()
+            msg = f"STOCKS:{json.dumps(payload)}"
+            send_udp(msg)
+            print(f"📊 Stock sync: {payload.get('symbol', '?')} ${payload.get('price', '?')}")
+        except Exception as e:
+            print(f"Stock feed error: {e}")
+        time.sleep(interval)
+
+
+def gaming_feed_loop():
+    """Periodically check game state and send to ESP."""
+    interval = config.get('gaming', {}).get('update_interval_seconds', 30)
+    time.sleep(5)
+    while True:
+        try:
+            state = steam_service.get_gaming_state()
+            msg = f"GAMING:{json.dumps(state)}"
+            send_udp(msg)
+            if state.get('active'):
+                print(f"🎮 Playing: {state['title']} ({state['session']})")
+        except Exception as e:
+            print(f"Gaming feed error: {e}")
+        time.sleep(interval)
+
+
+def social_feed_loop():
+    """Reformat Windows notifications as social cards for ESP."""
+    interval = config.get('social', {}).get('update_interval_seconds', 15)
+    last_social_body = ''
+    time.sleep(6)
+    while True:
+        try:
+            # Read from the notification storage that capture_windows_notifications populates
+            notif_file = os.path.join(SCRIPT_DIR, "notifications.json")
+            if os.path.exists(notif_file):
+                with open(notif_file, 'r') as f:
+                    notifs = json.load(f)
+                if notifs and isinstance(notifs, list):
+                    # Pick the most recent notification
+                    latest = notifs[-1]
+                    app_name = str(latest.get('app', 'App'))[:11]
+                    title = str(latest.get('title', ''))[:79]
+                    time_str = str(latest.get('time', ''))[:7]
+
+                    # Extract username from title (heuristic: first word before ':' or space)
+                    user = ''
+                    if ':' in title:
+                        user = title.split(':')[0].strip()[:15]
+                        body = title[title.index(':') + 1:].strip()
+                    else:
+                        parts = title.split(' ', 1)
+                        user = parts[0][:15] if parts else app_name
+                        body = parts[1] if len(parts) > 1 else title
+
+                    if body != last_social_body:
+                        social_payload = {
+                            'user': user,
+                            'app': app_name,
+                            'body': body[:79],
+                            'time': time_str,
+                            'likes': 0,
+                            'comments': 0
+                        }
+                        send_udp(f"SOCIAL:{json.dumps(social_payload)}")
+                        last_social_body = body
+        except Exception as e:
+            print(f"Social feed error: {e}")
+        time.sleep(interval)
+
+
+def productivity_feed_loop():
+    """Periodically fetch calendar/tasks and send to ESP."""
+    interval = config.get('productivity', {}).get('update_interval_seconds', 60)
+    time.sleep(7)
+    while True:
+        try:
+            state = productivity_service.get_productivity_state()
+            msg = f"TASKS:{json.dumps(state)}"
+            send_udp(msg)
+            if state.get('current'):
+                print(f"📅 Task: {state['current']}")
+        except Exception as e:
+            print(f"Productivity feed error: {e}")
+        time.sleep(interval)
+
+
 def main():
     print("\n╔════════════════════════════════════════════════╗")
-    print("║  COMPANION OS - Controller v3.0               ║")
+    print("║  COMPANION OS - Controller v6.0               ║")
     print("╚════════════════════════════════════════════════╝\n")
     
     # Start background threads
     threading.Thread(target=command_listener, daemon=True).start()
     threading.Thread(target=capture_windows_notifications, daemon=True).start()
     threading.Thread(target=start_notes_server, daemon=True).start()
+    # V6: New data feed threads
+    threading.Thread(target=stock_feed_loop, daemon=True).start()
+    threading.Thread(target=gaming_feed_loop, daemon=True).start()
+    threading.Thread(target=social_feed_loop, daemon=True).start()
+    threading.Thread(target=productivity_feed_loop, daemon=True).start()
     print("Monitoring playback & connections...")
     
     global current_lyrics, fast_poll_now

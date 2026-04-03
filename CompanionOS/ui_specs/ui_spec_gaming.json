@@ -1,0 +1,37 @@
+{
+  "gaming_screen": {
+    "identity": "Game Dashboard",
+    "purpose": "Display current Steam activity, session stats, and game deals.",
+    "layout": {
+      "left_pane": "140x220: Current Game card. Large cover art placeholder, title text, 'Now Playing' badge.",
+      "right_pane": "160x220: Metrics stack. Three rows. Row 1: Session Time (large digits). Row 2: Achievements progress bar. Row 3: Friends online status."
+    },
+    "typography": {
+      "game_title": "Bold, 18px, text_primary, text-wrap",
+      "badge": "Uppercase, 10px, accent_green",
+      "stat_value": "Monospace, 24px, accent_cyan",
+      "stat_label": "Regular, 10px, text_secondary"
+    },
+    "colors": {
+      "background": "bg_dark",
+      "card_bg": "surface",
+      "playing_badge": "accent_green",
+      "progress_bar": "accent_cyan",
+      "progress_bg": "divider"
+    },
+    "icons": ["steam_logo", "trophy", "friends"],
+    "data_schema": {
+      "state": "playing",
+      "game_title": "Cyberpunk 2077",
+      "session_time": "02:45:12",
+      "progress_pct": 68,
+      "friends_online": 4
+    },
+    "motion": "Digital blinking colon in session time (1Hz). Progress bar fills smoothly from 0 on page load. Soft breathing glow behind cover art.",
+    "interactions": "Tap right pane to toggle stats view vs recent screenshots.",
+    "rendering_notes": "Session time updates every second -> map to a small dirty rectangle. Cover art updates rarely.",
+    "assets": ["steam_icon_bmp", "trophy_icon_bmp"],
+    "prompt": "A modern gaming stat dashboard for a 320x240 landscape digital display. Dark charcoal theme with neon cyan and green accents. On the left is a vertical game cover art for a sci-fi game with a 'Now Playing' badge. On the right are digital stats including session time in large monospaced font, a progress bar for achievements, and a small friends-online indicator. UI feels cyber, sleek, and data-dense but readable.",
+    "motion_prompt": "The time value pulses the colon every second. The achievement progress bar illuminates from left to right easing into its current percentage."
+  }
+}

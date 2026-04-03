@@ -1,0 +1,30 @@
+{
+  "system_rules": {
+    "identity": "CompanionOS Single-Screen Architecture",
+    "purpose": "A unified, premium desk-dashboard UI optimized for ESP8266 320x240 TFTs",
+    "layout": "Grid-based padding framework. 320px width, 240px height. 8px baseline grid. Safe margins: 10px on all sides. Component spacing: 5px or 10px.",
+    "typography": "TFT_eSPI anti-aliased fonts (SmoothFonts / .vlw). Header: 18-24px depending on length. Body: 14px. Small caps/labels: 10px. Numeric values (Clock/Stocks): Monospaced or structured custom fonts 24-48px. Antialiasing over solid backgrounds to prevent RAM-heavy alpha blending.",
+    "colors": {
+      "bg_dark": "#0A0B10",
+      "surface": "#12141D",
+      "surface_highlight": "#1D202F",
+      "text_primary": "#FFFFFF",
+      "text_secondary": "#8A8D98",
+      "accent_blue": "#2A84FF",
+      "accent_cyan": "#00F0FF",
+      "accent_green": "#10B981",
+      "accent_red": "#EF4444",
+      "accent_purple": "#8B5CF6",
+      "divider": "#2A2D3A"
+    },
+    "icons": "16x16 or 24x24 bitmap icons (1-bit with drawBitmap) or small antialiased sprites if PROGMEM allows. Minimalist, line-based icons.",
+    "interactions": "Global Swipe Left/Right to change pages. Touch bounding boxes must be padded to minimum 40x40px to accommodate finger inaccuracy.",
+    "rendering_notes": "Avoid full screen tft.fillScreen() except on page transitions. Within a page, use dirty rectangles (fillRect over old text, then drawString). For complex shapes or album art, push to a TFT_eSprite buffer first, then pushSprite to screen to avoid tearing. 15 FPS target for dynamic data updates.",
+    "data_schema_globals": {
+      "page_index": 0,
+      "total_pages": 8,
+      "wifi_status": 1,
+      "time_string": "14:30"
+    }
+  }
+}

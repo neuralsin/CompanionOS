@@ -28,8 +28,17 @@ const int UDP_PORT_TX = 8889;
 // Feature Toggles
 #define ENABLE_EYES true
 #define ENABLE_SPOTIFY true
-#define ENABLE_GITHUB true
+#define ENABLE_GALLERY true     // Replaces GitHub page
 #define ENABLE_MIC true
+#define ENABLE_EXOTIC true      // Allow exotic mode toggle
+
+// EEPROM addresses
+#define EEPROM_EXOTIC_ADDR 0    // 1 byte: exotic mode on/off (V4 legacy)
+#define EEPROM_THEME_ADDR 1     // 1 byte: active theme index (0-10)
+#define EEPROM_SIZE 8           // Total EEPROM bytes used
+
+// Theme system
+#define THEME_COUNT 11          // Legacy + Exotic + 9 new themes
 
 // Display constants
 #define SCREEN_W 320

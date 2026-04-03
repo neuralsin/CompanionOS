@@ -1,11 +1,13 @@
 /*
  * ═══════════════════════════════════════════════════════════
- *   COMPANION OS v3.0 — Full Production
+ *   COMPANION OS v6.0 — Multi-Page Dashboard Engine
  *   
- *   7 Pages: Eyes, Spotify, Pomodoro, Weather, 
- *            Notifications, Quick Notes, System Info
- *   LDR sensor support on A0
- *   Time-based + light-based auto emotions
+ *   11 Pages: Eyes, Spotify, Pomodoro, Weather, 
+ *            Notifications, Notes, Stocks, Gaming,
+ *            Social, Productivity, Settings
+ *   11 Themes: Legacy, Exotic, Pikachu, Chill, Gaming,
+ *              Minimal, Angry, Sleep, Mood, System, Companion
+ *   V6: Full dashboard pages with premium UI
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -29,9 +31,17 @@ void runBootSequence() {
   
   // Central Logo
   tft.setTextColor(COLOR_EYE);
-  tft.drawCentreString("CompanionOS", SCREEN_W/2, 40, 4);
+  tft.drawCentreString("CompanionOS", SCREEN_W/2, 35, 4);
   tft.setTextColor(TFT_LIGHTGREY);
-  tft.drawCentreString("v3.0 by neuralsin", SCREEN_W/2, 70, 2);
+  tft.drawCentreString("v5.0 by neuralsin", SCREEN_W/2, 65, 2);
+
+  // V5: Show active theme name
+  char bootThemeName[16];
+  getThemeName(currentThemeId, bootThemeName, sizeof(bootThemeName));
+  char themeLabel[32];
+  sprintf(themeLabel, "Theme: %s", bootThemeName);
+  tft.setTextColor(getThemePrimaryColor(currentThemeId));
+  tft.drawCentreString(themeLabel, SCREEN_W/2, 88, 1);
 
   delay(600);
 
@@ -52,7 +62,7 @@ void runBootSequence() {
 
   tft.setTextFont(2);
   for (int i = 0; i < 6; i++) {
-    int barY = 100 + (i * 20);
+    int barY = 110 + (i * 20);
     tft.setTextColor(TFT_WHITE);
     tft.drawString(tasks[i].name, 10, barY);
     tft.drawRect(120, barY + 2, 80, 10, TFT_DARKGREY);
@@ -72,7 +82,7 @@ void runBootSequence() {
 void setup() {
   Serial.begin(115200);
   Serial.println(F("\n\n╔════════════════════════════════════════╗"));
-  Serial.println(F("║   COMPANION OS v3.0 - Production       ║"));
+  Serial.println(F("║   COMPANION OS v6.0 - Dashboard     ║"));
   Serial.println(F("╚════════════════════════════════════════╝\n"));
   
   Serial.print(F("Display... "));
@@ -88,8 +98,22 @@ void setup() {
   
   pinMode(TOUCH_LEFT, INPUT);
   pinMode(TOUCH_RIGHT, INPUT);
-  // A0 is used for LDR (analog input, no pinMode needed)
   Serial.println(F("Sensors... OK"));
+  
+  // V5: Load theme from EEPROM (migrates V4 exotic flag on first boot)
+  loadThemeFromEEPROM();
+  char tName[16];
+  getThemeName(currentThemeId, tName, sizeof(tName));
+  Serial.print(F("Theme: "));
+  Serial.print(tName);
+  Serial.print(F(" (ID: "));
+  Serial.print(currentThemeId);
+  Serial.println(F(")"));
+  
+  // V4: Initialize pet personality
+  lastInteractionTime = millis();
+  lastMoodDecay = millis();
+  petMoodLevel = 100;
   
   setupWiFi();
   runBootSequence();
@@ -109,6 +133,10 @@ void loop() {
     
     if (currentState == STATE_EYES) {
       updateEyes();
+    }
+    // V6: Productivity clock tick (update every frame for blinking colon)
+    else if (currentState == STATE_PRODUCTIVITY) {
+      redrawProductivityPartial();
     }
     
     // Flash notification timeout

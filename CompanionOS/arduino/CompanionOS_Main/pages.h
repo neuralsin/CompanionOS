@@ -4,6 +4,10 @@
 #include "globals.h"
 #include "ui.h"
 #include "eyes.h"
+#include "page_stocks.h"
+#include "page_gaming.h"
+#include "page_social.h"
+#include "page_productivity.h"
 
 // Data from network.h
 extern String currentTrack;
@@ -271,41 +275,84 @@ void redrawSpotifyPartial() {
   
   // Check if we need to redraw any lyric lines
   if (currentLyrics != lastLyric1 || currentLyricsLine2 != lastLyric2 || prevLyricsLine != lastPrevLyric) {
-    // Clear lyrics content block gracefully with a dark solid to match gradient bottom
+    // Clear lyrics content block gracefully
     tft.fillRect(cardX + 4, cardY + 30, cardW - 8, cardH - 35, 0x0821);
     
     int yC = cardY + 35;
     
-    // Previous lyric (dim)
-    if (prevLyricsLine.length() > 0) {
-      tft.setTextColor(0x4208, 0x0821);
-      String p1 = prevLyricsLine.substring(0, 12);
-      String p2 = prevLyricsLine.length() > 12 ? prevLyricsLine.substring(12, 24) : "";
-      tft.drawString(p1, cardX + 8, yC, 2); yC += 16;
-      if (p2.length() > 0) { tft.drawString(p2, cardX + 8, yC, 2); yC += 16; }
-      yC += 8; // Margin
+    if (exoticMode) {
+      // V4 EXOTIC: Kinetic typography — word-by-word fade-in
+      // Current lyric gets brighter word by word based on time
+      float wordPhase = (millis() % 3000) / 3000.0;  // 3-second cycle
+      
+      // Previous lyric (dim)
+      if (prevLyricsLine.length() > 0) {
+        tft.setTextColor(0x2104, 0x0821);  // Extra dim in exotic
+        String p1 = prevLyricsLine.substring(0, 12);
+        tft.drawString(p1, cardX + 8, yC, 2); yC += 16;
+        yC += 8;
+      } else {
+        yC += 24;
+      }
+      
+      // Current lyric — kinetic word-by-word brightness
+      String lyricLine = currentLyrics.substring(0, 24);
+      int charIdx = 0;
+      int drawX = cardX + 8;
+      for (int w = 0; charIdx < (int)lyricLine.length(); w++) {
+        // Find next word boundary
+        int nextSpace = lyricLine.indexOf(' ', charIdx);
+        if (nextSpace < 0) nextSpace = lyricLine.length();
+        String word = lyricLine.substring(charIdx, nextSpace);
+        
+        float wordT = (float)w / max(1, (int)(lyricLine.length() / 4));
+        float brightness = (wordT < wordPhase) ? 1.0 : 0.3;
+        uint16_t wordColor = blendColor(0x4208, TFT_WHITE, brightness);
+        tft.setTextColor(wordColor, 0x0821);
+        tft.drawString(word, drawX, yC, 2);
+        drawX += tft.textWidth(word, 2) + 4;
+        charIdx = nextSpace + 1;
+        if (drawX > cardX + cardW - 10) { yC += 16; drawX = cardX + 8; }
+      }
+      yC += 16 + 8;
+      
+      // Next lyric (dim)
+      if (currentLyricsLine2.length() > 0) {
+        tft.setTextColor(0x2104, 0x0821);
+        tft.drawString(currentLyricsLine2.substring(0, 12), cardX + 8, yC, 2);
+      }
     } else {
-      yC += 24; // Empty line padding
+      // Legacy: Standard lyric rendering
+      // Previous lyric (dim)
+      if (prevLyricsLine.length() > 0) {
+        tft.setTextColor(0x4208, 0x0821);
+        String p1 = prevLyricsLine.substring(0, 12);
+        String p2 = prevLyricsLine.length() > 12 ? prevLyricsLine.substring(12, 24) : "";
+        tft.drawString(p1, cardX + 8, yC, 2); yC += 16;
+        if (p2.length() > 0) { tft.drawString(p2, cardX + 8, yC, 2); yC += 16; }
+        yC += 8;
+      } else {
+        yC += 24;
+      }
+      
+      // Current lyric (bright, bold substitute)
+      tft.setTextColor(TFT_WHITE, 0x0821);
+      String c1 = currentLyrics.substring(0, 12);
+      String c2 = currentLyrics.length() > 12 ? currentLyrics.substring(12, 24) : "";
+      tft.drawString(c1, cardX + 8, yC, 2); yC += 16;
+      if (c2.length() > 0) { tft.drawString(c2, cardX + 8, yC, 2); yC += 16; }
+      yC += 8;
+      
+      // Next lyric (dimming)
+      if (currentLyricsLine2.length() > 0) {
+        tft.setTextColor(0x4208, 0x0821);
+        String n1 = currentLyricsLine2.substring(0, 12);
+        String n2 = currentLyricsLine2.length() > 12 ? currentLyricsLine2.substring(12, 24) : "";
+        tft.drawString(n1, cardX + 8, yC, 2); yC += 16;
+        if (n2.length() > 0) tft.drawString(n2, cardX + 8, yC, 2);
+      }
     }
     
-    // Current lyric (bright, bold substitute)
-    tft.setTextColor(TFT_WHITE, 0x0821); // Bright white
-    String c1 = currentLyrics.substring(0, 12);
-    String c2 = currentLyrics.length() > 12 ? currentLyrics.substring(12, 24) : "";
-    tft.drawString(c1, cardX + 8, yC, 2); yC += 16;
-    if (c2.length() > 0) { tft.drawString(c2, cardX + 8, yC, 2); yC += 16; }
-    yC += 8; // Margin
-    
-    // Next lyric (dimming)
-    if (currentLyricsLine2.length() > 0) {
-      tft.setTextColor(0x4208, 0x0821); // Dim gray again
-      String n1 = currentLyricsLine2.substring(0, 12);
-      String n2 = currentLyricsLine2.length() > 12 ? currentLyricsLine2.substring(12, 24) : "";
-      tft.drawString(n1, cardX + 8, yC, 2); yC += 16;
-      if (n2.length() > 0) tft.drawString(n2, cardX + 8, yC, 2);
-    }
-    
-    // Assign tracker states to prevent re-rendering when unnecessary
     lastLyric1 = currentLyrics;
     lastLyric2 = currentLyricsLine2;
     lastPrevLyric = prevLyricsLine;
@@ -345,22 +392,34 @@ void completeAlbumArt() {
   redrawSpotifyPartial(); // Redraw whole UI safely
 }
 
-// High-frequency trigonometric subpixel calculation for a perfectly smooth vector ring
+// Performant ring renderer using midpoint-circle traversal (no sqrt/atan2)
 void drawSmoothRing(int cx, int cy, int r, int thickness, float percent, uint16_t fgColor, uint16_t bgColor) {
   float endAngle = percent * 360.0;
-  for (int y = -r; y <= r; y++) {
-    for (int x = -r; x <= r; x++) {
-      float dist = sqrt(x*x + y*y);
-      if (dist >= r - thickness && dist <= r) {
-        float angle = atan2(y, x) * 180.0 / PI;
-        angle += 90.0; // Start at 12 o'clock
+  // Draw concentric circles from inner to outer radius
+  for (int cr = r - thickness; cr <= r; cr++) {
+    // Midpoint circle: iterate one octant, mirror to 8 points
+    int x = cr, y = 0;
+    int err = 1 - cr;
+    while (x >= y) {
+      // 8 symmetry points per iteration
+      int pts[][2] = {
+        {cx+x, cy-y}, {cx+y, cy-x}, {cx-y, cy-x}, {cx-x, cy-y},
+        {cx-x, cy+y}, {cx-y, cy+x}, {cx+y, cy+x}, {cx+x, cy+y}
+      };
+      for (int i = 0; i < 8; i++) {
+        int dx = pts[i][0] - cx;
+        int dy = pts[i][1] - cy;
+        // Fast angle approximation using atan2 only for ring pixels (much fewer)
+        float angle = atan2((float)dy, (float)dx) * 180.0 / PI + 90.0;
         if (angle < 0) angle += 360.0;
-        
-        if (angle <= endAngle) {
-          tft.drawPixel(cx + x, cy + y, fgColor);
-        } else {
-          tft.drawPixel(cx + x, cy + y, bgColor);
-        }
+        tft.drawPixel(pts[i][0], pts[i][1], (angle <= endAngle) ? fgColor : bgColor);
+      }
+      y++;
+      if (err < 0) {
+        err += 2 * y + 1;
+      } else {
+        x--;
+        err += 2 * (y - x) + 1;
       }
     }
   }
@@ -582,9 +641,9 @@ void updateFlashNotification() {
   if (flashNotifActive && millis() - flashNotifStart > 5000) {
     flashNotifActive = false;
     if (currentState == STATE_EYES) {
-      // Clear overlay area and redraw eyes
-      tft.fillRect(0, 0, SCREEN_W, 45, COLOR_BG);
-      drawEyes();
+      // Fully restore eyes page including starfield, backgrounds, and status bar
+      extern void drawEyesPage();
+      drawEyesPage();
     }
   }
 }
@@ -623,6 +682,41 @@ void redrawSettingsPartial() {
   tft.fillRect(0, 18, SCREEN_W, SCREEN_H - 35, COLOR_BG);
   
   int y = 25 - settingsScrollY;
+  
+  // V5: THEME SELECTOR — Scrollable list of all 11 themes
+  if (y > -20 && y < SCREEN_H) {
+    tft.setTextColor(TFT_CYAN);
+    tft.drawString("THEME", 10, y, 2);
+  }
+  y += 22;
+  
+  for (int t = 0; t < THEME_COUNT; t++) {
+    if (y > -20 && y < SCREEN_H) {
+      // Colored indicator dot using theme's primary color
+      uint16_t dotColor = getThemePrimaryColor(t);
+      tft.fillCircle(18, y + 7, 5, dotColor);
+      
+      // Active badge outline
+      if (t == currentThemeId) {
+        tft.drawCircle(18, y + 7, 7, TFT_WHITE);
+      }
+      
+      // Theme name
+      char tName[16];
+      getThemeName(t, tName, sizeof(tName));
+      tft.setTextColor(t == currentThemeId ? TFT_WHITE : 0x8410);
+      tft.drawString(tName, 30, y + 1, 2);
+      
+      // [ACTIVE] badge
+      if (t == currentThemeId) {
+        int nameW = tft.textWidth(tName, 2);
+        tft.setTextColor(TFT_GREEN);
+        tft.drawString("[ON]", 30 + nameW + 6, y + 3, 1);
+      }
+    }
+    y += 20;
+  }
+  y += 6;  // Spacer after theme list
   
   // Network
   if (y > -20 && y < SCREEN_H) {
@@ -690,7 +784,6 @@ void redrawSettingsPartial() {
     tft.setTextColor(TFT_YELLOW);
     char ld[8]; sprintf(ld, "%d", ldrValue);
     tft.drawString(ld, 35, y, 1);
-    // Visual bar
     int barLen = map(ldrValue, 0, 1024, 0, 100);
     tft.fillRect(65, y + 1, barLen, 6, TFT_YELLOW);
     tft.fillRect(65 + barLen, y + 1, 100 - barLen, 6, 0x2104);
@@ -717,12 +810,37 @@ void redrawSettingsPartial() {
   if (y > -20 && y < SCREEN_H) {
     if (timeReceived) {
       char tb[8]; sprintf(tb, "%02d:%02d", displayHour, displayMinute);
-      tft.setTextColor(TFT_YELLOW);
-      tft.drawString(tb, 10, y, 4);
+      // V4 EXOTIC: Variable font weight — breathe between font 2 and 4
+      if (exoticMode) {
+        float breathe = (sin(millis() * 0.00628) + 1.0) * 0.5;  // 1Hz cycle
+        int font = (breathe > 0.5) ? 4 : 2;
+        tft.setTextColor(TFT_YELLOW);
+        tft.drawString(tb, 10, y, font);
+      } else {
+        tft.setTextColor(TFT_YELLOW);
+        tft.drawString(tb, 10, y, 4);
+      }
     } else {
       tft.setTextColor(0x4208);
       tft.drawString("--:--", 10, y, 4);
     }
+  }
+  
+  // V4: Pet mood indicator
+  y += 40;
+  if (y > -20 && y < SCREEN_H) {
+    tft.setTextColor(TFT_CYAN);
+    tft.drawString("PET MOOD", 10, y, 2);
+  }
+  y += 20;
+  if (y > -20 && y < SCREEN_H) {
+    int moodBar = map(petMoodLevel, 0, 100, 0, 100);
+    uint16_t moodColor = petMoodLevel > 60 ? TFT_GREEN : petMoodLevel > 30 ? TFT_YELLOW : TFT_RED;
+    tft.fillRect(10, y, moodBar, 8, moodColor);
+    tft.fillRect(10 + moodBar, y, 100 - moodBar, 8, 0x2104);
+    char ml[8]; sprintf(ml, "%d%%", petMoodLevel);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawString(ml, 120, y, 1);
   }
 }
 
@@ -781,6 +899,34 @@ void drawSettingsPage() {
   redrawSettingsPartial();
 }
 
+// ═══════════════════════════════════════════════════════════
+// V6 NEW PAGE WRAPPERS
+// ═══════════════════════════════════════════════════════════
+
+void drawStocksPageFull() {
+  resetStockDrawState();
+  drawStocksPage();
+  drawStatusBar();
+}
+
+void drawGamingPageFull() {
+  resetGamingDrawState();
+  drawGamingPage();
+  drawStatusBar();
+}
+
+void drawSocialPageFull() {
+  resetSocialDrawState();
+  drawSocialPage();
+  drawStatusBar();
+}
+
+void drawProductivityPageFull() {
+  resetProductivityDrawState();
+  drawProductivityPage();
+  drawStatusBar();
+}
+
 void renderCurrentPage() {
   switch(currentState) {
     case STATE_EYES: drawEyesPage(); break;
@@ -789,6 +935,10 @@ void renderCurrentPage() {
     case STATE_WEATHER: drawWeatherPage(); break;
     case STATE_NOTIFICATIONS: drawNotificationsPage(); break;
     case STATE_NOTES: drawNotesPage(); break;
+    case STATE_STOCKS: drawStocksPageFull(); break;
+    case STATE_GAMING: drawGamingPageFull(); break;
+    case STATE_SOCIAL: drawSocialPageFull(); break;
+    case STATE_PRODUCTIVITY: drawProductivityPageFull(); break;
     case STATE_SETTINGS: drawSettingsPage(); break;
     default: break;
   }
@@ -799,6 +949,11 @@ void changePage(int direction) {
   if (next >= STATE_COUNT) next = 0;
   if (next < 0) next = STATE_COUNT - 1;
   currentState = (AppState)next;
+  
+  // V4: Ink-drop transition in exotic mode
+  extern void inkDropTransition();
+  inkDropTransition();
+  
   renderCurrentPage();
 }
 

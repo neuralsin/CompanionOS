@@ -1,0 +1,34 @@
+{
+  "notifications_screen": {
+    "identity": "Alert Center",
+    "purpose": "List recent Windows PC notifications in a stacked vertical layout.",
+    "layout": {
+      "header": "Top 30px: 'Notifications' title with clear-all button icon on the right.",
+      "list_area": "Below header (300x190): Up to 3 stacked notification cards (approx 300x55 each).",
+      "card_internal": "Icon (24x24) on left, App name and Time on top row, Preview text on bottom row."
+    },
+    "typography": {
+      "app_name": "Bold, 14px, text_primary",
+      "time": "Regular, 10px, text_secondary",
+      "message": "Regular, 10px, text_primary, single line truncation..."
+    },
+    "colors": {
+      "background": "bg_dark",
+      "card_bg": "surface",
+      "card_border": "surface_highlight"
+    },
+    "icons": ["app_generic", "discord", "mail", "clear_all"],
+    "data_schema": {
+      "count": 2,
+      "alerts": [
+        {"app": "Discord", "time": "Now", "message": "Hey, hop in voice chat?", "icon_id": 1},
+        {"app": "Mail", "time": "5m", "message": "Invoice #412 attached.", "icon_id": 2}
+      ]
+    },
+    "motion": "New notifications slide in vertically from the top, pushing older ones down.",
+    "interactions": "Swipe a specific card left to dismiss it. Tap 'clear all' to wipe the screen.",
+    "rendering_notes": "Notifications require string truncation logic on ESP8266 to fit bounds; do not wrap text indefinitely to save rendering cycles. Draw cards as filled rectangles with soft borders.",
+    "prompt": "A modern notification center UI on a 320x240 dark screen. It displays stacked glassy cards. The top card shows a Discord icon and message preview, the second from an email client. The layout is spaced perfectly with 'Alert Center' title in the header. The vibe is a clean, distraction-free inbox display.",
+    "motion_prompt": "A new notification card smoothly slides down into the stack from the top edge, seamlessly pushing the older cards downwards by exactly the height of one row."
+  }
+}

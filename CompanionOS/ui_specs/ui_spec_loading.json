@@ -1,0 +1,30 @@
+{
+  "loading_screen": {
+    "identity": "Cyberpunk Bridge",
+    "purpose": "A seamless, dynamic transition state used when changing pages or syncing heavy data. Replaces generic loading spinners with a premium visual sequence.",
+    "layout": {
+      "full_screen": "320x240 canvas",
+      "elements": "Horizontal scanlines, vertical data shred lines, center abstract geometry (e.g., merging shards or a pulsing ring), and a small 10px monospace status text line at the bottom center."
+    },
+    "typography": {
+      "status_text": "Monospace, 10px, accent_cyan (matches transition active color)"
+    },
+    "colors": {
+      "background": "bg_dark",
+      "tr_purple": "accent_purple",
+      "tr_cyan": "accent_cyan",
+      "tr_glow": "#FFFFFF"
+    },
+    "icons": [],
+    "data_schema": {
+      "target_screen": "stocks_screen",
+      "reason": "data_sync",
+      "status_message": "fetching market data..."
+    },
+    "motion": "Phase 1: Shred (vertical lines slice the previous screen). Phase 2: Morph (geometric shapes scale and rotate). Phase 3: Stitch (circular wipe into the new screen layout).",
+    "interactions": "None. Input is locked during transition.",
+    "rendering_notes": "Implemented purely in math (sine/cosine loops and fast horizontal/vertical lines) without bitmaps to guarantee 20+ FPS. Interpolates colors from the previous page's theme to the destination page's theme.",
+    "prompt": "A cyberpunk transition loading screen on a small dark 320x240 display. Abstract glowing cyan and purple vertical scanlines and geometric shards are morphing in the center. Tiny 'fetching market data...' text sits at the bottom in monospace. The feel is premium data-transfer and sci-fi aesthetic, avoiding cheap generic loading symbols.",
+    "motion_prompt": "The screen's previous image splits into vertical shreds and dissolves, quickly morphing into a spinning geometric neon ring which then rapidly zooms in and bursts to reveal the new UI."
+  }
+}
