@@ -577,24 +577,23 @@ def push_game_cover(title):
         
         resp = requests.get(url, timeout=10)
         img = Image.open(io.BytesIO(resp.content))
-        # Keep it 96x96 to fit precisely inside the existing albumArt buffer 
-        # (ignoring aspect ratio for now, as V5 handles it as square)
-        img = img.resize((96, 96), Image.LANCZOS)
+        # Keep it 100x60 to fit precisely inside the Gaming UI bounds
+        img = img.resize((100, 60), Image.LANCZOS)
         img = img.convert('RGB')
         
         send_udp("ART_START:")
         time.sleep(0.05)
         
         flat_bytes = []
-        for y in range(96):
-            for x in range(96):
+        for y in range(60):
+            for x in range(100):
                 r, g, b = img.getpixel((x, y))  # type: ignore
                 c = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
                 flat_bytes.append((c >> 8) & 0xFF)
                 flat_bytes.append(c & 0xFF)
                 
         byte_array = bytes(flat_bytes)
-        pixels_per_chunk = 96 * 2
+        pixels_per_chunk = 100 * 2
         for i in range(0, len(byte_array), pixels_per_chunk * 2):
             chunk_data = byte_array[i:i+(pixels_per_chunk*2)]  # type: ignore
             idx = i // (pixels_per_chunk * 2)

@@ -23,7 +23,7 @@ Emotion currentEmotion = EMO_NEUTRAL;
 unsigned long lastBlink = 0;
 bool isBlinking = false;
 int blinkPhase = 0;
-char udpBuffer[512];
+char udpBuffer[2048];
 
 void runBootSequence() {
   tft.fillScreen(COLOR_BG);

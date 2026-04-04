@@ -130,6 +130,39 @@ void drawGamingPage() {
 
 void redrawGamingPartial() {
   if (currentState != STATE_GAMING) return;
+  
+  static char lastGameTitle[24] = "";
+  int px2 = 110, w2 = 100;
+  
+  if (strcmp(gameTitle, lastGameTitle) != 0 || albumArtReady) {
+    if (albumArtReady) albumArtReady = false; // consume flag
+    strcpy(lastGameTitle, gameTitle);
+    
+    tft.fillRect(px2+5, 100, 90, 30, GAM_CARD); // Clear old title
+    tft.fillRect(px2+5, 165, 90, 15, GAM_CARD); // Clear status
+    
+    if (gameTitle[0]) {
+      if (albumArt[0] != 0 || albumArt[1] != 0) {
+        tft.pushImage(px2+1, 32, 100, 60, (uint16_t*)albumArt);
+      } else {
+        tft.fillRoundRect(px2+5, 32, w2-10, 60, 4, 0x0421);
+        for (int i=0; i<6; i++) {
+          tft.fillRect(px2+10+(i*12), 45+(i%3)*8, 8, 3, blendColor(GAM_CYAN, GAM_PURPLE, (float)i/6));
+        }
+      }
+      tft.setTextColor(TFT_WHITE);
+      String titleStr = String(gameTitle);
+      tft.drawString(titleStr.substring(0, 10), px2+5, 100, 1);
+      tft.drawString(titleStr.substring(10, 20), px2+5, 115, 1);
+      
+      tft.setTextColor(GAM_DIM);
+      tft.drawString(gameStatus, px2+5, 165, 1);
+    } else {
+      tft.fillRect(px2, 32, 100, 60, GAM_CARD); // clear image
+      tft.setTextColor(GAM_DIM);
+      tft.drawCentreString("No Game", px2+w2/2, 90, 1);
+    }
+  }
 
   if (strcmp(sessionTime, lastSessionTime) != 0) {
     int px1 = 8;

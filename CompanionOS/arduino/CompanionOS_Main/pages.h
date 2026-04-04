@@ -338,18 +338,22 @@ void completeAlbumArt() {
   receivingArt = false;
   albumArtReady = true;
   
-  // Advanced 160MHz Drop Shadow around Album Art 
-  // (We draw this strictly when album art is done, so it wraps perfectly)
-  int blurRadius = 4;
-  for (int i = 1; i <= blurRadius; i++) {
-    uint16_t shadeColor = (i == 1) ? 0x1042 : (i == 2) ? 0x0821 : 0x0000;
-    // Bottom shadow
-    tft.drawFastHLine(ALBUM_X + i, ALBUM_Y + ALBUM_SIZE + i - 1, ALBUM_SIZE, shadeColor);
-    // Right shadow
-    tft.drawFastVLine(ALBUM_X + ALBUM_SIZE + i - 1, ALBUM_Y + i, ALBUM_SIZE, shadeColor);
+  if (currentState == STATE_SPOTIFY) {
+    // Advanced 160MHz Drop Shadow around Album Art 
+    // (We draw this strictly when album art is done, so it wraps perfectly)
+    int blurRadius = 4;
+    for (int i = 1; i <= blurRadius; i++) {
+      uint16_t shadeColor = (i == 1) ? 0x1042 : (i == 2) ? 0x0821 : 0x0000;
+      // Bottom shadow
+      tft.drawFastHLine(ALBUM_X + i, ALBUM_Y + ALBUM_SIZE + i - 1, ALBUM_SIZE, shadeColor);
+      // Right shadow
+      tft.drawFastVLine(ALBUM_X + ALBUM_SIZE + i - 1, ALBUM_Y + i, ALBUM_SIZE, shadeColor);
+    }
+    redrawSpotifyPartial(); // Redraw whole UI safely
+  } else if (currentState == STATE_GAMING) {
+    extern void redrawGamingPartial();
+    redrawGamingPartial();
   }
-  
-  redrawSpotifyPartial(); // Redraw whole UI safely
 }
 
 // High-frequency trigonometric subpixel calculation for a perfectly smooth vector ring

@@ -13,7 +13,7 @@
 // NETWORK FUNCTIONS V3
 // ═══════════════════════════════════════════════════════════
 
-extern char udpBuffer[512];
+extern char udpBuffer[2048];
 String pcIPStr = DEFAULT_PC_IP;
 
 // Global data states
@@ -144,7 +144,7 @@ void handleNetwork() {
     IPAddress remoteIP = udp.remoteIP();
     pcIPStr = remoteIP.toString();
     
-    int readLen = min(packetSize, 511);
+    int readLen = min(packetSize, 2047);
     int len = udp.read(udpBuffer, readLen);
     
     // ── V4 OPTIMIZATION: BARE-METAL BINARY PACKET SNIFFING ──
@@ -166,7 +166,7 @@ void handleNetwork() {
         }
         
         // Instant Progressive Hardware Rendering straight onto the physical display
-        int imgX = (currentState == STATE_GAMING) ? 27 : 10;
+        int imgX = (currentState == STATE_GAMING) ? 110 : 10;
         int imgY = (currentState == STATE_GAMING) ? 32 : 25;
         
         int yStart = startPixel / imgWidth;
