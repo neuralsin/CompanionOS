@@ -127,8 +127,6 @@ void handleTouch() {
             setEmotion((Emotion)((currentEmotion + 1) % EMO_COUNT));
           }
           else if (currentState == STATE_POMODORO) {
-            // ANY tap on the Pomodoro page toggles start/pause
-            // The whole screen is the timer — no Y-zone restriction needed
             if (pomoActive) sendCommand("POMO:PAUSE");
             else sendCommand("POMO:START");
           }
@@ -139,6 +137,27 @@ void handleTouch() {
             }
             else if (lastTouchY > SCREEN_H - 60 && lastTouchY <= SCREEN_H - 40) {
               sendCommand("NOTIF:CLEAR");
+            }
+          }
+          // ── V6: New page tap interactions ──────────────
+          else if (currentState == STATE_STOCKS) {
+            if (lastTouchX > 160 && lastTouchY > 40 && lastTouchY < 196) {
+              int idx = (lastTouchY - 40) / 52;
+              if (idx >= 0 && idx < 3) {
+                char cmd[24];
+                sprintf(cmd, "STOCK:SET:%s", wlSymbol[idx]);
+                sendCommand(cmd);
+              }
+            }
+          }
+          else if (currentState == STATE_SOCIAL) {
+            if (lastTouchX > 30 && lastTouchX < 80 && lastTouchY > 170) {
+              sendCommand("SOCIAL:LIKE");
+            }
+          }
+          else if (currentState == STATE_PRODUCTIVITY) {
+            if (lastTouchX > 150 && lastTouchY > 36 && lastTouchY < 94) {
+              sendCommand("TASK:DONE");
             }
           }
           

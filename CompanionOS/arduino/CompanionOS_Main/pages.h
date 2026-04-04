@@ -4,6 +4,10 @@
 #include "globals.h"
 #include "ui.h"
 #include "eyes.h"
+#include "page_stocks.h"
+#include "page_gaming.h"
+#include "page_social.h"
+#include "page_productivity.h"
 
 // Data from network.h
 extern String currentTrack;
@@ -114,6 +118,8 @@ String lastLyric1 = "";
 String lastLyric2 = "";
 String lastPrevLyric = "";
 bool artDrawn = false;
+static bool controlsDrawn = false;
+static bool cardDrawn = false;
 
 void redrawSpotifyPartial() {
   if (currentState != STATE_SPOTIFY) return;
@@ -155,7 +161,7 @@ void redrawSpotifyPartial() {
   int ctrlY = 118;
   int ctrlX = 160;
   
-  static bool controlsDrawn = false;
+  
   if (!controlsDrawn) {
     tft.fillRect(110, ctrlY - 20, 100, 60, COLOR_BG); 
     
@@ -229,7 +235,6 @@ void redrawSpotifyPartial() {
   int cardW = 105;
   int cardH = 190;
   
-  static bool cardDrawn = false;
   if (!cardDrawn) {
     // Advanced 160MHz Premium Detailing: Drop Shadow
     // Background is black, so to cast a shadow we drop a subtle deep grey aura 
@@ -320,6 +325,8 @@ void resetSpotifyDrawState() {
   lastLyric2 = "";
   lastPrevLyric = "";
   artDrawn = false;
+  controlsDrawn = false;
+  cardDrawn = false;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -781,6 +788,34 @@ void drawSettingsPage() {
   redrawSettingsPartial();
 }
 
+// ═══════════════════════════════════════════════════════════
+// V6 NEW PAGE WRAPPERS
+// ═══════════════════════════════════════════════════════════
+
+void drawStocksPageFull() {
+  resetStockDrawState();
+  drawStocksPage();
+  drawStatusBar();
+}
+
+void drawGamingPageFull() {
+  resetGamingDrawState();
+  drawGamingPage();
+  drawStatusBar();
+}
+
+void drawSocialPageFull() {
+  resetSocialDrawState();
+  drawSocialPage();
+  drawStatusBar();
+}
+
+void drawProductivityPageFull() {
+  resetProductivityDrawState();
+  drawProductivityPage();
+  drawStatusBar();
+}
+
 void renderCurrentPage() {
   switch(currentState) {
     case STATE_EYES: drawEyesPage(); break;
@@ -789,6 +824,10 @@ void renderCurrentPage() {
     case STATE_WEATHER: drawWeatherPage(); break;
     case STATE_NOTIFICATIONS: drawNotificationsPage(); break;
     case STATE_NOTES: drawNotesPage(); break;
+    case STATE_STOCKS: drawStocksPageFull(); break;
+    case STATE_GAMING: drawGamingPageFull(); break;
+    case STATE_SOCIAL: drawSocialPageFull(); break;
+    case STATE_PRODUCTIVITY: drawProductivityPageFull(); break;
     case STATE_SETTINGS: drawSettingsPage(); break;
     default: break;
   }

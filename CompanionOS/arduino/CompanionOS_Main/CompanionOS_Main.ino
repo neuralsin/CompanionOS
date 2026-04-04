@@ -1,11 +1,12 @@
 /*
  * ═══════════════════════════════════════════════════════════
- *   COMPANION OS v3.0 — Full Production
+ *   COMPANION OS v6.0 — Full Production
  *   
- *   7 Pages: Eyes, Spotify, Pomodoro, Weather, 
- *            Notifications, Quick Notes, System Info
- *   LDR sensor support on A0
- *   Time-based + light-based auto emotions
+ *   11 Pages: Eyes, Spotify, Pomodoro, Weather, 
+ *             Notifications, Quick Notes, Stocks,
+ *             Gaming, Social, Productivity, System Info
+ *   V4: Pet personality, agent overlay, flash notifs
+ *   V6: Stocks, Gaming, Social, Productivity dashboards
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -31,7 +32,7 @@ void runBootSequence() {
   tft.setTextColor(COLOR_EYE);
   tft.drawCentreString("CompanionOS", SCREEN_W/2, 40, 4);
   tft.setTextColor(TFT_LIGHTGREY);
-  tft.drawCentreString("v3.0 by neuralsin", SCREEN_W/2, 70, 2);
+  tft.drawCentreString("v6.0 by neuralsin", SCREEN_W/2, 70, 2);
 
   delay(600);
 
@@ -72,7 +73,7 @@ void runBootSequence() {
 void setup() {
   Serial.begin(115200);
   Serial.println(F("\n\n╔════════════════════════════════════════╗"));
-  Serial.println(F("║   COMPANION OS v3.0 - Production       ║"));
+  Serial.println(F("║   COMPANION OS v6.0 - Production       ║"));
   Serial.println(F("╚════════════════════════════════════════╝\n"));
   
   Serial.print(F("Display... "));
@@ -91,8 +92,14 @@ void setup() {
   // A0 is used for LDR (analog input, no pinMode needed)
   Serial.println(F("Sensors... OK"));
   
+  // Initialize EEPROM
+  EEPROM.begin(EEPROM_SIZE);
+  EEPROM.end();
+  
   setupWiFi();
   runBootSequence();
+  
+  lastInteractionTime = millis();
   
   renderCurrentPage();
   Serial.println(F("\n✓ Ready!\n"));
@@ -109,9 +116,59 @@ void loop() {
     
     if (currentState == STATE_EYES) {
       updateEyes();
+      
+      // V4: Agent overlay on eyes page
+      drawAgentOverlay();
     }
     
     // Flash notification timeout
     updateFlashNotification();
+  }
+  
+  // Status bar refresh every 1 second (keeps clock updating on ALL pages)
+  static unsigned long lastStatusBarUpdate = 0;
+  if (millis() - lastStatusBarUpdate >= 1000) {
+    lastStatusBarUpdate = millis();
+    drawStatusBar();
+  }
+  
+  // V4: Pet mood decay (every 60 seconds of no interaction)
+  if (millis() - lastMoodDecay > 60000) {
+    lastMoodDecay = millis();
+    if (petMoodLevel > 0) petMoodLevel -= 2;
+  }
+  
+  // V4: Auto-yawn after 5 mins of no interaction
+  if (currentState == STATE_EYES && !isYawning) {
+    if (millis() - lastInteractionTime > 300000 && petMoodLevel < 30) {
+      isYawning = true;
+      yawnStart = millis();
+      setEmotion(EMO_SLEEPY);
+    }
+  }
+  if (isYawning && millis() - yawnStart > 3000) {
+    isYawning = false;
+    setEmotion(EMO_NEUTRAL);
+  }
+  
+  // Native internal clock tick (1s resolution between UDP syncs)
+  if (timeReceived && millis() - lastTimeUpdateMillis >= 1000) {
+    lastTimeUpdateMillis = millis();
+    displaySecond++;
+    if (displaySecond >= 60) {
+      displaySecond = 0;
+      displayMinute++;
+      if (displayMinute >= 60) {
+        displayMinute = 0;
+        displayHour = (displayHour + 1) % 24;
+      }
+    }
+  }
+  
+  // LDR read (every 2s)
+  static unsigned long lastLDR = 0;
+  if (millis() - lastLDR > 2000) {
+    lastLDR = millis();
+    ldrValue = analogRead(A0);
   }
 }

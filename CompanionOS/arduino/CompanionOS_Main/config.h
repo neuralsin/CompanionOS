@@ -28,8 +28,13 @@ const int UDP_PORT_TX = 8889;
 // Feature Toggles
 #define ENABLE_EYES true
 #define ENABLE_SPOTIFY true
-#define ENABLE_GITHUB true
+#define ENABLE_GALLERY true
 #define ENABLE_MIC true
+
+// EEPROM addresses
+#define EEPROM_EXOTIC_ADDR 0    // 1 byte: legacy
+#define EEPROM_THEME_ADDR 1     // 1 byte: unused (themes removed)
+#define EEPROM_SIZE 8           // Total EEPROM bytes used
 
 // Display constants
 #define SCREEN_W 320

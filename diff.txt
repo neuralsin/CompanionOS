@@ -1,0 +1,243 @@
+diff --git a/CompanionOS/arduino/CompanionOS_Main/network.h b/CompanionOS/arduino/CompanionOS_Main/network.h
+index e949ca3..77206d0 100644
+--- a/CompanionOS/arduino/CompanionOS_Main/network.h
++++ b/CompanionOS/arduino/CompanionOS_Main/network.h
+@@ -25,6 +25,7 @@ extern String prevLyricsLine;
+ int playProgress = 0;
+ int playDuration = 100;
+ bool isPlaying = false;
++extern bool artDrawn; // Added this line
+ 
+ String currentNotes[4] = {"", "", "", ""};
+ 
+@@ -35,7 +36,6 @@ extern void redrawPomodoroPartial();
+ extern void redrawNotificationsPartial();
+ extern void redrawSettingsPartial();
+ extern void drawStatusBar();
+-extern void prepareAlbumArt();
+ extern void processArtChunk(int chunkIdx, String hexData);
+ extern void completeAlbumArt();
+ extern void showFlashNotification(String text);
+@@ -151,9 +151,10 @@ void handleNetwork() {
+         uint16_t* dest = albumArt + startPixel;
+         unsigned char* src = (unsigned char*)(udpBuffer + 3);
+         
+-        // Fast direct memory alignment to RGB565 struct array
+-        for (int i = 0; i < pixelsInChunk && (startPixel + i) < 9216; i++) {
+-          dest[i] = (src[i*2] << 8) | src[i*2 + 1]; 
++        // Unpack RGB565 with Native Endianness Flipping (L, H)
++        for (int i = 0; i < pixelsInChunk; i++) {
++          int offset = 3 + (i * 2);
++          dest[i] = udpBuffer[offset] | (udpBuffer[offset+1] << 8); 
+         }
+         
+         // Instant Progressive Hardware Rendering straight onto the physical display
+@@ -202,6 +203,11 @@ void handleCommand(String msg) {
+         redrawSpotifyPartial();
+       }
+     }
++    else if (msg.startsWith("ART_START:")) {
++      receivingArt = true;
++      albumArtReady = false;
++      artDrawn = false;
++    }
+     else if (msg.startsWith("STATE:")) {
+       String json = msg.substring(6);
+       DynamicJsonDocument doc(512);
+diff --git a/CompanionOS/arduino/CompanionOS_Main/pages.h b/CompanionOS/arduino/CompanionOS_Main/pages.h
+index b1691a1..35dff93 100644
+--- a/CompanionOS/arduino/CompanionOS_Main/pages.h
++++ b/CompanionOS/arduino/CompanionOS_Main/pages.h
+@@ -113,6 +113,7 @@ String lastArtist = "";
+ String lastLyric1 = "";
+ String lastLyric2 = "";
+ String lastPrevLyric = "";
++bool artDrawn = false;
+ 
+ void redrawSpotifyPartial() {
+   if (currentState != STATE_SPOTIFY) return;
+@@ -122,6 +123,19 @@ void redrawSpotifyPartial() {
+   String title = currentTrack.substring(0, 12);
+   String artist = currentArtist.substring(0, 14);
+   
++  if (!artDrawn && albumArtReady) {
++    tft.pushImage(ALBUM_X, ALBUM_Y, ALBUM_SIZE, ALBUM_SIZE, albumArt);
++    
++    // Repaint the shadow wrap since we just pasted the square
++    int blurRadius = 4;
++    for (int i = 1; i <= blurRadius; i++) {
++      uint16_t shadeColor = (i == 1) ? 0x1042 : (i == 2) ? 0x0821 : 0x0000;
++      tft.drawFastHLine(ALBUM_X + i, ALBUM_Y + ALBUM_SIZE + i - 1, ALBUM_SIZE, shadeColor);
++      tft.drawFastVLine(ALBUM_X + ALBUM_SIZE + i - 1, ALBUM_Y + i, ALBUM_SIZE, shadeColor);
++    }
++    artDrawn = true;
++  }
++  
+   if (title != lastTrackTitle) {
+     tft.fillRect(ALBUM_X, infoY, 110, 20, COLOR_BG);
+     tft.setTextColor(TFT_WHITE, COLOR_BG);
+@@ -305,6 +319,7 @@ void resetSpotifyDrawState() {
+   lastLyric1 = "";
+   lastLyric2 = "";
+   lastPrevLyric = "";
++  artDrawn = false;
+ }
+ 
+ // ?????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+diff --git a/CompanionOS/arduino/CompanionOS_Main/touch.h b/CompanionOS/arduino/CompanionOS_Main/touch.h
+index 9aeffb6..0fbcfb0 100644
+--- a/CompanionOS/arduino/CompanionOS_Main/touch.h
++++ b/CompanionOS/arduino/CompanionOS_Main/touch.h
+@@ -61,6 +61,10 @@ void handleTouch() {
+     int x = map(p.x, 200, 3800, SCREEN_W, 0);
+     int y = map(p.y, 200, 3800, SCREEN_H, 0);
+     
++    // Hardware auto-calibration compensation for resistive drift
++    x += 30;
++    y -= 15;
++    
+     if (x >= 0 && x <= SCREEN_W && y >= 0 && y <= SCREEN_H) {
+       lastTouchX = x;
+       lastTouchY = y;
+@@ -95,13 +99,16 @@ void handleTouch() {
+         if (millis() - lastTouchTime > 300) {
+           
+           if (currentState == STATE_SPOTIFY) {
+-            // Playback controls row (Y: 110-145 ??? matches updated layout)
+-            if (lastTouchY > 110 && lastTouchY < 145) {
+-              if (lastTouchX > 110 && lastTouchX < 130) sendCommand("SHUFFLE:TOGGLE");
+-              else if (lastTouchX >= 130 && lastTouchX < 153) sendCommand("PREV");
+-              else if (lastTouchX >= 153 && lastTouchX < 185) sendCommand("PLAY_PAUSE");
+-              else if (lastTouchX >= 185 && lastTouchX < 200) sendCommand("NEXT");
+-              else if (lastTouchX >= 200 && lastTouchX < 215) sendCommand("REPEAT:TOGGLE");
++            // Top Row (Y: 100-130) -> Prev, Play, Next
++            if (lastTouchY > 100 && lastTouchY < 130) {
++              if (lastTouchX >= 115 && lastTouchX < 145) sendCommand("PREV");
++              else if (lastTouchX >= 145 && lastTouchX < 175) sendCommand("PLAY_PAUSE");
++              else if (lastTouchX >= 175 && lastTouchX < 205) sendCommand("NEXT");
++            }
++            // Bottom Row (Y: 130-148) -> Shuffle, Repeat
++            else if (lastTouchY >= 130 && lastTouchY < 148) {
++              if (lastTouchX >= 120 && lastTouchX < 160) sendCommand("SHUFFLE:TOGGLE");
++              else if (lastTouchX >= 160 && lastTouchX < 200) sendCommand("REPEAT:TOGGLE");
+             }
+             // Progress bar seek zone (Y: 148-175)
+             else if (lastTouchY >= 148 && lastTouchY <= 175) {
+diff --git a/CompanionOS/python/.cache b/CompanionOS/python/.cache
+index bf55c17..632294d 100644
+--- a/CompanionOS/python/.cache
++++ b/CompanionOS/python/.cache
+@@ -1 +1 @@
+-{"access_token": "BQDl6X7fCNfCU_KjeyPHltzpBmmabCWMqhDgWWs1Of2tw2czqRVr1YFjSiM453apd7aH9b2rStiUHCTmGMN9WNCLlUwzfkcvKQu__EUfkzwo6Mlvvm-ckrcnSDkEUfSZHcxmOq4tYm_yoWeGodOOeMtxkz_tlFoQjojx3vFTjsRE-oxyOzS3FvG-cdNJKn0-dO6JcwjEVbsOJUMTm9sYS7G6_jflzJFqPG4ZP8bGxtCZjutjlUj-q6M7k4185dElVaQsN6PjYjEGQ7KHtO1a-MWL18Sl", "token_type": "Bearer", "expires_in": 3600, "refresh_token": "AQCDzzl6TnG-FpdJKuWddUHoX_wTx2jA1mMHJR3okGYjllb_DnifVtaplec0Do9EJWTZippa7R5DCejRbR_eJgexej9BEmsFbCdE3o6zwgXCs4tXHOth3eOT6NksbNi1lSs", "scope": "user-read-playback-state user-modify-playback-state user-read-currently-playing user-library-read user-library-modify", "expires_at": 1774190190}
+\ No newline at end of file
++{"access_token": "BQD6sJSFgImJceHRJLm3GVyhbxLt5zOqYp5o-RUT7KWdDzqJj7TObw8qmt2VDMiXbwWs2EGLTHSWEs3Eiki8Ji67JONcoJE0cFFBCaRUyWooEi9hoHUBmF_8VoSOKR5yuwtG1xCcH6Z8kxVS5njyYRoXhfptJmup0REanK2zeUewvkEDE-ZzKT5w5n0GugNXysuIq2qOxfteWOIQlYUzdF46WWTzTBRpm0Pt0MlG4ZpE3wW1VmkMxeVcEA1dGhCCqTYsi0A5ov9815m4Hzt76mrKZXWJ", "token_type": "Bearer", "expires_in": 3600, "scope": "user-read-playback-state user-modify-playback-state user-read-currently-playing user-library-read user-library-modify", "expires_at": 1774194448, "refresh_token": "AQCDzzl6TnG-FpdJKuWddUHoX_wTx2jA1mMHJR3okGYjllb_DnifVtaplec0Do9EJWTZippa7R5DCejRbR_eJgexej9BEmsFbCdE3o6zwgXCs4tXHOth3eOT6NksbNi1lSs"}
+\ No newline at end of file
+diff --git a/CompanionOS/python/companion_controller.py b/CompanionOS/python/companion_controller.py
+index 60f8411..99d4330 100644
+--- a/CompanionOS/python/companion_controller.py
++++ b/CompanionOS/python/companion_controller.py
+@@ -311,16 +311,28 @@ def command_listener():
+             active_esp_ip = addr[0]
+             command = data.decode().strip()
+             
+-            if command == "HELLO_COMPANION":
++            msg = data.decode('utf-8').strip()
++            
++            if msg == "HELLO_COMPANION":
+                 print(f"???? Companion Device Discovered at {active_esp_ip}!")
+                 force_resync = True
++            elif msg == "RESYNC":
++                print(f"???? Resync requested by device at {active_esp_ip}!")
++                force_resync = True
+             else:
+-                print(f"??? [{addr[0]}] {command}")
+-                if command in ["PLAY_PAUSE", "NEXT", "PREV"]:
+-                    spotify_service.control_playback(command)
+-                elif command.startswith("VOLUME:") or command.startswith("SEEK:"):
+-                    spotify_service.control_playback(command)
+-                elif command == "SHUFFLE:TOGGLE":
++                print(f"??? [{addr[0]}] {msg}")
++                if msg.startswith("PLAY_PAUSE"):
++                    spotify_service.control_playback("PLAY_PAUSE")
++                    fast_poll_now = True
++                elif msg.startswith("NEXT"):
++                    spotify_service.control_playback("NEXT")
++                    fast_poll_now = True
++                elif msg.startswith("PREV"):
++                    spotify_service.control_playback("PREV")
++                    fast_poll_now = True
++                elif msg.startswith("VOLUME:") or msg.startswith("SEEK:"):
++                    spotify_service.control_playback(msg)
++                elif msg == "SHUFFLE:TOGGLE":
+                     try:
+                         state = spotify_service.client.current_playback()
+                         if state:
+@@ -328,7 +340,7 @@ def command_listener():
+                             print(f"???? Shuffle {'ON' if not state['shuffle_state'] else 'OFF'}")
+                     except Exception as e:
+                         print(f"Shuffle error: {e}")
+-                elif command == "REPEAT:TOGGLE":
++                elif msg == "REPEAT:TOGGLE":
+                     try:
+                         state = spotify_service.client.current_playback()
+                         if state:
+@@ -338,7 +350,7 @@ def command_listener():
+                             print(f"???? Repeat {states[idx].upper()}")
+                     except Exception as e:
+                         print(f"Repeat error: {e}")
+-                elif command == "LIKE:TOGGLE":
++                elif msg == "LIKE:TOGGLE":
+                     try:
+                         track = spotify_service.get_current_track()
+                         if track and track.get('id'):
+@@ -351,7 +363,7 @@ def command_listener():
+                                 print(f"?????? Saved {track['name']}")
+                     except Exception as e:
+                         print(f"Like toggle error: {e}")
+-                elif command == "POMO:START":
++                elif msg == "POMO:START":
+                     pomodoro_active = True
+                     pomodoro_last_tick = time.time()
+                     if not pomodoro_is_break: # If starting work, reset remaining
+@@ -359,10 +371,10 @@ def command_listener():
+                     else: # If starting break, reset remaining
+                         pomodoro_remaining = pomodoro_break_duration
+                     print("???? Pomodoro started!")
+-                elif command == "POMO:PAUSE":
++                elif msg == "POMO:PAUSE":
+                     pomodoro_active = False
+                     print("???? Pomodoro paused")
+-                elif command == "POMO:SKIP":
++                elif msg == "POMO:SKIP":
+                     if pomodoro_is_break:
+                         pomodoro_is_break = False
+                         pomodoro_remaining = pomodoro_duration
+@@ -373,7 +385,7 @@ def command_listener():
+                         pomodoro_last_tick = time.time()
+                         pomodoro_sessions += 1  # type: ignore
+                     print(f"???? Skipped to {'break' if pomodoro_is_break else 'work'}")
+-                elif command == "NOTIF:CLEAR":
++                elif msg == "NOTIF:CLEAR":
+                     notifications.clear()
+                     notif_file = os.path.join(SCRIPT_DIR, "notifications.json")
+                     with open(notif_file, 'w') as f:
+@@ -395,7 +407,8 @@ def main():
+     threading.Thread(target=start_notes_server, daemon=True).start()
+     print("Monitoring playback & connections...")
+     
+-    global current_lyrics
++    global current_lyrics, fast_poll_now
++    fast_poll_now = False
+     current_track_id = None
+     last_sent_lyrics = None
+     last_github_check: float = 0.0
+@@ -417,6 +430,9 @@ def main():
+         try:
+             now = time.time()
+             
++            if force_resync or fast_poll_now:
++                fast_poll_now = False
++                
+             if force_resync:
+                 current_track_id = None
+                 last_sent_lyrics = None

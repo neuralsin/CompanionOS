@@ -1,0 +1,43 @@
+{
+  "productivity_screen": {
+    "identity": "Action Hub",
+    "purpose": "Focus-oriented display of the current time, today's schedule, and pending tasks.",
+    "layout": {
+      "left_pane": "120x220: Large time display. Top text shows current date/day. Beneath is massive digital clock. Bottom text shows next upcoming alarm or timer.",
+      "right_pane": "180x220: Now/Next Agenda layout. Top half shows current meeting/task. Bottom half shows next 2 tasks in a compact list format."
+    },
+    "typography": {
+      "clock_huge": "Monospace, 48px, text_primary",
+      "date_text": "Bold, 14px, accent_blue",
+      "agenda_header": "Bold, 10px, text_secondary",
+      "task_title": "Regular, 14px, text_primary",
+      "task_time": "Regular, 10px, accent_blue"
+    },
+    "colors": {
+      "background": "bg_dark",
+      "surface": "surface",
+      "time_color": "text_primary",
+      "active_task_bg": "surface_highlight",
+      "completed_text": "text_secondary"
+    },
+    "icons": ["calendar", "check_circle", "clock_outline"],
+    "data_schema": {
+      "time": "18:45",
+      "date": "THU FEB 21",
+      "current_task": {
+        "title": "Weekly Team Sync",
+        "time": "18:00 - 19:00",
+        "is_active": true
+      },
+      "upcoming_tasks": [
+        {"title": "Review PRs", "time": "19:00 - 19:30"},
+        {"title": "Dinner", "time": "20:00"}
+      ]
+    },
+    "motion": "Colon in time pulses at 1Hz. Progress bar on the active task advances slowly based on current time.",
+    "interactions": "Tap the current task to mark as complete/dismiss.",
+    "rendering_notes": "Use a fixed-width custom font for the clock to avoid layout shifting on tick. The active task card should have a solid background, while upcoming tasks have an invisible background and border separator.",
+    "prompt": "A modern desk productivity dashboard on a 320x240 LCD. Left column has a giant digital clock reading 18:45 and the date in neon blue. Right column has a clean agenda UI showing an active 'Weekly Team Sync' meeting inside a highlighted card, and a subtle list of upcoming tasks beneath it. Background is dark charcoal. It looks hyper-organized and focused, like a premium smart desk clock interface.",
+    "motion_prompt": "The colon on the clock blinks precisely every second. A thin blue progress line at the top of the active meeting card slowly inches to the right."
+  }
+}

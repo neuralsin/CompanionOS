@@ -17,18 +17,7 @@
 //   - Vertical pill pupils with dual reflection highlights
 // ═══════════════════════════════════════════════════════════
 
-enum Emotion {
-  EMO_NEUTRAL,
-  EMO_HAPPY,
-  EMO_SAD,
-  EMO_EXCITED,
-  EMO_LOVE,
-  EMO_SLEEPY,
-  EMO_ANGRY,
-  EMO_SURPRISED,
-  EMO_COUNT
-};
-
+// Emotion system now defined in globals.h
 extern Emotion currentEmotion;
 Emotion autoEmotion = EMO_NEUTRAL;  // Time/LDR suggested emotion
 
@@ -83,10 +72,10 @@ void drawStarfield() {
   }
 }
 
-// Time state
-int displayHour = 0;
-int displayMinute = 0;
-bool timeReceived = false;
+// Time state is now in globals.h
+extern int displayHour;
+extern int displayMinute;
+extern bool timeReceived;
 
 extern void drawStatusBar();
 
@@ -111,8 +100,6 @@ void drawAlmondEye(int cx, int cy, int w, int h, float pX, float pY,
   float halfW = w / 2.0;
 
   // SUBMISSION 2: True Double-Buffering for Zero-Tear Eye Rendering
-  // Allocates a temporary sprite in RAM, draws all gradient loops and physics
-  // inside the silicon, then ships it to the screen over fast SPI at once.
   int sprW = w + 16;
   int sprH = (h + 4) * 2;
   if (!eyeSprAllocated) {
@@ -151,7 +138,6 @@ void drawAlmondEye(int cx, int cy, int w, int h, float pX, float pY,
     int totalH = yb - yt;
     
     if (totalH > 0) {
-      // 5 segments for smooth gradient
       for (int py = 0; py < totalH; py++) {
         float t = (float)py / totalH;
         uint16_t color;
@@ -160,7 +146,7 @@ void drawAlmondEye(int cx, int cy, int w, int h, float pX, float pY,
         } else if (t < 0.66) {
           color = blendColor(c2, c3, (t - 0.33) / 0.33);
         } else {
-          color = blendColor(c3, c2, (t - 0.66) / 0.34);  // Fade back slightly
+          color = blendColor(c3, c2, (t - 0.66) / 0.34);
         }
         eyeSpr.drawPixel(scx + x, scy + yt + py, color);
       }
@@ -172,22 +158,21 @@ void drawAlmondEye(int cx, int cy, int w, int h, float pX, float pY,
   int py = scy + (int)pY;
   
   // Advanced Detailing: Rich Iris depth ring
-  eyeSpr.fillRoundRect(px - PUPIL_W/2 - 2, py - PUPIL_H/2 - 2, PUPIL_W + 4, PUPIL_H + 4, (PUPIL_W+4)/2, 0xFEA0); // Amber/Gold inner iris
-  eyeSpr.drawRoundRect(px - PUPIL_W/2 - 3, py - PUPIL_H/2 - 3, PUPIL_W + 6, PUPIL_H + 6, (PUPIL_W+6)/2, 0x8260); // Dark outer boundary
+  eyeSpr.fillRoundRect(px - PUPIL_W/2 - 2, py - PUPIL_H/2 - 2, PUPIL_W + 4, PUPIL_H + 4, (PUPIL_W+4)/2, 0xFEA0);
+  eyeSpr.drawRoundRect(px - PUPIL_W/2 - 3, py - PUPIL_H/2 - 3, PUPIL_W + 6, PUPIL_H + 6, (PUPIL_W+6)/2, 0x8260);
   
   // Deep Black pill pupil
   eyeSpr.fillRoundRect(px - PUPIL_W/2, py - PUPIL_H/2, PUPIL_W, PUPIL_H, PUPIL_W/2, TFT_BLACK);
   
   // Primary reflection (top-right curved glass highlight)
   eyeSpr.fillCircle(px + 4, py - 6, 3, TFT_WHITE);
-  eyeSpr.fillCircle(px + 3, py - 9, 2, TFT_WHITE); // Extended highlight tail
+  eyeSpr.fillCircle(px + 3, py - 9, 2, TFT_WHITE);
   
   // Secondary bounce reflection (bottom-left)
-  eyeSpr.fillCircle(px - 2, py + 6, 2, 0x6B4D);  // Subtle blue/grey bounce light
+  eyeSpr.fillCircle(px - 2, py + 6, 2, 0x6B4D);
 
-  // Push completed tear-free frame to screen and free RAM
+  // Push completed tear-free frame to screen
   eyeSpr.pushSprite(cx - scx, cy - scy);
-  // We no longer deleteSprite() here to prevent massive heap fragmentation
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -213,28 +198,7 @@ void drawEyebrows(int lx, int rx, int y, uint16_t color, bool angry) {
   }
 }
 
-void drawTears(int cx, int cy) {
-  // Animated teardrop
-  for (int i = 0; i < 3; i++) {
-    int ty = cy + 35 + (i * 12);
-    tft.fillCircle(cx + 10, ty, 3 - i, 0x5DDF);  // Light blue
-  }
-}
-
-void drawSparkles(int cx, int cy) {
-  // Tiny diamond sparkles around the eye
-  int spots[][2] = {{-30, -30}, {35, -25}, {-25, 30}, {30, 25}};
-  for (int i = 0; i < 4; i++) {
-    int sx = cx + spots[i][0];
-    int sy = cy + spots[i][1];
-    tft.drawPixel(sx, sy, TFT_WHITE);
-    tft.drawPixel(sx-1, sy, TFT_WHITE);
-    tft.drawPixel(sx+1, sy, TFT_WHITE);
-    tft.drawPixel(sx, sy-1, TFT_WHITE);
-    tft.drawPixel(sx, sy+1, TFT_WHITE);
-  }
-}
-
+// Tears and sparkles removed completely
 void drawMouth(int cx, int cy, bool happy) {
   int my = cy + 55;
   if (happy) {
@@ -315,19 +279,15 @@ void drawSadEyes() {
                 0x4208, 0x630C, 0xA514, -0.25, 0.25);
   drawAlmondEye(RIGHT_EYE_X, EYE_Y, EYE_W, EYE_H - 5, 0, 5,
                 0x4208, 0x630C, 0xA514, -0.25, 0.25);
-  drawTears(LEFT_EYE_X, EYE_Y);
-  drawTears(RIGHT_EYE_X, EYE_Y);
   drawMouth(SCREEN_W/2, EYE_Y, false);
 }
 
 void drawExcitedEyes() {
-  // Big wide eyes with sparkles
+  // Big wide eyes alone
   drawAlmondEye(LEFT_EYE_X, EYE_Y, EYE_W, EYE_H + 12, pupilOffsetX*1.3, pupilOffsetY*1.3,
                 0x900A, MID_BLUE, BRIGHT_CYAN, 0.1, -0.1);
   drawAlmondEye(RIGHT_EYE_X, EYE_Y, EYE_W, EYE_H + 12, pupilOffsetX*1.3, pupilOffsetY*1.3,
                 0x900A, MID_BLUE, BRIGHT_CYAN, 0.1, -0.1);
-  drawSparkles(LEFT_EYE_X, EYE_Y);
-  drawSparkles(RIGHT_EYE_X, EYE_Y);
   drawMouth(SCREEN_W/2, EYE_Y, true);
 }
 
@@ -369,6 +329,8 @@ void drawSurprisedEyes() {
   // Open mouth
   tft.drawCircle(SCREEN_W/2, EYE_Y + 58, 6, 0x8410);
 }
+
+
 
 // ═══════════════════════════════════════════════════════════
 // TIME & LDR BASED EMOTION LOGIC
@@ -413,9 +375,8 @@ void setEmotion(Emotion newEmotion) {
     currentEmotion = newEmotion;
     if (currentState == STATE_EYES) {
       // CRITICAL FIX: Only clear the safe eye zone, NOT the entire screen.
-      // fillScreen() was destroying the status bar and page indicators.
       int eyeZoneY = 16;  // Below status bar
-      int eyeZoneH = SCREEN_H - 16; // Now just above bottom since dots are gone
+      int eyeZoneH = SCREEN_H - 16;
       tft.fillRect(0, eyeZoneY, SCREEN_W, eyeZoneH, COLOR_BG);
       drawStarfield();
       drawEyes();
@@ -445,7 +406,7 @@ void updateEyes() {
         setEmotion(autoEmotion);
       }
     }
-  } // <--- Missing brace restored
+  }
   
   // Pupil drift (High-speed 160MHz mode)
   if (now - lastPupilMove > 3500) {

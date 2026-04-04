@@ -35,10 +35,17 @@ extern void redrawWeatherPartial();
 extern void redrawPomodoroPartial();
 extern void redrawNotificationsPartial();
 extern void redrawSettingsPartial();
+extern void redrawStocksPartial();
+extern void redrawGamingPartial();
+extern void redrawSocialPartial();
+extern void redrawProductivityPartial();
 extern void drawStatusBar();
 extern void processArtChunk(int chunkIdx, String hexData);
 extern void completeAlbumArt();
 extern void showFlashNotification(String text);
+
+// Safe string extraction to prevent nullptr crash on ESP
+#define SAFESTR(dest, src, sz) do { const char* _s = (src).as<const char*>(); if (_s) { strncpy(dest, _s, sz-1); dest[sz-1] = '\0'; } } while(0)
 
 // Weather data (defined in pages.h, declared here)
 extern String weatherCondition;
@@ -145,24 +152,29 @@ void handleNetwork() {
     if (len > 3 && (unsigned char)udpBuffer[0] == 0xFE) {
       int chunkIdx = ((unsigned char)udpBuffer[1] << 8) | ((unsigned char)udpBuffer[2]);
       int pixelsInChunk = (len - 3) / 2;
-      int startPixel = chunkIdx * 192; // Python packs exactly 192 pixels (2 visual rows) per chunk
+      int imgWidth = (currentState == STATE_GAMING) ? 100 : 96;
+      int pixels_per_chunk = imgWidth * 2;
+      int startPixel = chunkIdx * pixels_per_chunk;
       
       if (startPixel < 9216) {
         uint16_t* dest = albumArt + startPixel;
-        unsigned char* src = (unsigned char*)(udpBuffer + 3);
         
         // Unpack RGB565 with Native Endianness Flipping (L, H)
         for (int i = 0; i < pixelsInChunk; i++) {
           int offset = 3 + (i * 2);
-          dest[i] = udpBuffer[offset] | (udpBuffer[offset+1] << 8); 
+          dest[i] = (unsigned char)udpBuffer[offset] | ((unsigned char)udpBuffer[offset+1] << 8); 
         }
         
         // Instant Progressive Hardware Rendering straight onto the physical display
-        if (currentState == STATE_SPOTIFY) {
-          int yStart = startPixel / 96; // 96 is ALBUM_SIZE
-          int maxRows = pixelsInChunk / 96;
-          if (maxRows > 0 && yStart + maxRows <= 96) {
-             tft.pushImage(10, 25 + yStart, 96, maxRows, dest); // ALBUM_X=10, ALBUM_Y=25
+        int imgX = (currentState == STATE_GAMING) ? 27 : 10;
+        int imgY = (currentState == STATE_GAMING) ? 32 : 25;
+        
+        int yStart = startPixel / imgWidth;
+        int maxRows = pixelsInChunk / imgWidth;
+        
+        if (currentState == STATE_SPOTIFY || currentState == STATE_GAMING) {
+          if (maxRows > 0) {
+             tft.pushImage(imgX, imgY + yStart, imgWidth, maxRows, dest);
           }
         }
       }
@@ -192,6 +204,22 @@ void handleCommand(String msg) {
       else if (emo == "SURPRISED") setEmotion(EMO_SURPRISED);
       else if (emo == "NEUTRAL") setEmotion(EMO_NEUTRAL);
     }
+    // ── V4: Antigravity Agent Status ──────────────────
+    else if (msg.startsWith("AGENT:")) {
+      String json = msg.substring(6);
+      DynamicJsonDocument doc(512);
+      if (!deserializeJson(doc, json)) {
+        agentStatus = doc["status"].as<String>();
+        agentStatusText = doc["text"].as<String>();
+        agentStatusStart = millis();
+        agentOverlayActive = true;
+        lastInteractionTime = millis();
+        
+        if (agentStatus == "thinking") setEmotion(EMO_EXCITED);
+        else if (agentStatus == "done") setEmotion(EMO_HAPPY);
+        else if (agentStatus == "error") setEmotion(EMO_SAD);
+      }
+    }
     else if (msg.startsWith("TRACK:")) {
       String json = msg.substring(6);
       DynamicJsonDocument doc(1024);
@@ -207,6 +235,9 @@ void handleCommand(String msg) {
       receivingArt = true;
       albumArtReady = false;
       artDrawn = false;
+    }
+    else if (msg.startsWith("ART_COMPLETE:")) {
+      completeAlbumArt();
     }
     else if (msg.startsWith("STATE:")) {
       String json = msg.substring(6);
@@ -275,7 +306,7 @@ void handleCommand(String msg) {
       if (!deserializeJson(doc, json)) {
         JsonArray array = doc.as<JsonArray>();
         notifTotal = array.size();
-        notifCount = notifTotal;  // For status bar icon
+        notifCount = notifTotal;
         for (int i = 0; i < 3; i++) {
           if (i < (int)array.size()) {
             notifApps[i] = array[i]["app"].as<String>();
@@ -289,7 +320,6 @@ void handleCommand(String msg) {
         }
         redrawNotificationsPartial();
         
-        // Flash notification on eyes page
         if (notifTotal > 0 && currentState == STATE_EYES) {
           showFlashNotification(notifTitles[0]);
         }
@@ -312,10 +342,84 @@ void handleCommand(String msg) {
       DynamicJsonDocument doc(256);
       deserializeJson(doc, json);
       if (doc.containsKey("time")) {
-        String t = doc["time"]; // HH:MM
+        String t = doc["time"];
         updateTimeFromUDP(t);
-        // Force status bar update immediately so clock appears without waiting for a page change
         drawStatusBar();
+      }
+    }
+    // ═══════════════════════════════════════════════════════
+    // V6: New Page Data Handlers
+    // ═══════════════════════════════════════════════════════
+    else if (msg.startsWith("STOCKS:")) {
+      String json = msg.substring(7);
+      DynamicJsonDocument doc(1024);
+      if (!deserializeJson(doc, json)) {
+        if (doc.containsKey("symbol")) SAFESTR(stockSymbol, doc["symbol"], 16);
+        if (doc.containsKey("price"))  SAFESTR(stockPrice, doc["price"], 16);
+        if (doc.containsKey("delta"))  SAFESTR(stockDelta, doc["delta"], 16);
+        if (doc.containsKey("pct"))    SAFESTR(stockPctChg, doc["pct"], 16);
+        if (doc.containsKey("up"))     stockIsUp = doc["up"].as<bool>();
+        
+        if (doc.containsKey("hist")) {
+          JsonArray hist = doc["hist"];
+          stockHistoryLen = min((int)hist.size(), 40);
+          for (int i = 0; i < stockHistoryLen; i++) {
+            stockHistory[i] = hist[i].as<int16_t>();
+          }
+        }
+        
+        if (doc.containsKey("wl")) {
+          JsonArray wl = doc["wl"];
+          for (int i = 0; i < min((int)wl.size(), 3); i++) {
+            SAFESTR(wlSymbol[i], wl[i]["s"], 16);
+            SAFESTR(wlPrice[i], wl[i]["p"], 16);
+            SAFESTR(wlDelta[i], wl[i]["d"], 16);
+            wlIsUp[i] = wl[i]["u"].as<bool>();
+          }
+        }
+        
+        redrawStocksPartial();
+      }
+    }
+    else if (msg.startsWith("GAMING:")) {
+      String json = msg.substring(7);
+      DynamicJsonDocument doc(512);
+      if (!deserializeJson(doc, json)) {
+        if (doc.containsKey("title"))   SAFESTR(gameTitle, doc["title"], 24);
+        if (doc.containsKey("session")) SAFESTR(sessionTime, doc["session"], 12);
+        if (doc.containsKey("achieve")) achievePct = doc["achieve"].as<uint8_t>();
+        if (doc.containsKey("friends")) friendsOnline = doc["friends"].as<uint8_t>();
+        if (doc.containsKey("active"))  gameActive = doc["active"].as<bool>();
+        if (doc.containsKey("status"))  SAFESTR(gameStatus, doc["status"], 16);
+        redrawGamingPartial();
+      }
+    }
+    else if (msg.startsWith("SOCIAL:")) {
+      String json = msg.substring(7);
+      DynamicJsonDocument doc(512);
+      if (!deserializeJson(doc, json)) {
+        if (doc.containsKey("user"))     SAFESTR(socialUser, doc["user"], 16);
+        if (doc.containsKey("app"))      SAFESTR(socialApp, doc["app"], 12);
+        if (doc.containsKey("body"))     SAFESTR(socialBody, doc["body"], 80);
+        if (doc.containsKey("time"))     SAFESTR(socialTime, doc["time"], 8);
+        if (doc.containsKey("likes"))    socialLikes = doc["likes"].as<uint16_t>();
+        if (doc.containsKey("comments")) socialComments = doc["comments"].as<uint16_t>();
+        redrawSocialPartial();
+      }
+    }
+    else if (msg.startsWith("TASKS:")) {
+      String json = msg.substring(6);
+      DynamicJsonDocument doc(1024);
+      if (!deserializeJson(doc, json)) {
+        if (doc.containsKey("current"))      SAFESTR(taskCurrent, doc["current"], 32);
+        if (doc.containsKey("current_time")) SAFESTR(taskCurrentTime, doc["current_time"], 20);
+        if (doc.containsKey("next1"))        SAFESTR(taskNext1, doc["next1"], 32);
+        if (doc.containsKey("next1_time"))   SAFESTR(taskNext1Time, doc["next1_time"], 16);
+        if (doc.containsKey("next2"))        SAFESTR(taskNext2, doc["next2"], 32);
+        if (doc.containsKey("next2_time"))   SAFESTR(taskNext2Time, doc["next2_time"], 16);
+        if (doc.containsKey("active"))       taskActive = doc["active"].as<bool>();
+        if (doc.containsKey("progress"))     taskProgressPct = doc["progress"].as<uint8_t>();
+        redrawProductivityPartial();
       }
     }
 }

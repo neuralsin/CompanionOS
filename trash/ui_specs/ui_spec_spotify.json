@@ -1,0 +1,37 @@
+{
+  "spotify_screen": {
+    "identity": "Now Playing",
+    "purpose": "A visually striking music player interface synced with Spotify.",
+    "layout": {
+      "album_art": "Left side (120x120 centered vertically): Large square area for RGB565 album art stream.",
+      "track_info": "Right side (160x100): vertically stacked track title (large, max 2 lines), artist name (medium), and album name (small).",
+      "progress_bar": "Right side bottom (160x20): Thin horizontal line with a filled portion and a floating playhead dot. Current time / total time labels at edges.",
+      "controls": "Bottom center (if needed) or abstract EQ bars behind the track info."
+    },
+    "typography": {
+      "song_title": "Bold, 18px, text_primary",
+      "artist": "Regular, 14px, text_secondary",
+      "time_labels": "Regular, 10px, text_secondary"
+    },
+    "colors": {
+      "background": "bg_dark",
+      "progress_fill": "accent_green (Spotify Green #1DB954)",
+      "progress_bg": "divider"
+    },
+    "icons": ["play_icon", "pause_icon", "skip_icon"],
+    "data_schema": {
+      "is_playing": true,
+      "track": "Starboy",
+      "artist": "The Weeknd",
+      "album": "Starboy",
+      "progress_ms": 125000,
+      "duration_ms": 230000,
+      "has_art": true
+    },
+    "motion": "Progress bar smoothly advances based on local millis() interpolation. Tiny EQ bars bounce randomly if is_playing is true.",
+    "interactions": "Tap the center to Play/Pause. Swipe left/right skips tracks (intercepts page change if swiped quickly in the center area, else changes page).",
+    "rendering_notes": "The ESP8266 will struggle with full RGB565 album art if pushed at once. Host script will chunk the 120x120 image. Use pushImage() for chunks. Use a dedicated dirty rect for the progress bar to ensure smooth 15+ FPS movement.",
+    "prompt": "A modern Spotify 'Now Playing' dashboard on a 320x240 dark display. Left side features vibrant, sharp album square art. Right side has the song title 'Starboy', artist name, and a sleek horizontal progress bar in Spotify green. A few subtle audio visualizer bars sit faintly in the background. It feels fluid, rich, and musical.",
+    "motion_prompt": "The album art breathes with a 1% scale-up pulse softly. The progress bar fluidly moves rightward. Tiny audio bars in the background jump actively."
+  }
+}

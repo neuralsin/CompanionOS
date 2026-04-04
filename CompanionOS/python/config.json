@@ -1,5 +1,5 @@
 {
-  "_comment": "Companion OS V3 Configuration",
+  "_comment": "Companion OS V6 Configuration",
   "spotify": {
     "client_id": "450a2e6ab1ed4ce4ac9738f654814240",
     "client_secret": "78200536e7804c8ca427102a6ba2138f",
@@ -33,5 +33,29 @@
     "spotify_poll_seconds": 1,
     "github_refresh_minutes": 60,
     "weather_refresh_minutes": 15
+  },
+  "stocks": {
+    "primary_ticker": "MSFT",
+    "watchlist": [
+      "TATAELXSI.NS",
+      "INDIGO.NS",
+      "TATSILV.NS"
+    ],
+    "portfolio_file": "c:\\Users\\shaan\\OneDrive\\Documents\\C++\\esp\\CompanionOS\\python\\stock_records.json",
+    "update_interval_seconds": 60
+  },
+  "gaming": {
+    "steam_api_key": "",
+    "steam_id": "",
+    "update_interval_seconds": 30
+  },
+  "productivity": {
+    "google_credentials": "credentials.json",
+    "calendar_id": "primary",
+    "update_interval_seconds": 60
+  },
+  "social": {
+    "source": "windows_notifications",
+    "update_interval_seconds": 15
   }
 }
