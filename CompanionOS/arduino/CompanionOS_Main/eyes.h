@@ -21,14 +21,14 @@
 extern Emotion currentEmotion;
 Emotion autoEmotion = EMO_NEUTRAL;  // Time/LDR suggested emotion
 
-// ── Layout Constants ─────────────────────────────────────
-#define EYE_Y        110
-#define LEFT_EYE_X   95
-#define RIGHT_EYE_X  225
-#define EYE_W        90     // Full width of almond
-#define EYE_H        38     // Baseline height
-#define PUPIL_W      10
-#define PUPIL_H      28
+// ── Layout Constants (v7: SCALE-aware) ──────────────────
+#define EYE_Y        SCALE_Y(110)
+#define LEFT_EYE_X   SCALE_X(95)
+#define RIGHT_EYE_X  SCALE_X(225)
+#define EYE_W        SCALE_X(90)   // Full width of almond
+#define EYE_H        SCALE_Y(38)   // Baseline height
+#define PUPIL_W      SCALE_X(10)
+#define PUPIL_H      SCALE_Y(28)
 
 // ── Animation State ──────────────────────────────────────
 extern unsigned long lastBlink;
@@ -79,17 +79,8 @@ extern bool timeReceived;
 
 extern void drawStatusBar();
 
-// ── Color Interpolation ──────────────────────────────────
-uint16_t blendColor(uint16_t c1, uint16_t c2, float t) {
-  if (t <= 0) return c1;
-  if (t >= 1) return c2;
-  uint8_t r1 = (c1 >> 11) & 0x1F, g1 = (c1 >> 5) & 0x3F, b1 = c1 & 0x1F;
-  uint8_t r2 = (c2 >> 11) & 0x1F, g2 = (c2 >> 5) & 0x3F, b2 = c2 & 0x1F;
-  uint8_t r = r1 + (r2 - r1) * t;
-  uint8_t g = g1 + (g2 - g1) * t;
-  uint8_t b = b1 + (b2 - b1) * t;
-  return (r << 11) | (g << 5) | b;
-}
+// blendColor() is defined in ui_components.h — using that version.
+// Removed duplicate to avoid linker errors.
 
 // ── Core Almond Eye Renderer ────────────────────────────
 float currentBlinkMod = 1.0;
@@ -337,7 +328,76 @@ void drawSurprisedEyes() {
   drawAlmondEye(RIGHT_EYE_X, EYE_Y, EYE_W - 20, EYE_H + 18, 0, 0,
                 0x8260, 0xCCA0, TFT_YELLOW, 0.0, 0.0);
   // Open mouth
-  tft.drawCircle(SCREEN_W/2, EYE_Y + 58, 6, 0x8410);
+  tft.drawCircle(SCREEN_W/2, EYE_Y + SCALE_Y(58), SCALE_MIN(6), 0x8410);
+}
+
+// ═══════════════════════════════════════════════════════════
+// V7: SHOOTING STAR ANIMATION — diagonal streak across bg
+// ═══════════════════════════════════════════════════════════
+
+static unsigned long lastShootingStar = 0;
+static int starX = -1, starY = -1, starLen = 0;
+static bool starActive = false;
+
+static void updateShootingStar() {
+  unsigned long now = millis();
+  
+  if (!starActive) {
+    // Trigger a new shooting star every 8-15 seconds
+    if (now - lastShootingStar > (uint32_t)(8000 + random(7000))) {
+      starX = random(SCALE_X(20), SCREEN_W - SCALE_X(20));
+      starY = random(SCALE_Y(20), SCALE_Y(50));
+      starLen = 0;
+      starActive = true;
+    }
+    return;
+  }
+  
+  // Animate the streak
+  int maxLen = SCALE_X(40);
+  if (starLen < maxLen) {
+    int drawX = starX + starLen;
+    int drawY = starY + starLen / 3;
+    if (drawX < SCREEN_W && drawY < SCREEN_H) {
+      // Bright head
+      tft.drawPixel(drawX, drawY, TFT_WHITE);
+      // Dim tail (fade previous pixels)
+      if (starLen > 2) {
+        tft.drawPixel(drawX - 2, drawY - 1, 0x4208);
+      }
+      if (starLen > 5) {
+        tft.drawPixel(drawX - 5, drawY - 2, COLOR_BG);
+      }
+    }
+    starLen += 2;
+  } else {
+    // Erase remaining tail
+    for (int i = max(0, starLen - 6); i <= starLen; i++) {
+      int ex = starX + i;
+      int ey = starY + i / 3;
+      if (ex < SCREEN_W && ey < SCREEN_H) {
+        tft.drawPixel(ex, ey, COLOR_BG);
+      }
+    }
+    starActive = false;
+    lastShootingStar = now;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// V7: HEARTBEAT PULSE — subtle glow ring around eyes on LOVE
+// ═══════════════════════════════════════════════════════════
+
+static void drawHeartbeatPulse() {
+  if (currentEmotion != EMO_LOVE) return;
+  
+  float beat = (sin(millis() * 0.006f) + 1.0f) * 0.5f;
+  uint16_t glowCol = blendColor(COLOR_BG, TFT_MAGENTA, beat * 0.25f);
+  
+  // Soft glow ring around each eye
+  int r = EYE_W / 2 + SCALE_X(12);
+  tft.drawCircle(LEFT_EYE_X, EYE_Y, r, glowCol);
+  tft.drawCircle(RIGHT_EYE_X, EYE_Y, r, glowCol);
 }
 
 
@@ -400,11 +460,15 @@ void updateEyes() {
   
   unsigned long now = millis();
   
-  // Read LDR (on A0)
+  // Read LDR (platform-aware: ESP32=GPIO36/VP, ESP8266=A0)
   static unsigned long lastLDR = 0;
   if (now - lastLDR > 5000) {
     lastLDR = now;
-    ldrValue = analogRead(A0);
+    #ifdef ESP32
+      ldrValue = analogRead(36);  // GPIO36 (SVP) = ADC1_CH0
+    #else
+      ldrValue = analogRead(A0);
+    #endif
     
     // Auto-emotion based on LDR + time (only if no manual emotion override recently)
     Emotion suggested = getAutoEmotion();
@@ -493,16 +557,15 @@ void updateEyes() {
   if (currentEmotion == EMO_SLEEPY && !isBlinking) {
     drawZzz(RIGHT_EYE_X, EYE_Y); 
   }
+  
+  // V7: Shooting star animation (background, non-blocking)
+  updateShootingStar();
+  
+  // V7: Heartbeat glow ring on LOVE emotion
+  drawHeartbeatPulse();
 }
 
-void updateTimeFromUDP(String timeStr) {
-  int colonIndex = timeStr.indexOf(':');
-  if (colonIndex > 0) {
-    displayHour = timeStr.substring(0, colonIndex).toInt();
-    displayMinute = timeStr.substring(colonIndex + 1).toInt();
-    timeReceived = true;
-    // UI drawing is handled by ui.h globally now
-  }
-}
+// updateTimeFromUDP() is defined in CompanionOS_Main.ino
+// Removed duplicate to avoid linker errors.
 
 #endif

@@ -2,11 +2,11 @@
 #define PAGE_GAMING_H
 #include "globals.h"
 
-extern uint16_t blendColor(uint16_t c1, uint16_t c2, float t);
 extern void drawPageIndicator(int current, int total);
 
 // ═══════════════════════════════════════════════════════════
-// GAMING DASHBOARD — V6 Premium Steam-Inspired Page
+// GAMING DASHBOARD — V7 Compact Steam-Inspired Page
+// Resolution-aware via SCALE_X/SCALE_Y macros.
 // ═══════════════════════════════════════════════════════════
 
 #define GAM_BG       0x0841
@@ -26,18 +26,14 @@ void resetGamingDrawState() {
   lastSessionTime[0] = 0;
 }
 
+// Achievement progress bar with purple→cyan gradient
 void drawAchievementBar(int x, int y, int w, int h, uint8_t pct) {
   tft.fillRoundRect(x, y, w, h, h/2, GAM_BAR_BG);
   int fillW = (int)((long)pct * w / 100);
   if (fillW > 0) {
     for (int i = 0; i < fillW; i++) {
       float t = (float)i / max(1, fillW);
-      uint16_t r1 = (GAM_PURPLE >> 11) & 0x1F, g1 = (GAM_PURPLE >> 5) & 0x3F, b1 = GAM_PURPLE & 0x1F;
-      uint16_t r2 = (GAM_CYAN >> 11) & 0x1F, g2 = (GAM_CYAN >> 5) & 0x3F, b2 = GAM_CYAN & 0x1F;
-      uint16_t cr = r1 + (r2 - r1) * t;
-      uint16_t cg = g1 + (g2 - g1) * t;
-      uint16_t cb = b1 + (b2 - b1) * t;
-      uint16_t col = (cr << 11) | (cg << 5) | cb;
+      uint16_t col = blendColor(GAM_PURPLE, GAM_CYAN, t);
       tft.drawFastVLine(x + i, y, h, col);
     }
     if (fillW > h) {
@@ -50,133 +46,188 @@ void drawAchievementBar(int x, int y, int w, int h, uint8_t pct) {
   tft.drawCentreString(pctStr, x + w/2, y + 1, 1);
 }
 
+// Pulsing "NOW PLAYING" badge
 void drawPlayingBadge(int x, int y) {
   if (!gameActive) return;
   float pulse = (sin(millis() * 0.004f) + 1.0f) * 0.5f;
   uint8_t brightness = 160 + (uint8_t)(95 * pulse);
   uint16_t dotColor = ((brightness >> 3) << 5) | 0x0400;
-  tft.fillCircle(x, y + 5, 4, dotColor);
-  tft.fillCircle(x, y + 5, 2, GAM_GREEN);
+  tft.fillCircle(x, y + SCALE_Y(5), SCALE_MIN(4), dotColor);
+  tft.fillCircle(x, y + SCALE_Y(5), SCALE_MIN(2), GAM_GREEN);
   tft.setTextColor(GAM_GREEN);
-  tft.drawString("NOW PLAYING", x + 10, y, 1);
+  tft.drawString("PLAYING", x + SCALE_X(8), y, 1);
 }
+
+// ═══════════════════════════════════════════════════════════
+// FULL PAGE DRAW — Redesigned for 128×160 (landscape)
+// Layout: Header | Session + Friends row | Game card | Recent
+// ═══════════════════════════════════════════════════════════
 
 void drawGamingPage() {
   tft.fillScreen(GAM_BG);
 
+  // ── Header bar ──
   tft.setTextColor(GAM_DIM);
-  tft.drawString("GAMING", 10, 3, 1);
-  tft.fillCircle(SCREEN_W - 15, 7, 3, gameActive ? GAM_GREEN : 0xE8C4);
-  tft.drawFastHLine(0, 15, SCREEN_W, 0x2104);
+  tft.drawString("GAMING", SCALE_X(10), SCALE_Y(3), 1);
+  tft.fillCircle(SCREEN_W - SCALE_X(15), SCALE_Y(7), SCALE_MIN(3), gameActive ? GAM_GREEN : 0xE8C4);
+  tft.drawFastHLine(0, SCALE_Y(14), SCREEN_W, 0x2104);
 
-  int px1 = 8, w1 = 95;
-  tft.fillRoundRect(px1, 22, w1, 55, 4, GAM_CARD);
+  // ── Left column: Session + Friends + Achievement ──
+  int lx = SCALE_X(4);
+  int lw = SCALE_X(72);
+  int topY = SCALE_Y(18);
+
+  // Session card
+  tft.fillRoundRect(lx, topY, lw, SCALE_Y(28), 3, GAM_CARD);
   tft.setTextColor(GAM_DIM);
-  tft.drawString("SESSION", px1+5, 27, 1);
+  tft.drawString("SESSION", lx + SCALE_X(4), topY + SCALE_Y(2), 1);
   tft.setTextColor(GAM_CYAN);
-  tft.drawString(sessionTime, px1+5, 44, 2);
+  tft.drawString(sessionTime, lx + SCALE_X(4), topY + SCALE_Y(14), 1);
 
-  tft.fillRoundRect(px1, 84, w1, 50, 4, GAM_CARD);
+  // Friends card
+  int friendY = topY + SCALE_Y(32);
+  tft.fillRoundRect(lx, friendY, lw, SCALE_Y(24), 3, GAM_CARD);
   tft.setTextColor(GAM_DIM);
-  tft.drawString("ACHIEVE", px1+5, 89, 1);
-  drawAchievementBar(px1+5, 105, w1-10, 10, achievePct);
-
-  tft.fillRoundRect(px1, 140, w1, 45, 4, GAM_CARD);
-  tft.setTextColor(GAM_DIM);
-  tft.drawString("FRIENDS", px1+5, 145, 1);
+  tft.drawString("FRIENDS", lx + SCALE_X(4), friendY + SCALE_Y(2), 1);
   char friendStr[8]; sprintf(friendStr, "%d", friendsOnline);
   tft.setTextColor(GAM_GREEN);
-  tft.drawString(friendStr, px1+5, 160, 2);
+  tft.drawString(friendStr, lx + SCALE_X(4), friendY + SCALE_Y(13), 1);
 
-  int px2 = 110, w2 = 100;
-  tft.fillRoundRect(px2, 22, w2, 163, 6, GAM_CARD);
-  tft.drawRoundRect(px2, 22, w2, 163, 6, GAM_BORDER);
+  // Achievement bar
+  int achY = friendY + SCALE_Y(28);
+  tft.setTextColor(GAM_DIM);
+  tft.drawString("ACHIEV", lx + SCALE_X(4), achY, 1);
+  drawAchievementBar(lx, achY + SCALE_Y(10), lw, SCALE_Y(8), achievePct);
+
+  // ── Right column: Current game card ──
+  int rx = lx + lw + SCALE_X(4);
+  int rw = SCREEN_W - rx - SCALE_X(4);
+
+  tft.fillRoundRect(rx, topY, rw, SCALE_Y(70), 4, GAM_CARD);
+  tft.drawRoundRect(rx, topY, rw, SCALE_Y(70), 4, GAM_BORDER);
 
   if (gameTitle[0]) {
-    if (albumArt[0] != 0 || albumArt[1] != 0) {
-      tft.pushImage(px2, 32, 100, 60, (uint16_t*)albumArt);
-    } else {
-      tft.fillRoundRect(px2+5, 32, w2-10, 60, 4, 0x0421);
-      for (int i=0; i<6; i++) {
-        tft.fillRect(px2+10+(i*12), 45+(i%3)*8, 8, 3, blendColor(GAM_CYAN, GAM_PURPLE, (float)i/6));
-      }
-    }
+    // Game title (2 lines)
     tft.setTextColor(TFT_WHITE);
     String titleStr = String(gameTitle);
-    tft.drawString(titleStr.substring(0, 10), px2+5, 100, 1);
-    tft.drawString(titleStr.substring(10, 20), px2+5, 115, 1);
+    int titleX = rx + SCALE_X(4);
+    int titleY = topY + SCALE_Y(4);
+    
+    if (titleStr.length() <= 10) {
+      tft.drawString(titleStr.c_str(), titleX, titleY, 1);
+    } else {
+      tft.drawString(titleStr.substring(0, 10).c_str(), titleX, titleY, 1);
+      tft.drawString(titleStr.substring(10, 20).c_str(), titleX, titleY + SCALE_Y(12), 1);
+    }
 
-    drawPlayingBadge(px2+5, 142);
+    // Now playing badge
+    drawPlayingBadge(rx + SCALE_X(4), topY + SCALE_Y(35));
+
+    // Status line
     tft.setTextColor(GAM_DIM);
-    tft.drawString(gameStatus, px2+5, 165, 1);
+    tft.drawString(gameStatus, rx + SCALE_X(4), topY + SCALE_Y(55), 1);
   } else {
     tft.setTextColor(GAM_DIM);
-    tft.drawCentreString("No Game", px2+w2/2, 90, 1);
+    tft.drawCentreString("No Game", rx + rw/2, topY + SCALE_Y(30), 1);
   }
 
-  int px3 = 215, w3 = 95;
-  tft.drawRoundRect(px3+25, 22, 45, 30, 4, GAM_DIM);
+  // ── Bottom section: Recent games list ──
+  int recentY = SCALE_Y(100);
   tft.setTextColor(GAM_DIM);
-  tft.drawCentreString("STEAM", px3+47, 30, 1);
+  tft.drawString("RECENT", lx + SCALE_X(2), recentY, 1);
+  recentY += SCALE_Y(10);
 
-  tft.fillRoundRect(px3, 60, w3, 125, 4, GAM_CARD);
-  tft.drawString("WEEKLY", px3+5, 65, 1);
-  tft.setTextColor(TFT_WHITE);
-  tft.drawString("4.2h played", px3+5, 80, 1);
+  for (int i = 0; i < 3; i++) {
+    int rowY = recentY + i * SCALE_Y(10);
+    if (recentGame[i][0]) {
+      // Game name (truncated)
+      tft.setTextColor(GAM_CYAN);
+      String rName = String(recentGame[i]);
+      if (rName.length() > 12) rName = rName.substring(0, 10) + "..";
+      tft.drawString(rName.c_str(), lx + SCALE_X(2), rowY, 1);
+
+      // Playtime
+      char ptBuf[12];
+      if (recentPlaytime[i] >= 60) {
+        sprintf(ptBuf, "%dh", recentPlaytime[i] / 60);
+      } else {
+        sprintf(ptBuf, "%dm", recentPlaytime[i]);
+      }
+      tft.setTextColor(GAM_DIM);
+      tft.drawString(ptBuf, SCREEN_W - SCALE_X(24), rowY, 1);
+    } else {
+      tft.setTextColor(0x2104);
+      tft.drawString("---", lx + SCALE_X(2), rowY, 1);
+    }
+  }
 
   drawPageIndicator(STATE_GAMING, STATE_COUNT);
   gamingPageDrawn = true;
 }
 
+// ═══════════════════════════════════════════════════════════
+// PARTIAL REDRAW — Only update changed fields
+// ═══════════════════════════════════════════════════════════
+
 void redrawGamingPartial() {
   if (currentState != STATE_GAMING) return;
   
   static char lastGameTitle[24] = "";
-  int px2 = 110, w2 = 100;
+  int rx = SCALE_X(4) + SCALE_X(72) + SCALE_X(4);
+  int rw = SCREEN_W - rx - SCALE_X(4);
+  int topY = SCALE_Y(18);
   
+  // Title changed or album art ready
   if (strcmp(gameTitle, lastGameTitle) != 0 || albumArtReady) {
-    if (albumArtReady) albumArtReady = false; // consume flag
+    if (albumArtReady) albumArtReady = false;
     strcpy(lastGameTitle, gameTitle);
     
-    tft.fillRect(px2+5, 100, 90, 30, GAM_CARD); // Clear old title
-    tft.fillRect(px2+5, 165, 90, 15, GAM_CARD); // Clear status
+    // Clear and redraw game card
+    tft.fillRoundRect(rx + 1, topY + 1, rw - 2, SCALE_Y(70) - 2, 3, GAM_CARD);
     
     if (gameTitle[0]) {
-      if (albumArt[0] != 0 || albumArt[1] != 0) {
-        tft.pushImage(px2+1, 32, 100, 60, (uint16_t*)albumArt);
-      } else {
-        tft.fillRoundRect(px2+5, 32, w2-10, 60, 4, 0x0421);
-        for (int i=0; i<6; i++) {
-          tft.fillRect(px2+10+(i*12), 45+(i%3)*8, 8, 3, blendColor(GAM_CYAN, GAM_PURPLE, (float)i/6));
-        }
-      }
       tft.setTextColor(TFT_WHITE);
       String titleStr = String(gameTitle);
-      tft.drawString(titleStr.substring(0, 10), px2+5, 100, 1);
-      tft.drawString(titleStr.substring(10, 20), px2+5, 115, 1);
+      int titleX = rx + SCALE_X(4);
+      int titleY = topY + SCALE_Y(4);
       
+      if (titleStr.length() <= 10) {
+        tft.drawString(titleStr.c_str(), titleX, titleY, 1);
+      } else {
+        tft.drawString(titleStr.substring(0, 10).c_str(), titleX, titleY, 1);
+        tft.drawString(titleStr.substring(10, 20).c_str(), titleX, titleY + SCALE_Y(12), 1);
+      }
+      
+      drawPlayingBadge(rx + SCALE_X(4), topY + SCALE_Y(35));
       tft.setTextColor(GAM_DIM);
-      tft.drawString(gameStatus, px2+5, 165, 1);
+      tft.drawString(gameStatus, rx + SCALE_X(4), topY + SCALE_Y(55), 1);
     } else {
-      tft.fillRect(px2, 32, 100, 60, GAM_CARD); // clear image
       tft.setTextColor(GAM_DIM);
-      tft.drawCentreString("No Game", px2+w2/2, 90, 1);
+      tft.drawCentreString("No Game", rx + rw/2, topY + SCALE_Y(30), 1);
     }
   }
 
+  // Session time changed
   if (strcmp(sessionTime, lastSessionTime) != 0) {
-    int px1 = 8;
-    tft.fillRect(px1+5, 44, 80, 20, GAM_CARD);
+    int lx = SCALE_X(4);
+    int lw = SCALE_X(72);
+    
+    // Update session
+    tft.fillRect(lx + SCALE_X(4), topY + SCALE_Y(14), lw - SCALE_X(8), SCALE_Y(12), GAM_CARD);
     tft.setTextColor(GAM_CYAN);
-    tft.drawString(sessionTime, px1+5, 44, 2);
+    tft.drawString(sessionTime, lx + SCALE_X(4), topY + SCALE_Y(14), 1);
     strcpy(lastSessionTime, sessionTime);
 
-    drawAchievementBar(px1+5, 105, 85, 10, achievePct);
-
-    tft.fillRect(px1+5, 160, 80, 20, GAM_CARD);
+    // Update friends
+    int friendY = topY + SCALE_Y(32);
+    tft.fillRect(lx + SCALE_X(4), friendY + SCALE_Y(13), lw - SCALE_X(8), SCALE_Y(10), GAM_CARD);
     char friendStr[8]; sprintf(friendStr, "%d", friendsOnline);
     tft.setTextColor(GAM_GREEN);
-    tft.drawString(friendStr, px1+5, 160, 2);
+    tft.drawString(friendStr, lx + SCALE_X(4), friendY + SCALE_Y(13), 1);
+
+    // Update achievement
+    int achY = friendY + SCALE_Y(28);
+    drawAchievementBar(lx, achY + SCALE_Y(10), lw, SCALE_Y(8), achievePct);
   }
 }
 
