@@ -1,152 +1,249 @@
+// ═══════════════════════════════════════════════════════════
+// COMPANION OS v7.0 — UI COMPONENTS (Status Bar, Overlays)
+// Resolution-aware, dual-transport status indicators.
+// ═══════════════════════════════════════════════════════════
 #ifndef UI_H
 #define UI_H
 
 #include "globals.h"
+#include "ui_components.h"
 
 extern int displayHour;
 extern int displayMinute;
 extern bool timeReceived;
 
 // ═══════════════════════════════════════════════════════════
-// UI COMPONENTS - V3 (No orange bar, thin status line)
-// + V4 ADDITIONS: Loading screen, agent overlay
+// V7 STATUS BAR — Redesigned: clock, WiFi+BT, music, notif
 // ═══════════════════════════════════════════════════════════
 
-void drawButton(int x, int y, int w, int h, const char* label, uint16_t color) {
-  tft.fillRoundRect(x, y, w, h, 5, color);
-  tft.setTextColor(TFT_WHITE);
-  tft.drawCentreString(label, x + (w/2), y + (h/2) - 8, 2);
+void drawStatusBar() {
+  int barH = SCALE_Y(15);
+  tft.fillRect(0, 0, SCR_W, barH, CLR_BG);
+
+  // ── Persistent Clock on left ──
+  if (timeReceived) {
+    char timeStr[6];
+    sprintf(timeStr, "%02d:%02d", displayHour, displayMinute);
+    tft.setTextColor(CLR_TEXT_HI, CLR_BG);
+    tft.drawString(timeStr, SCALE_X(4), SCALE_Y(2), 1);
+  }
+
+  // ── Song name marquee (center of status bar) ──
+  if (currentState == STATE_EYES && musicPlaying) {
+    extern String currentTrack;
+    String songSnippet = currentTrack.substring(0, (SCR_W < 200) ? 12 : 18);
+    tft.setTextColor(CLR_TEXT_LO, CLR_BG);
+    int songX = SCALE_X(38);
+    int maxSongW = SCR_W - SCALE_X(80);
+    drawTruncatedText(songX, SCALE_Y(2), songSnippet.c_str(), maxSongW, CLR_TEXT_LO, 1);
+  }
+
+  // ── Right-side indicators ──
+  int x = SCR_W - SCALE_X(5);
+  int y = SCALE_Y(5);
+
+  // Notification dot (leftmost indicator)
+  if (notifCount > 0) {
+    int dotX = x - SCALE_X(42);
+    tft.fillCircle(dotX, y, SCALE_X(3), TFT_MAGENTA);
+    tft.setTextColor(CLR_TEXT_HI, CLR_BG);
+    char nb[4];
+    sprintf(nb, "%d", min(notifCount, 9));
+    tft.drawString(nb, dotX + SCALE_X(4), y - SCALE_Y(4), 1);
+  }
+
+  // Music icon (middle indicator)
+  if (musicPlaying) {
+    int mX = x - SCALE_X(28);
+    tft.drawFastVLine(mX, y - SCALE_Y(3), SCALE_Y(6), CLR_SUCCESS);
+    tft.drawFastVLine(mX + SCALE_X(2), y - SCALE_Y(4), SCALE_Y(7), CLR_SUCCESS);
+    tft.fillCircle(mX, y + SCALE_Y(3), 1, CLR_SUCCESS);
+    tft.fillCircle(mX + SCALE_X(2), y + SCALE_Y(3), 1, CLR_SUCCESS);
+  }
+
+  // BT icon (ESP32 only)
+  #ifdef ESP32
+  if (btConnected) {
+    int bx = x - SCALE_X(18);
+    tft.drawFastVLine(bx, y - SCALE_Y(4), SCALE_Y(8), 0x001F); // blue
+    tft.drawLine(bx - 2, y - 2, bx + 2, y + 2, 0x001F);
+    tft.drawLine(bx - 2, y + 2, bx + 2, y - 2, 0x001F);
+  }
+  #endif
+
+  // WiFi icon (rightmost)
+  if (wifiConnected) {
+    int wX = x - SCALE_X(5);
+    int wY = y;
+    // Compact 3-arc WiFi icon
+    tft.fillCircle(wX, wY + SCALE_Y(4), 1, CLR_PRIMARY);
+    tft.drawFastHLine(wX - SCALE_X(2), wY + SCALE_Y(2), SCALE_X(5), CLR_PRIMARY);
+    tft.drawFastHLine(wX - SCALE_X(3), wY, SCALE_X(7), CLR_PRIMARY);
+    tft.drawFastHLine(wX - SCALE_X(4), wY - SCALE_Y(2), SCALE_X(9), CLR_PRIMARY);
+  } else {
+    int wX = x - SCALE_X(5);
+    int wY = y;
+    tft.fillCircle(wX, wY + SCALE_Y(4), 1, CLR_SECONDARY);
+    tft.drawLine(wX - 2, wY, wX + 2, wY + 4, CLR_SECONDARY);
+    tft.drawLine(wX + 2, wY, wX - 2, wY + 4, CLR_SECONDARY);
+  }
 }
 
-// ── V4: Loading Screen for Mode Switching ─────────────────
+// ═══════════════════════════════════════════════════════════
+// V4/V7: Loading Screen for Mode Switching
+// ═══════════════════════════════════════════════════════════
+
 void showLoadingScreen(const char* message) {
-  tft.fillScreen(COLOR_BG);
-  tft.setTextColor(TFT_CYAN);
-  tft.drawCentreString(message, SCREEN_W/2, SCREEN_H/2 - 20, 2);
-  tft.drawRect(SCREEN_W/2 - 60, SCREEN_H/2 + 10, 120, 8, 0x4208);
-  for (int i = 0; i < 116; i += 4) {
-    tft.fillRect(SCREEN_W/2 - 58 + i, SCREEN_H/2 + 12, 4, 4, TFT_CYAN);
+  tft.fillScreen(CLR_BG);
+  tft.setTextColor(CLR_PRIMARY);
+  tft.drawCentreString(message, SCR_CX, SCR_CY - SCALE_Y(20), 2);
+
+  // Progress bar animation
+  int barX = SCR_CX - SCALE_X(60);
+  int barY = SCR_CY + SCALE_Y(10);
+  int barW = SCALE_X(120);
+  int barH = SCALE_Y(8);
+
+  tft.drawRect(barX, barY, barW, barH, CLR_BORDER);
+  for (int i = 0; i < barW - 4; i += SCALE_X(4)) {
+    tft.fillRect(barX + 2 + i, barY + 2, SCALE_X(4), barH - 4, CLR_PRIMARY);
     delay(15);
   }
   delay(200);
 }
 
-// Minimal status bar: tiny icons at top-right, no colored background
-void drawStatusBar() {
-  tft.fillRect(0, 0, SCREEN_W, 15, COLOR_BG);
-  
-  // Persistent Clock on left
-  if (timeReceived) {
-    char timeStr[6];
-    sprintf(timeStr, "%02d:%02d", displayHour, displayMinute);
-    tft.setTextColor(TFT_WHITE, COLOR_BG);
-    tft.drawString(timeStr, 8, 2, 1);
-  }
+// ═══════════════════════════════════════════════════════════
+// PAGE INDICATOR DOTS — Bottom center
+// ═══════════════════════════════════════════════════════════
 
-  // V4: Song name on eyes page (right of clock)
-  if (currentState == STATE_EYES && musicPlaying) {
-    extern String currentTrack;
-    String songSnippet = currentTrack.substring(0, 18);
-    tft.setTextColor(0x6B4D, COLOR_BG);
-    tft.drawString(songSnippet, 50, 2, 1);
-  }
-  
-  int x = SCREEN_W - 10;
-  int y = 5;
-  
-  // Notification dot (leftmost)
-  if (notifCount > 0) {
-    tft.fillCircle(x - 55, y, 3, TFT_MAGENTA);
-    tft.setTextColor(TFT_WHITE, COLOR_BG);
-    char nb[4];
-    sprintf(nb, "%d", min(notifCount, 9));
-    tft.drawString(nb, x - 49, y - 4, 1);
-  }
-  
-  // Music icon (middle)
-  if (musicPlaying) {
-    tft.drawFastVLine(x - 32, y - 3, 6, TFT_GREEN);
-    tft.drawFastVLine(x - 29, y - 4, 7, TFT_GREEN);
-    tft.fillCircle(x - 32, y + 3, 1, TFT_GREEN);
-    tft.fillCircle(x - 29, y + 3, 1, TFT_GREEN);
-  }
-  
-  // WiFi icon (premium 3-arc style)
-  if (wifiConnected) {
-    tft.fillCircle(x - 5, y + 8, 2, TFT_CYAN);
-    tft.drawFastHLine(x - 7, y + 4, 5, TFT_CYAN);
-    tft.drawPixel(x - 8, y + 5, TFT_CYAN); tft.drawPixel(x + 2, y + 5, TFT_CYAN);
-    tft.drawFastHLine(x - 10, y, 11, TFT_CYAN);
-    tft.drawPixel(x - 11, y + 1, TFT_CYAN); tft.drawPixel(x + 1, y + 1, TFT_CYAN);
-    tft.drawFastHLine(x - 13, y - 4, 17, TFT_CYAN);
-    tft.drawPixel(x - 14, y - 3, TFT_CYAN); tft.drawPixel(x + 4, y - 3, TFT_CYAN);
-  } else {
-    tft.fillCircle(x - 5, y + 8, 2, TFT_RED);
-    tft.drawLine(x - 8, y, x - 2, y + 6, TFT_RED);
-    tft.drawLine(x - 2, y, x - 8, y + 6, TFT_RED);
-  }
-}
-
-// Page dots - bottom center, thin
 void drawPageIndicator(int current, int total) {
-  int spacing = 12;
-  int startX = (SCREEN_W - ((total - 1) * spacing)) / 2;
-  int y = SCREEN_H - 8;
+  int spacing = SCALE_X(8);
+  int startX = (SCR_W - ((total - 1) * spacing)) / 2;
+  int y = SCR_H - SCALE_Y(6);
 
   for (int i = 0; i < total; i++) {
+    int dotX = startX + (i * spacing);
     if (i == current) {
-      tft.fillCircle(startX + (i * spacing), y, 3, TFT_WHITE);
+      tft.fillCircle(dotX, y, SCALE_X(2), CLR_TEXT_HI);
     } else {
-      tft.fillCircle(startX + (i * spacing), y, 2, 0x4208);
+      tft.fillCircle(dotX, y, SCALE_X(1), CLR_BORDER);
     }
   }
 }
 
-// Thin header for content pages (no orange, just text)
+// ═══════════════════════════════════════════════════════════
+// PAGE HEADER — Thin, minimal
+// ═══════════════════════════════════════════════════════════
+
 void drawPageHeader(const char* title) {
-  tft.fillRect(0, 0, SCREEN_W - 80, 16, COLOR_BG);
-  tft.setTextColor(0x8410);  // Dim grey
-  tft.drawString(title, 8, 2, 2);
+  tft.fillRect(0, 0, SCR_W - SCALE_X(40), SCALE_Y(16), CLR_BG);
+  tft.setTextColor(CLR_TEXT_LO);
+  tft.drawString(title, SCALE_X(4), SCALE_Y(2), 2);
 }
 
-// ── V4: Agent Status Overlay ──────────────────────────────
+// ═══════════════════════════════════════════════════════════
+// BUTTON HELPER (legacy, used by touch pages)
+// ═══════════════════════════════════════════════════════════
+
+void drawButton(int x, int y, int w, int h, const char* label, uint16_t color) {
+  tft.fillRoundRect(x, y, w, h, 5, color);
+  tft.setTextColor(CLR_TEXT_HI);
+  tft.drawCentreString(label, x + (w/2), y + (h/2) - 8, 2);
+}
+
+// ═══════════════════════════════════════════════════════════
+// AGENT STATUS OVERLAY
+// ═══════════════════════════════════════════════════════════
+
 void drawAgentOverlay() {
   if (!agentOverlayActive) return;
-  
-  extern uint16_t blendColor(uint16_t c1, uint16_t c2, float t);
-  
-  uint16_t bgColor = 0x1082;
-  uint16_t accentColor = TFT_CYAN;
+
+  uint16_t bgColor = CLR_SURFACE;
+  uint16_t accentColor = CLR_PRIMARY;
   if (agentStatus == "error") {
-    accentColor = TFT_RED;
+    accentColor = CLR_SECONDARY;
   } else if (agentStatus == "done") {
-    accentColor = TFT_GREEN;
+    accentColor = CLR_SUCCESS;
   }
-  
-  tft.fillRoundRect(8, SCREEN_H - 55, SCREEN_W - 16, 42, 6, bgColor);
-  tft.fillRect(8, SCREEN_H - 55, 4, 42, accentColor);
-  
+
+  int oy = SCR_H - SCALE_Y(42);
+  int oh = SCALE_Y(34);
+  int ox = SCALE_X(4);
+  int ow = SCR_W - SCALE_X(8);
+
+  tft.fillRoundRect(ox, oy, ow, oh, 4, bgColor);
+  tft.fillRect(ox, oy, SCALE_X(3), oh, accentColor);
+
   if (agentStatus == "thinking") {
     float pulse = (sin(millis() * 0.005) + 1.0) * 0.5;
-    uint16_t dotColor = blendColor(0x4208, accentColor, pulse);
-    tft.fillCircle(20, SCREEN_H - 34, 3, dotColor);
+    uint16_t dotColor = blendColor(CLR_BORDER, accentColor, pulse);
+    tft.fillCircle(ox + SCALE_X(10), oy + oh / 2, SCALE_X(3), dotColor);
   } else {
-    tft.fillCircle(20, SCREEN_H - 34, 3, accentColor);
+    tft.fillCircle(ox + SCALE_X(10), oy + oh / 2, SCALE_X(3), accentColor);
   }
-  
-  tft.setTextColor(TFT_WHITE);
-  String displayText = agentStatusText.substring(0, 32);
-  tft.drawString(displayText, 28, SCREEN_H - 42, 1);
-  if (agentStatusText.length() > 32) {
-    tft.drawString(agentStatusText.substring(32, 64), 28, SCREEN_H - 30, 1);
+
+  tft.setTextColor(CLR_TEXT_HI);
+  int textX = ox + SCALE_X(18);
+  int maxTextW = ow - SCALE_X(22);
+  String displayText = agentStatusText.substring(0, (SCR_W < 200) ? 24 : 32);
+  tft.drawString(displayText, textX, oy + SCALE_Y(4), 1);
+  if (agentStatusText.length() > (unsigned int)((SCR_W < 200) ? 24 : 32)) {
+    tft.drawString(agentStatusText.substring((SCR_W < 200) ? 24 : 32, (SCR_W < 200) ? 48 : 64), textX, oy + SCALE_Y(16), 1);
   }
-  
+
   if (agentStatus == "done" && millis() - agentStatusStart > 5000) {
     agentOverlayActive = false;
   }
   if (agentStatus == "error" && millis() - agentStatusStart > 8000) {
     agentOverlayActive = false;
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+// FLASH NOTIFICATION — Full-screen flash for important notifs
+// ═══════════════════════════════════════════════════════════
+
+extern bool flashNotifActive;
+extern unsigned long flashNotifStart;
+extern String flashNotifText;
+extern bool flashNotifEnabled;
+
+void showFlashNotification(String text) {
+  if (!flashNotifEnabled) return;
+  flashNotifActive = true;
+  flashNotifStart = millis();
+  flashNotifText = text;
+}
+
+void drawFlashNotification() {
+  if (!flashNotifActive) return;
+
+  unsigned long elapsed = millis() - flashNotifStart;
+  if (elapsed > 3000) {
+    flashNotifActive = false;
+    return;
+  }
+
+  // Pulsing notification banner at bottom
+  float alpha = 1.0f;
+  if (elapsed < 300) alpha = elapsed / 300.0f;
+  else if (elapsed > 2700) alpha = (3000 - elapsed) / 300.0f;
+
+  int bannerH = SCALE_Y(30);
+  int bannerY = SCR_H - bannerH;
+
+  uint16_t bgColor = blendColor(CLR_BG, 0x600F, alpha * 0.8f);
+  uint16_t textColor = blendColor(CLR_BG, CLR_TEXT_HI, alpha);
+
+  tft.fillRect(0, bannerY, SCR_W, bannerH, bgColor);
+  tft.drawFastHLine(0, bannerY, SCR_W, TFT_MAGENTA);
+
+  tft.setTextColor(textColor);
+  drawTruncatedText(SCALE_X(8), bannerY + SCALE_Y(6), flashNotifText.c_str(), 
+                    SCR_W - SCALE_X(16), textColor, 1);
+
+  tft.setTextColor(blendColor(CLR_BG, CLR_TEXT_LO, alpha));
+  tft.drawString("New notification", SCALE_X(8), bannerY + SCALE_Y(18), 1);
 }
 
 #endif

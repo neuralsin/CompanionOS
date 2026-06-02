@@ -11,6 +11,9 @@
 #include "page_network.h"
 #include "theme2_eyes.h"
 #include "theme2_spotify.h"
+#ifdef ESP32
+#include "page_dr_hack.h"
+#endif
 
 // Data from network.h
 extern String currentTrack;
@@ -716,14 +719,17 @@ void redrawSettingsPartial() {
   }
   y += 14;
   if (y > -20 && y < SCREEN_H) {
+    #if HAS_TOUCH
     tft.setTextColor(0x8410);
-    tft.drawString("Touch L:", 10, y, 1);
-    tft.setTextColor(digitalRead(TOUCH_LEFT) ? TFT_GREEN : TFT_RED);
-    tft.drawString(digitalRead(TOUCH_LEFT) ? "HIGH" : "LOW", 60, y, 1);
+    tft.drawString("Touch:", 10, y, 1);
+    tft.setTextColor(TFT_GREEN);
+    tft.drawString("XPT2046 OK", 50, y, 1);
+    #else
     tft.setTextColor(0x8410);
-    tft.drawString("Touch R:", 120, y, 1);
-    tft.setTextColor(digitalRead(TOUCH_RIGHT) ? TFT_GREEN : TFT_RED);
-    tft.drawString(digitalRead(TOUCH_RIGHT) ? "HIGH" : "LOW", 170, y, 1);
+    tft.drawString("Buttons:", 10, y, 1);
+    tft.setTextColor(TFT_GREEN);
+    tft.drawString("L/R/SEL", 55, y, 1);
+    #endif
   }
   
   y += 20;
@@ -880,15 +886,31 @@ void renderCurrentPage() {
     case STATE_PRODUCTIVITY: drawProductivityPageFull(); break;
     case STATE_NETWORK: drawNetworkPageFull(); break;
     case STATE_SETTINGS: drawSettingsPage(); break;
+    #ifdef ESP32
+    case STATE_DR_HACK: initDrHack(); break;
+    #endif
     default: break;
   }
 }
 
 void changePage(int direction) {
   int next = (int)currentState + direction;
-  if (next >= STATE_COUNT) next = 0;
-  if (next < 0) next = STATE_COUNT - 1;
+  // Compute effective max page count
+  int maxPage = STATE_COUNT;
+  #ifndef ESP32
+  // ESP8266: skip Dr. Hack (STATE_DR_HACK) — it's ESP32-only
+  maxPage = STATE_DR_HACK; // stop before DR_HACK
+  #endif
+  if (next >= maxPage) next = 0;
+  if (next < 0) next = maxPage - 1;
   currentState = (AppState)next;
+  #ifdef ESP32
+  // Reset Dr. Hack state when leaving
+  if (currentState != STATE_DR_HACK) {
+    extern DrHackSubState dhCurrentState;
+    dhCurrentState = DH_MENU;
+  }
+  #endif
   renderCurrentPage();
 }
 

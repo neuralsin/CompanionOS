@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ESP32-TOOLS-PRO-480x320-V2.0 | Web Flasher</title>
+  <meta name="description" content="Flashea ESP32-TOOLS-PRO-480x320-V2.0 desde Chrome o Edge con ESP Web Tools.">
+  <meta name="theme-color" content="#050505">
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #050505;
+      --panel: #101215;
+      --soft: #181b20;
+      --line: #30353d;
+      --text: #f5f7fb;
+      --muted: #aab4c2;
+      --cyan: #43d7ff;
+      --green: #48e17f;
+      --yellow: #f5d15f;
+      --red: #ff6565;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    a {
+      color: var(--text);
+      text-decoration: underline;
+      text-underline-offset: 4px;
+    }
+
+    .hero {
+      min-height: 92vh;
+      display: grid;
+      align-items: end;
+      background:
+        linear-gradient(180deg, rgba(5, 5, 5, .14), rgba(5, 5, 5, .86) 68%, #050505 100%),
+        url("img/pro1.JPG") center / cover no-repeat;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .wrap {
+      width: min(1120px, calc(100% - 28px));
+      margin: 0 auto;
+    }
+
+    .hero-inner {
+      padding: 56px 0 42px;
+      display: grid;
+      gap: 22px;
+    }
+
+    .eyebrow {
+      color: var(--cyan);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 940px;
+      margin: 0;
+      font-size: clamp(42px, 10vw, 104px);
+      line-height: .9;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 760px;
+      margin: 0;
+      color: var(--text);
+      font-size: clamp(18px, 2.8vw, 24px);
+    }
+
+    .install-band {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px;
+      width: min(820px, 100%);
+      border: 1px solid rgba(255, 255, 255, .26);
+      background: rgba(5, 5, 5, .78);
+      backdrop-filter: blur(12px);
+    }
+
+    esp-web-install-button {
+      --esp-tools-button-color: #ffffff;
+      --esp-tools-button-text-color: #050505;
+      --esp-tools-button-border-radius: 0;
+    }
+
+    button {
+      min-height: 44px;
+      border: 1px solid var(--text);
+      background: var(--text);
+      color: #050505;
+      padding: 10px 16px;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    main {
+      padding: 34px 0 44px;
+    }
+
+    section {
+      padding: 28px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: clamp(24px, 4vw, 38px);
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 12px;
+      color: var(--muted);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 16px;
+    }
+
+    .panel strong {
+      display: block;
+      font-size: 18px;
+      margin-bottom: 6px;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .meta div {
+      border: 1px solid var(--line);
+      background: var(--soft);
+      padding: 12px;
+    }
+
+    .meta span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .meta b {
+      display: block;
+      margin-top: 4px;
+      font-size: 18px;
+    }
+
+    .shots {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .shot {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    .shot img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+    }
+
+    .shot span {
+      display: block;
+      padding: 10px 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    ol {
+      color: var(--muted);
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    li + li {
+      margin-top: 8px;
+    }
+
+    footer {
+      padding: 28px 0 42px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 860px) {
+      .install-band,
+      .meta,
+      .grid,
+      .shots {
+        grid-template-columns: 1fr;
+      }
+
+      .install-band {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .hero {
+        min-height: 88vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap hero-inner">
+      <div class="eyebrow">ESP32 Web Flasher</div>
+      <h1>ESP32-TOOLS-PRO-480x320-V2.0</h1>
+      <p class="lead">Firmware multi-herramienta para ESP32 con pantalla 480x320, WiFi, BLE, IR, nRF24 y CC1101 sub-GHz.</p>
+      <div class="install-band">
+        <div>
+          <strong>Instalacion directa desde navegador</strong>
+          <p>Conecta el ESP32 por USB, abre esta pagina en Chrome o Edge y selecciona el puerto serial.</p>
+        </div>
+        <esp-web-install-button manifest="manifest.json">
+          <button slot="activate">Instalar firmware</button>
+          <span slot="unsupported">Tu navegador no soporta Web Serial. Usa Chrome o Edge en escritorio.</span>
+          <span slot="not-allowed">Web Serial esta bloqueado. Abre esta pagina con HTTPS o localhost.</span>
+        </esp-web-install-button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section>
+      <div class="meta">
+        <div><span>Chip</span><b>ESP32</b></div>
+        <div><span>Firmware</span><b>2.0 final</b></div>
+        <div><span>Binario</span><b>firmware-merged.bin</b></div>
+        <div><span>Ruta</span><b>assets/Firmware</b></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Funciones Clave</h2>
+      <div class="grid">
+        <div class="panel"><strong>WiFi Tools</strong><p>Scanner, Channel Scan, Radar, Direction Finder, Beacon Spam, Deauther, Evil Portal, Probe Sniffer y KARMA.</p></div>
+        <div class="panel"><strong>IR Tools</strong><p>Captura, replay, guardado, controles virtuales, analyzer, protocol scan, sniffer y detector IR nocturno.</p></div>
+        <div class="panel"><strong>CC1101</strong><p>Diag, spectrum, waterfall, frequency monitor, finder, RF analyzer, raw view, live detector y lab replay.</p></div>
+        <div class="panel"><strong>Web Dashboard</strong><p>AP propio con dashboard para IR guardados, CC1101, WiFi tools y Beacon Spam web lab.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Galeria</h2>
+      <div class="shots">
+        <div class="shot"><img src="img/pro1.JPG" alt="ESP32-TOOLS-PRO terminado"><span>Dispositivo final</span></div>
+        <div class="shot"><img src="img/wifi.JPG" alt="WiFi tools"><span>WiFi Tools</span></div>
+        <div class="shot"><img src="img/radio.JPG" alt="Radio tools"><span>Radio Tools</span></div>
+        <div class="shot"><img src="img/bluetooth.JPG" alt="Bluetooth tools"><span>Bluetooth Tools</span></div>
+        <div class="shot"><img src="img/system.JPG" alt="System tools"><span>System Tools</span></div>
+        <div class="shot"><img src="img/splash.jpg" alt="Splash screen"><span>Splash screen</span></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Pasos De Flasheo</h2>
+      <ol>
+        <li>Conecta el ESP32 por USB.</li>
+        <li>Presiona Instalar firmware y elige el puerto serial correcto.</li>
+        <li>Si tu placa lo requiere, manten presionado BOOT al iniciar la carga.</li>
+        <li>Espera a que termine y reinicia el ESP32.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Uso Responsable</h2>
+      <p>Este firmware esta pensado para aprendizaje, diagnostico y pruebas en redes o dispositivos propios. Algunas funciones pueden transmitir, interferir o capturar senales si se usan mal.</p>
+      <p>El usuario es responsable de cumplir las leyes locales y usarlo solo en entornos controlados.</p>
+    </section>
+  </main>
+
+  <footer class="wrap">
+    PepeAngell - <a href="https://github.com/pepeangell5/ESP32-TOOLS-PRO-480x320-V2.0">GitHub</a> - <a href="https://instagram.com/pepeangelll">Instagram</a> - <a href="https://www.facebook.com/esp32tools/">Facebook</a>
+  </footer>
+</body>
+</html>

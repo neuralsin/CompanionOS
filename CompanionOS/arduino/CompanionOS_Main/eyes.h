@@ -55,8 +55,8 @@ void drawStarfield() {
   
   // Stars in the center zone between the two eyes
   for (int i = 0; i < 40; i++) {
-    uint32_t rX = xorshift(seed) % 320;
-    uint32_t rY = xorshift(seed) % 150 + 30;
+    uint32_t rX = xorshift(seed) % SCREEN_W;
+    uint32_t rY = xorshift(seed) % (SCREEN_H - 50) + 20;  // below status bar, above bottom
     uint8_t  brightness = xorshift(seed) % 3;
     
     // Skip pixels that overlap the eye bounding boxes

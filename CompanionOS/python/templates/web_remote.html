@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>CompanionOS Web Remote</title>
+<meta name="description" content="CompanionOS v7.0 Web Remote Control — Navigate your ESP32 companion device from any browser">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #14141f;
+    --surface2: #1c1c2e;
+    --border: #2a2a3e;
+    --primary: #6366f1;
+    --primary-glow: rgba(99, 102, 241, 0.25);
+    --secondary: #ef4444;
+    --success: #22c55e;
+    --warning: #eab308;
+    --text-hi: #e8e8f0;
+    --text-med: #9ca3af;
+    --text-lo: #4b5563;
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text-hi);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+  }
+
+  .header-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo {
+    font-size: 20px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--primary), #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .version-badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: var(--primary-glow);
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--secondary);
+    animation: pulse 2s infinite;
+  }
+
+  .status-dot.connected {
+    background: var(--success);
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── Content Container ── */
+  .container {
+    max-width: 420px;
+    margin: 0 auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* ── Section Cards ── */
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    transition: border-color 0.2s;
+  }
+
+  .section:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+  }
+
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-lo);
+    margin-bottom: 12px;
+  }
+
+  /* ── Physical Button Simulator ── */
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .hw-btn {
+    width: 72px;
+    height: 72px;
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface2);
+    color: var(--text-hi);
+    font-family: var(--font);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transition: all 0.15s;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .hw-btn:active {
+    transform: scale(0.92);
+    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.15);
+    box-shadow: 0 0 20px var(--primary-glow);
+  }
+
+  .hw-btn .icon {
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .hw-btn.select {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border-color: var(--primary);
+    background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(99,102,241,0.05));
+  }
+
+  .hw-btn.select:active {
+    background: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 0 30px var(--primary-glow);
+  }
+
+  .hw-btn.home {
+    border-color: var(--warning);
+    width: 100%;
+    height: 44px;
+    border-radius: 12px;
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .hw-btn.home:active {
+    border-color: var(--warning);
+    background: rgba(234, 179, 8, 0.15);
+  }
+
+  /* ── Page Grid ── */
+  .page-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+
+  .page-tile {
+    padding: 8px 4px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface2);
+    color: var(--text-med);
+    font-family: var(--font);
+    font-size: 9px;
+    font-weight: 500;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .page-tile:active, .page-tile.active {
+    border-color: var(--primary);
+    color: var(--text-hi);
+    background: rgba(99, 102, 241, 0.12);
+  }
+
+  .page-tile .tile-icon {
+    font-size: 16px;
+    display: block;
+    margin-bottom: 3px;
+  }
+
+  /* ── Emotion Grid ── */
+  .emo-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+
+  .emo-btn {
+    padding: 10px 4px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface2);
+    color: var(--text-med);
+    font-family: var(--font);
+    font-size: 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .emo-btn:active {
+    transform: scale(0.95);
+    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.12);
+  }
+
+  .emo-btn .emo-icon {
+    font-size: 20px;
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  /* ── Spotify Controls ── */
+  .spotify-row {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .spot-btn {
+    width: 48px;
+    height: 48px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--surface2);
+    color: var(--text-hi);
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .spot-btn:active {
+    transform: scale(0.9);
+    background: #1db954;
+    border-color: #1db954;
+    color: #fff;
+  }
+
+  .spot-btn.play {
+    width: 56px;
+    height: 56px;
+    border-color: #1db954;
+    background: rgba(29, 185, 84, 0.1);
+    font-size: 24px;
+  }
+
+  /* ── Thought Input ── */
+  .thought-form {
+    display: flex;
+    gap: 8px;
+  }
+
+  .thought-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface2);
+    color: var(--text-hi);
+    font-family: var(--font);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .thought-input:focus {
+    border-color: var(--primary);
+  }
+
+  .thought-input::placeholder {
+    color: var(--text-lo);
+  }
+
+  .thought-send {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 10px;
+    background: var(--primary);
+    color: #fff;
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .thought-send:active {
+    transform: scale(0.95);
+    background: #4f46e5;
+  }
+
+  /* ── Status Panel ── */
+  .status-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .status-item {
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+  }
+
+  .status-label {
+    font-size: 10px;
+    color: var(--text-lo);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+
+  .status-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-hi);
+  }
+
+  /* ── Toast notification ── */
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--surface2);
+    border: 1px solid var(--primary);
+    color: var(--text-hi);
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 500;
+    opacity: 0;
+    transition: all 0.3s ease;
+    z-index: 1000;
+    pointer-events: none;
+    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+  }
+
+  .toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-lo);
+    font-size: 11px;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 380px) {
+    .hw-btn { width: 60px; height: 60px; font-size: 10px; }
+    .hw-btn .icon { font-size: 18px; }
+    .hw-btn.select { width: 68px; height: 68px; }
+    .page-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-title">
+    <span class="logo">C/OS</span>
+    <span class="version-badge">v7.0</span>
+  </div>
+  <div id="statusDot" class="status-dot"></div>
+</div>
+
+<div class="container">
+
+  <!-- Physical Buttons Simulator -->
+  <div class="section">
+    <div class="section-title">Navigation</div>
+    <div class="btn-row">
+      <button class="hw-btn" onclick="pressBtn('LEFT')" id="btn-left">
+        <span class="icon">◀</span>
+        LEFT
+      </button>
+      <button class="hw-btn select" onclick="pressBtn('SELECT')" id="btn-select">
+        <span class="icon">●</span>
+        SEL
+      </button>
+      <button class="hw-btn" onclick="pressBtn('RIGHT')" id="btn-right">
+        <span class="icon">▶</span>
+        RIGHT
+      </button>
+    </div>
+    <div style="height:8px"></div>
+    <button class="hw-btn home" onclick="pressBtn('HOME')" id="btn-home">
+      <span class="icon">🏠</span> HOME
+    </button>
+  </div>
+
+  <!-- Direct Page Navigation -->
+  <div class="section">
+    <div class="section-title">Pages</div>
+    <div class="page-grid" id="pageGrid">
+      <button class="page-tile active" onclick="goPage(0)" data-page="0"><span class="tile-icon">👁</span>Eyes</button>
+      <button class="page-tile" onclick="goPage(1)" data-page="1"><span class="tile-icon">🎵</span>Music</button>
+      <button class="page-tile" onclick="goPage(2)" data-page="2"><span class="tile-icon">🍅</span>Pomo</button>
+      <button class="page-tile" onclick="goPage(3)" data-page="3"><span class="tile-icon">🌤</span>Weath</button>
+      <button class="page-tile" onclick="goPage(4)" data-page="4"><span class="tile-icon">🔔</span>Notif</button>
+      <button class="page-tile" onclick="goPage(5)" data-page="5"><span class="tile-icon">📝</span>Notes</button>
+      <button class="page-tile" onclick="goPage(6)" data-page="6"><span class="tile-icon">📈</span>Stock</button>
+      <button class="page-tile" onclick="goPage(7)" data-page="7"><span class="tile-icon">🎮</span>Game</button>
+      <button class="page-tile" onclick="goPage(8)" data-page="8"><span class="tile-icon">💬</span>Social</button>
+      <button class="page-tile" onclick="goPage(9)" data-page="9"><span class="tile-icon">✅</span>Tasks</button>
+      <button class="page-tile" onclick="goPage(10)" data-page="10"><span class="tile-icon">📡</span>Net</button>
+      <button class="page-tile" onclick="goPage(11)" data-page="11"><span class="tile-icon">⚙</span>Sys</button>
+      <button class="page-tile" onclick="goPage(12)" data-page="12" style="border-color: var(--secondary); color: var(--secondary);"><span class="tile-icon">💀</span>Hack</button>
+    </div>
+  </div>
+
+  <!-- Spotify Controls -->
+  <div class="section">
+    <div class="section-title">Spotify</div>
+    <div class="spotify-row">
+      <button class="spot-btn" onclick="spotifyCmd('SHUFFLE:TOGGLE')">🔀</button>
+      <button class="spot-btn" onclick="spotifyCmd('PREV')">⏮</button>
+      <button class="spot-btn play" onclick="spotifyCmd('PLAY_PAUSE')">⏯</button>
+      <button class="spot-btn" onclick="spotifyCmd('NEXT')">⏭</button>
+      <button class="spot-btn" onclick="spotifyCmd('REPEAT:TOGGLE')">🔁</button>
+    </div>
+  </div>
+
+  <!-- Emotion Picker -->
+  <div class="section">
+    <div class="section-title">Emotion</div>
+    <div class="emo-grid">
+      <button class="emo-btn" onclick="setEmo('NEUTRAL')"><span class="emo-icon">😐</span>Neutral</button>
+      <button class="emo-btn" onclick="setEmo('HAPPY')"><span class="emo-icon">😊</span>Happy</button>
+      <button class="emo-btn" onclick="setEmo('SAD')"><span class="emo-icon">😢</span>Sad</button>
+      <button class="emo-btn" onclick="setEmo('EXCITED')"><span class="emo-icon">🤩</span>Excited</button>
+      <button class="emo-btn" onclick="setEmo('LOVE')"><span class="emo-icon">😍</span>Love</button>
+      <button class="emo-btn" onclick="setEmo('SLEEPY')"><span class="emo-icon">😴</span>Sleepy</button>
+      <button class="emo-btn" onclick="setEmo('ANGRY')"><span class="emo-icon">😠</span>Angry</button>
+      <button class="emo-btn" onclick="setEmo('SURPRISED')"><span class="emo-icon">😲</span>Surprise</button>
+    </div>
+  </div>
+
+  <!-- Thought Bubble -->
+  <div class="section">
+    <div class="section-title">Push Thought Bubble</div>
+    <div class="thought-form">
+      <input type="text" class="thought-input" id="thoughtInput" placeholder="Type a thought (max 79 chars)" maxlength="79">
+      <button class="thought-send" onclick="sendThought()">Send</button>
+    </div>
+  </div>
+
+  <!-- Status Display -->
+  <div class="section">
+    <div class="section-title">Device Status</div>
+    <div class="status-grid">
+      <div class="status-item">
+        <div class="status-label">ESP IP</div>
+        <div class="status-value" id="espIp">scanning...</div>
+      </div>
+      <div class="status-item">
+        <div class="status-label">Page</div>
+        <div class="status-value" id="currentPage">Eyes</div>
+      </div>
+      <div class="status-item">
+        <div class="status-label">Emotion</div>
+        <div class="status-value" id="currentEmo">NEUTRAL</div>
+      </div>
+      <div class="status-item">
+        <div class="status-label">Track</div>
+        <div class="status-value" id="currentTrack">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    CompanionOS v7.0 • neuralsin<br>
+    Web Remote Control
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── API Calls ──────────────────────────────────────────
+
+  async function api(endpoint, method = 'POST', body = null) {
+    try {
+      const opts = { method };
+      if (body) {
+        opts.headers = { 'Content-Type': 'application/json' };
+        opts.body = JSON.stringify(body);
+      }
+      const res = await fetch(endpoint, opts);
+      const data = await res.json();
+      return data;
+    } catch (e) {
+      console.error('API error:', e);
+      return { ok: false, error: e.message };
+    }
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 1500);
+  }
+
+  // ── Button Press ──────────────────────────────────────
+
+  async function pressBtn(btn) {
+    const r = await api(`/api/btn/${btn}`);
+    if (r.ok) showToast(`${btn} pressed`);
+  }
+
+  // ── Direct Page Nav ──────────────────────────────────
+
+  async function goPage(id) {
+    const r = await api(`/api/page/${id}`);
+    if (r.ok) {
+      showToast(`→ ${r.page}`);
+      updateActivePageTile(id);
+    }
+  }
+
+  function updateActivePageTile(id) {
+    document.querySelectorAll('.page-tile').forEach(t => t.classList.remove('active'));
+    const tile = document.querySelector(`.page-tile[data-page="${id}"]`);
+    if (tile) tile.classList.add('active');
+  }
+
+  // ── Emotion ──────────────────────────────────────────
+
+  async function setEmo(emo) {
+    const r = await api(`/api/emotion/${emo}`);
+    if (r.ok) {
+      showToast(`Emotion: ${emo}`);
+      document.getElementById('currentEmo').textContent = emo;
+    }
+  }
+
+  // ── Spotify ──────────────────────────────────────────
+
+  async function spotifyCmd(cmd) {
+    const r = await api(`/api/spotify/${cmd}`);
+    if (r.ok) showToast(`♪ ${cmd}`);
+  }
+
+  // ── Thought Bubble ──────────────────────────────────
+
+  async function sendThought() {
+    const input = document.getElementById('thoughtInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    const r = await api('/api/thought', 'POST', { text });
+    if (r.ok) {
+      showToast(`💭 "${text}"`);
+      input.value = '';
+    }
+  }
+
+  // Enter key to send thought
+  document.getElementById('thoughtInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendThought();
+  });
+
+  // ── Status Polling ──────────────────────────────────
+  // 🟡 GAP-03: Using polling (2s interval) instead of SSE
+  // for simplicity. Future: upgrade to Server-Sent Events.
+
+  async function pollStatus() {
+    const r = await api('/api/status', 'GET');
+    if (r) {
+      document.getElementById('espIp').textContent = r.esp_ip || 'scanning...';
+      document.getElementById('currentPage').textContent = r.page_name || '—';
+      document.getElementById('currentEmo').textContent = r.emotion || '—';
+      document.getElementById('currentTrack').textContent = r.track || '—';
+
+      const dot = document.getElementById('statusDot');
+      if (r.esp_ip && r.esp_ip !== 'searching...') {
+        dot.classList.add('connected');
+      } else {
+        dot.classList.remove('connected');
+      }
+
+      updateActivePageTile(r.page || 0);
+    }
+  }
+
+  setInterval(pollStatus, 2000);
+  pollStatus();
+
+  // ── Keyboard shortcuts ────────────────────────────────
+
+  document.addEventListener('keydown', (e) => {
+    switch (e.key) {
+      case 'ArrowLeft':  e.preventDefault(); pressBtn('LEFT'); break;
+      case 'ArrowRight': e.preventDefault(); pressBtn('RIGHT'); break;
+      case 'Enter':      if (e.target === document.body) { e.preventDefault(); pressBtn('SELECT'); } break;
+      case 'Escape':     e.preventDefault(); pressBtn('HOME'); break;
+      case ' ':          if (e.target === document.body) { e.preventDefault(); spotifyCmd('PLAY_PAUSE'); } break;
+    }
+  });
+</script>
+
+</body>
+</html>

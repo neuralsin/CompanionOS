@@ -689,10 +689,104 @@ def productivity_feed_loop():
             print(f"Productivity feed error: {e}")
         time.sleep(interval)
 
+# ═══════════════════════════════════════════════════════════
+# V7: THOUGHT PUSH — PC→ESP override thought injection
+# 🟠 CRIT-06 FIX: THOUGHT: is OUTGOING (PC→ESP), not incoming.
+# This function generates context-aware thoughts and pushes
+# them to override the ESP's next scheduled thought slot.
+# ═══════════════════════════════════════════════════════════
+
+import random as _random
+
+_THOUGHT_CONTEXT_TEMPLATES = {
+    'track_change': [
+        "omg {artist} is goated",
+        "{track} on repeat all day",
+        "new {artist} just dropped? vibing",
+        "this {track} hits different rn",
+        "{artist} never misses fr",
+    ],
+    'weather_hot': [
+        "it's {temp}°C... melting rn",
+        "AC cranked to max",
+        "too hot to think straight",
+    ],
+    'weather_cold': [
+        "it's {temp}°C... need more layers",
+        "blanket burrito time",
+        "winter is here. literally.",
+    ],
+    'weather_rain': [
+        "rain + lofi = perfect combo",
+        "don't forget your umbrella!",
+        "rainy vibes activated",
+    ],
+    'hourly': [
+        "still going strong at {hour}",
+        "time check: {hour}:00",
+        "another hour, another vibe",
+        "been awake for {uptime}h now",
+    ]
+}
+
+_last_thought_track = None
+_last_thought_time = 0
+
+
+def push_thought_to_esp(context: str, **kwargs):
+    """Generate a context-aware thought and send THOUGHT: to ESP."""
+    templates = _THOUGHT_CONTEXT_TEMPLATES.get(context, _THOUGHT_CONTEXT_TEMPLATES['hourly'])
+    template = _random.choice(templates)
+    try:
+        thought = template.format(**kwargs)
+    except (KeyError, IndexError):
+        thought = template  # Use raw template if format fails
+    
+    if len(thought) > 79:
+        thought = thought[:76] + "..."
+    
+    send_udp(f"THOUGHT:{thought}")
+    print(f"💭 Pushed thought: {thought}")
+
+
+def thought_push_loop():
+    """Background thread: push context thoughts on events."""
+    global _last_thought_track, _last_thought_time
+    time.sleep(30)  # Wait for initial setup
+    
+    while True:
+        try:
+            now = time.time()
+            
+            # Check for track change → push music thought
+            try:
+                track = spotify_service.get_current_track()
+                if track and track.get('id') != _last_thought_track:
+                    _last_thought_track = track.get('id')
+                    push_thought_to_esp('track_change',
+                                       track=track.get('name', 'this song')[:20],
+                                       artist=track.get('artist', 'them')[:15])
+                    _last_thought_time = now
+            except Exception:
+                pass
+            
+            # Hourly thought (if no thought sent in the last 55 minutes)
+            if now - _last_thought_time > 3300:
+                hour = datetime.now().hour
+                uptime_h = int((now - _last_thought_time) / 3600) + 1
+                push_thought_to_esp('hourly', hour=hour, uptime=uptime_h)
+                _last_thought_time = now
+            
+            time.sleep(60)  # Check every minute
+            
+        except Exception as e:
+            print(f"Thought push error: {e}")
+            time.sleep(120)
+
 
 def main():
     print("\n╔════════════════════════════════════════════════╗")
-    print("║  COMPANION OS - Controller v6.0               ║")
+    print("║  COMPANION OS - Controller v7.0               ║")
     print("╚════════════════════════════════════════════════╝\n")
     
     # Start background threads
@@ -704,6 +798,8 @@ def main():
     threading.Thread(target=gaming_feed_loop, daemon=True).start()
     threading.Thread(target=social_feed_loop, daemon=True).start()
     threading.Thread(target=productivity_feed_loop, daemon=True).start()
+    # V7: Thought push thread (PC→ESP override thoughts)
+    threading.Thread(target=thought_push_loop, daemon=True).start()
     # Theme 2: Extended Spotify data bridge (reuses same spotify_service + API keys)
     threading.Thread(target=theme2_spotify_feed, args=(spotify_service, send_udp, config), daemon=True).start()
     print("Monitoring playback & connections...")

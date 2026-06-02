@@ -1,8 +1,21 @@
+// ═══════════════════════════════════════════════════════════
+// COMPANION OS v7.0 — NETWORK FUNCTIONS
+// Dual-platform: ESP32 (WiFi + BT) / ESP8266 (WiFi only)
+// ═══════════════════════════════════════════════════════════
 #ifndef NETWORK_H
 #define NETWORK_H
 
-#include <ESP8266WiFi.h>
-#include <WiFiManager.h>
+// [LEGACY - v6.0] Original included ESP8266WiFi.h unconditionally.
+// Now uses platform-conditional includes.
+
+#ifdef ESP32
+  #include <WiFi.h>
+  #include <BluetoothSerial.h>
+#elif defined(ESP8266)
+  #include <ESP8266WiFi.h>
+  #include <WiFiManager.h>
+#endif
+
 #include <WiFiUdp.h>
 #include <ArduinoJson.h>
 #include <NTPClient.h>
@@ -11,19 +24,18 @@
 #include "eyes.h"
 
 // ═══════════════════════════════════════════════════════════
-// NETWORK FUNCTIONS V3
+// STATE & FORWARD DECLARATIONS
 // ═══════════════════════════════════════════════════════════
 
 extern char udpBuffer[2048];
 String pcIPStr = DEFAULT_PC_IP;
 
-// ── NTP Time Sync ──
+// NTP Time Sync — IST = UTC + 5:30 = 19800 seconds
 WiFiUDP ntpUDP;
-// IST = UTC + 5:30 = 19800 seconds
-NTPClient timeClient(ntpUDP, "pool.ntp.org", 19800, 300000); // sync every 5 min
+NTPClient timeClient(ntpUDP, NTP_SERVER, NTP_OFFSET, 300000); // sync every 5 min
 unsigned long lastNTPSync = 0;
 
-// Global data states
+// Track data
 String currentTrack = "";
 String currentArtist = "";
 extern String currentLyrics;
@@ -32,10 +44,17 @@ extern String prevLyricsLine;
 int playProgress = 0;
 int playDuration = 100;
 bool isPlaying = false;
-extern bool artDrawn; // Added this line
+extern bool artDrawn;
 
 String currentNotes[4] = {"", "", "", ""};
 
+// ESP32 Bluetooth Serial
+#ifdef ESP32
+  BluetoothSerial btSerial;
+  bool btInitialized = false;
+#endif
+
+// Forward declarations for page redraw functions
 extern void redrawSpotifyPartial();
 extern void redrawNotesPartial();
 extern void redrawWeatherPartial();
@@ -52,7 +71,7 @@ extern void completeAlbumArt();
 extern void showFlashNotification(String text);
 extern void renderCurrentPage();
 
-// Safe string extraction to prevent nullptr crash on ESP
+// Safe string extraction to prevent nullptr crash
 #define SAFESTR(dest, src, sz) do { const char* _s = (src).as<const char*>(); if (_s) { strncpy(dest, _s, sz-1); dest[sz-1] = '\0'; } } while(0)
 
 // Weather data (defined in pages.h, declared here)
@@ -83,16 +102,19 @@ extern int notifTotal;
 
 void handleCommand(String msg);
 
+// ═══════════════════════════════════════════════════════════
+// WiFi SETUP — Platform-aware
+// ═══════════════════════════════════════════════════════════
+
 void setupWiFi() {
   Serial.print(F("WiFi setup..."));
   tft.fillScreen(COLOR_BG);
   tft.setTextColor(TFT_WHITE);
-  tft.drawCentreString("Connecting WiFi...", SCREEN_W/2, SCREEN_H/2, 2);
-  
+  tft.drawCentreString("Connecting WiFi...", SCR_CX, SCR_CY, 2);
+
   WiFi.begin(WIFI_SSID, WIFI_PASS);
-  
+
   int timeout = 0;
-  // Increase timeout to 60 to allow 30 seconds for slower routers to handshake
   while (WiFi.status() != WL_CONNECTED && timeout < 60) {
     delay(500);
     Serial.print(".");
@@ -104,13 +126,13 @@ void setupWiFi() {
     Serial.println(F(" OK"));
     Serial.print(F("IP: "));
     Serial.println(WiFi.localIP());
-    
+
     tft.fillScreen(COLOR_BG);
     tft.setTextColor(TFT_GREEN);
-    tft.drawCentreString("WiFi Connected!", SCREEN_W/2, SCREEN_H/2 - 20, 2);
-    tft.drawCentreString(WiFi.localIP().toString(), SCREEN_W/2, SCREEN_H/2 + 10, 2);
-    
-    // ── NTP Time Sync (immediate) ──
+    tft.drawCentreString("WiFi Connected!", SCR_CX, SCR_CY - SCALE_Y(20), 2);
+    tft.drawCentreString(WiFi.localIP().toString(), SCR_CX, SCR_CY + SCALE_Y(10), 2);
+
+    // NTP Time Sync (immediate)
     timeClient.begin();
     if (timeClient.update()) {
       displayHour = timeClient.getHours();
@@ -126,32 +148,89 @@ void setupWiFi() {
   } else {
     Serial.println(F(" FAILED"));
     tft.setTextColor(TFT_RED);
-    tft.drawCentreString("WiFi Failed!", SCREEN_W/2, SCREEN_H/2 - 20, 2);
+    tft.drawCentreString("WiFi Failed!", SCR_CX, SCR_CY - SCALE_Y(20), 2);
+
+    #ifdef ESP32
+    // ESP32: activate BT fallback
+    if (!btInitialized) {
+      btSerial.begin("CompanionOS");
+      btInitialized = true;
+      btConnected = false;
+      Serial.println(F("BT Serial started as 'CompanionOS'"));
+      tft.setTextColor(TFT_CYAN);
+      tft.drawCentreString("BT: CompanionOS", SCR_CX, SCR_CY + SCALE_Y(10), 2);
+    }
+    #endif
   }
-  
+
   udp.begin(UDP_PORT_RX);
   delay(1500);
 
   // Auto-discovery handshake
   udp.beginPacket("255.255.255.255", UDP_PORT_TX);
   const char* hello = "HELLO_COMPANION";
-  udp.write(hello, strlen(hello));
+  udp.write((const uint8_t*)hello, strlen(hello));
   udp.endPacket();
 }
 
+// ═══════════════════════════════════════════════════════════
+// ESP32 BLUETOOTH TRANSPORT
+// ═══════════════════════════════════════════════════════════
+
+#ifdef ESP32
+void setupBluetooth() {
+  if (!btInitialized) {
+    btSerial.begin("CompanionOS");
+    btInitialized = true;
+    Serial.println(F("BT Serial started as 'CompanionOS'"));
+  }
+}
+
+void handleBluetoothData() {
+  if (!btInitialized) return;
+
+  if (btSerial.hasClient()) {
+    btConnected = true;
+  }
+
+  if (btSerial.available()) {
+    String msg = btSerial.readStringUntil('\n');
+    msg.trim();
+    if (msg.length() > 0) {
+      handleCommand(msg);
+    }
+  }
+}
+#endif
+
+// ═══════════════════════════════════════════════════════════
+// SEND COMMAND — Dual transport (WiFi preferred, BT fallback)
+// ═══════════════════════════════════════════════════════════
+
 void sendCommand(String cmd) {
-  udp.beginPacket(pcIPStr.c_str(), UDP_PORT_TX);
-  udp.write(cmd.c_str());
-  udp.endPacket();
+  if (wifiConnected) {
+    udp.beginPacket(pcIPStr.c_str(), UDP_PORT_TX);
+    udp.write((const uint8_t*)cmd.c_str(), cmd.length());
+    udp.endPacket();
+  }
+  #ifdef ESP32
+  if (btConnected && btInitialized) {
+    btSerial.println(cmd);
+  }
+  #endif
   Serial.print(F("Sent: "));
   Serial.println(cmd);
 }
+
+// ═══════════════════════════════════════════════════════════
+// HANDLE NETWORK — Main loop network processor
+// ═══════════════════════════════════════════════════════════
 
 bool pcFound = false;
 unsigned long lastDiscoveryShout = 0;
 
 void handleNetwork() {
-  // ── Periodic NTP re-sync (every 5 minutes) ──
+  // Periodic NTP re-sync (every 5 minutes)
   if (wifiConnected && millis() - lastNTPSync >= 300000) {
     if (timeClient.update()) {
       displayHour = timeClient.getHours();
@@ -163,76 +242,86 @@ void handleNetwork() {
     }
     lastNTPSync = millis();
   }
-  
+
   // Auto-discovery
   if (!pcFound && millis() - lastDiscoveryShout > 3000) {
     udp.beginPacket("255.255.255.255", UDP_PORT_TX);
     const char* hello = "HELLO_COMPANION";
-    udp.write(hello, strlen(hello));
+    udp.write((const uint8_t*)hello, strlen(hello));
     udp.endPacket();
     lastDiscoveryShout = millis();
   }
 
+  // UDP packet processing
   int packetSize = udp.parsePacket();
   if (packetSize) {
     pcFound = true;
     IPAddress remoteIP = udp.remoteIP();
     pcIPStr = remoteIP.toString();
-    
+
     int readLen = min(packetSize, 2047);
     int len = udp.read(udpBuffer, readLen);
-    
-    // ── V4 OPTIMIZATION: BARE-METAL BINARY PACKET SNIFFING ──
-    // If the first byte is 0xFE, this is a raw structured image packet, bypassing String handling entirely
+
+    // V4 OPTIMIZATION: BARE-METAL BINARY PACKET SNIFFING
     if (len > 3 && (unsigned char)udpBuffer[0] == 0xFE) {
       int chunkIdx = ((unsigned char)udpBuffer[1] << 8) | ((unsigned char)udpBuffer[2]);
       int pixelsInChunk = (len - 3) / 2;
       int imgWidth = (currentState == STATE_GAMING) ? 100 : 96;
       int pixels_per_chunk = imgWidth * 2;
       int startPixel = chunkIdx * pixels_per_chunk;
-      
+
       if (startPixel < 9216) {
         uint16_t* dest = albumArt + startPixel;
-        
-        // Unpack RGB565 with Native Endianness Flipping (L, H)
+
         for (int i = 0; i < pixelsInChunk; i++) {
           int offset = 3 + (i * 2);
-          dest[i] = (unsigned char)udpBuffer[offset] | ((unsigned char)udpBuffer[offset+1] << 8); 
+          dest[i] = (unsigned char)udpBuffer[offset] | ((unsigned char)udpBuffer[offset+1] << 8);
         }
-        
-        // Instant Progressive Hardware Rendering straight onto the physical display
-        int imgX = 10;
-        int imgY = 25;
+
+        // Progressive rendering
+        int imgX = SCALE_X(10);
+        int imgY = SCALE_Y(25);
         if (currentState == STATE_GAMING) {
-          imgX = 110;
-          imgY = 32;
+          imgX = SCALE_X(110);
+          imgY = SCALE_Y(32);
         } else if (currentState == STATE_SPOTIFY && activeTheme == 1) {
-          imgX = 140; // T2S_ART_X
-          imgY = 20;  // T2S_ART_Y
+          imgX = SCALE_X(140);
+          imgY = SCALE_Y(20);
         }
-        
+
         int yStart = startPixel / imgWidth;
         int maxRows = pixelsInChunk / imgWidth;
-        
+
         if (currentState == STATE_SPOTIFY || currentState == STATE_GAMING) {
           if (maxRows > 0) {
-             tft.pushImage(imgX, imgY + yStart, imgWidth, maxRows, dest);
+            tft.pushImage(imgX, imgY + yStart, imgWidth, maxRows, dest);
           }
         }
       }
-      return; // Bypass the expensive String payload parsing
+      return;
     }
-    
-    // Standard string packet fallback logic
+
+    // Standard string packet
     udpBuffer[len] = 0;
     String msg = String(udpBuffer);
-    
     handleCommand(msg);
   }
-  
-  // Update WiFi status for status bar
+
+  // Update WiFi status
   wifiConnected = (WiFi.status() == WL_CONNECTED);
+
+  // ESP32: also check BT data
+  #ifdef ESP32
+  handleBluetoothData();
+  #endif
 }
+
+// ═══════════════════════════════════════════════════════════
+// HANDLE COMMAND — Central command parser
+// ═══════════════════════════════════════════════════════════
+
+// [LEGACY - v6.0] updateTimeFromUDP forward declaration
+extern void updateTimeFromUDP(String t);
 
 void handleCommand(String msg) {
     if (msg.startsWith("EMOTION:")) {
@@ -247,7 +336,7 @@ void handleCommand(String msg) {
       else if (emo == "SURPRISED") e = EMO_SURPRISED;
       if (activeTheme == 1) t2_setEmotion(e); else setEmotion(e);
     }
-    // ── V4: Antigravity Agent Status ──────────────────
+    // V4: Antigravity Agent Status
     else if (msg.startsWith("AGENT:")) {
       String json = msg.substring(6);
       DynamicJsonDocument doc(512);
@@ -257,7 +346,7 @@ void handleCommand(String msg) {
         agentStatusStart = millis();
         agentOverlayActive = true;
         lastInteractionTime = millis();
-        
+
         if (agentStatus == "thinking") {
           if (activeTheme == 1) t2_setEmotion(EMO_EXCITED); else setEmotion(EMO_EXCITED);
         }
@@ -371,7 +460,7 @@ void handleCommand(String msg) {
           }
         }
         redrawNotificationsPartial();
-        
+
         if (notifTotal > 0 && currentState == STATE_EYES) {
           showFlashNotification(notifTitles[0]);
         }
@@ -400,7 +489,7 @@ void handleCommand(String msg) {
       }
     }
     // ═══════════════════════════════════════════════════════
-    // V6: New Page Data Handlers
+    // V6: Page Data Handlers
     // ═══════════════════════════════════════════════════════
     else if (msg.startsWith("STOCKS:")) {
       String json = msg.substring(7);
@@ -411,7 +500,7 @@ void handleCommand(String msg) {
         if (doc.containsKey("delta"))  SAFESTR(stockDelta, doc["delta"], 16);
         if (doc.containsKey("pct"))    SAFESTR(stockPctChg, doc["pct"], 16);
         if (doc.containsKey("up"))     stockIsUp = doc["up"].as<bool>();
-        
+
         if (doc.containsKey("hist")) {
           JsonArray hist = doc["hist"];
           stockHistoryLen = min((int)hist.size(), 40);
@@ -419,7 +508,7 @@ void handleCommand(String msg) {
             stockHistory[i] = hist[i].as<int16_t>();
           }
         }
-        
+
         if (doc.containsKey("wl")) {
           JsonArray wl = doc["wl"];
           for (int i = 0; i < min((int)wl.size(), 3); i++) {
@@ -429,7 +518,7 @@ void handleCommand(String msg) {
             wlIsUp[i] = wl[i]["u"].as<bool>();
           }
         }
-        
+
         redrawStocksPartial();
       }
     }
@@ -443,6 +532,16 @@ void handleCommand(String msg) {
         if (doc.containsKey("friends")) friendsOnline = doc["friends"].as<uint8_t>();
         if (doc.containsKey("active"))  gameActive = doc["active"].as<bool>();
         if (doc.containsKey("status"))  SAFESTR(gameStatus, doc["status"], 16);
+        
+        // 🟡 GAP-01 FIX: Parse recent games list
+        if (doc.containsKey("recent")) {
+          JsonArray recent = doc["recent"];
+          for (int i = 0; i < min((int)recent.size(), 3); i++) {
+            SAFESTR(recentGame[i], recent[i]["name"], 24);
+            recentPlaytime[i] = recent[i]["time"].as<uint16_t>();
+          }
+        }
+        
         redrawGamingPartial();
       }
     }
@@ -475,7 +574,72 @@ void handleCommand(String msg) {
       }
     }
     // ═══════════════════════════════════════════════════════
-    // Theme 2: Extended Data Handlers
+    // V7: New Command Handlers
+    // ═══════════════════════════════════════════════════════
+
+    // THOUGHT: — PC-pushed thought bubble override
+    else if (msg.startsWith("THOUGHT:")) {
+      String thought = msg.substring(8);
+      thought.trim();
+      if (thought.length() > 0 && thought.length() < 80) {
+        strncpy(overrideThought, thought.c_str(), 79);
+        overrideThought[79] = '\0';
+      }
+    }
+
+    // HACK: — PC-side hack command relay (results pushed back)
+    else if (msg.startsWith("HACK:")) {
+      // Commands from PC bridge:
+      // HACK:SCAN_RESULT:{json} — WiFi scan results from PC
+      // HACK:PORT_RESULT:{json} — Port scan results from PC
+      // Currently a placeholder — Dr. Hack mode uses on-device scanning
+      Serial.print(F("HACK CMD: "));
+      Serial.println(msg.substring(5));
+    }
+
+    // BTN: — Web remote virtual button press
+    else if (msg.startsWith("BTN:")) {
+      String btn = msg.substring(4);
+      btn.trim();
+      if (btn == "LEFT") {
+        #ifdef ESP32
+        extern void handleButtons();
+        btnLeft.wasPressed = true;
+        #endif
+        changePage(-1);
+      }
+      else if (btn == "RIGHT") {
+        #ifdef ESP32
+        btnRight.wasPressed = true;
+        #endif
+        changePage(1);
+      }
+      else if (btn == "SELECT") {
+        #ifdef ESP32
+        btnSelect.wasPressed = true;
+        #endif
+      }
+      else if (btn == "HOME") {
+        if (currentState != STATE_EYES) {
+          extern void changePage(int delta);
+          changePage(-(int)currentState);
+        }
+      }
+      lastInteractionTime = millis();
+    }
+
+    // PAGE: — Direct page navigation from web remote
+    else if (msg.startsWith("PAGE:")) {
+      int page = msg.substring(5).toInt();
+      if (page >= 0 && page < STATE_COUNT) {
+        extern void changePage(int delta);
+        int delta = page - (int)currentState;
+        if (delta != 0) changePage(delta);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // Theme 2 Extended Data
     // ═══════════════════════════════════════════════════════
     else if (msg.startsWith("T2SPOT:")) {
       String json = msg.substring(7);
@@ -491,7 +655,7 @@ void handleCommand(String msg) {
         if (doc.containsKey("dev"))    SAFESTR(t2_device, doc["dev"], 24);
         extern void t2_redrawSpotifyPartial();
         extern bool t2s_overlayDrawn;
-        t2s_overlayDrawn = false; // Force volume/device sidebar refresh
+        t2s_overlayDrawn = false;
         if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
       }
     }
