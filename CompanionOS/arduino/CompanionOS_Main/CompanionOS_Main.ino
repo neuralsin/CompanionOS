@@ -94,8 +94,9 @@ void setup() {
   
   // Initialize EEPROM
   EEPROM.begin(EEPROM_SIZE);
+  activeTheme = EEPROM.read(EEPROM_ACTIVE_THEME_ADDR);
+  if (activeTheme > 1) activeTheme = 0; // Sanitize on first boot (0xFF → 0)
   EEPROM.end();
-  
   setupWiFi();
   runBootSequence();
   
@@ -115,8 +116,11 @@ void loop() {
     lastFrameTime = millis();
     
     if (currentState == STATE_EYES) {
-      updateEyes();
-      
+      if (activeTheme == 1) {
+        t2_updateEyes();
+      } else {
+        updateEyes();
+      }
       // V4: Agent overlay on eyes page
       drawAgentOverlay();
     }
@@ -130,6 +134,13 @@ void loop() {
   if (millis() - lastStatusBarUpdate >= 1000) {
     lastStatusBarUpdate = millis();
     drawStatusBar();
+  }
+  
+  // Network stats page refresh every 2 seconds
+  static unsigned long lastNetRefresh = 0;
+  if (currentState == STATE_NETWORK && millis() - lastNetRefresh >= 2000) {
+    lastNetRefresh = millis();
+    redrawNetworkPartial();
   }
   
   // V4: Pet mood decay (every 60 seconds of no interaction)

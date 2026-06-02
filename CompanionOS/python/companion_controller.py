@@ -27,6 +27,7 @@ from github_integration import GitHubIntegration  # type: ignore # noqa: E402
 from steam_tracker import SteamTracker  # type: ignore # noqa: E402
 from google_cal import GoogleCalendar, LocalTaskList  # type: ignore # noqa: E402
 from stock_manager import StockManager  # type: ignore # noqa: E402
+from theme2_bridge import theme2_spotify_feed  # type: ignore # noqa: E402
 
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
 
@@ -387,13 +388,13 @@ def start_notes_server():
                 
                 file = request.files['image']
                 img = Image.open(io.BytesIO(file.read()))
-                img = img.resize((96, 96), Image.LANCZOS)
+                img = img.resize((96, 96), getattr(Image, 'Resampling', Image).LANCZOS)
                 img = img.convert('RGB')
                 
                 pixels = []
                 for y in range(96):
                     for x in range(96):
-                        r, g, b = img.getpixel((x, y))
+                        r, g, b = img.getpixel((x, y))  # type: ignore
                         rgb565 = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
                         pixels.append(rgb565)
                 
@@ -578,7 +579,7 @@ def push_game_cover(title):
         resp = requests.get(url, timeout=10)
         img = Image.open(io.BytesIO(resp.content))
         # Keep it 100x60 to fit precisely inside the Gaming UI bounds
-        img = img.resize((100, 60), Image.LANCZOS)
+        img = img.resize((100, 60), getattr(Image, 'Resampling', Image).LANCZOS)
         img = img.convert('RGB')
         
         send_udp("ART_START:")
@@ -703,6 +704,8 @@ def main():
     threading.Thread(target=gaming_feed_loop, daemon=True).start()
     threading.Thread(target=social_feed_loop, daemon=True).start()
     threading.Thread(target=productivity_feed_loop, daemon=True).start()
+    # Theme 2: Extended Spotify data bridge (reuses same spotify_service + API keys)
+    threading.Thread(target=theme2_spotify_feed, args=(spotify_service, send_udp, config), daemon=True).start()
     print("Monitoring playback & connections...")
     
     global current_lyrics, fast_poll_now

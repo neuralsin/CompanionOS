@@ -92,11 +92,16 @@ uint16_t blendColor(uint16_t c1, uint16_t c2, float t) {
 }
 
 // ── Core Almond Eye Renderer ────────────────────────────
+float currentBlinkMod = 1.0;
+
 TFT_eSprite eyeSpr = TFT_eSprite(&tft);
 bool eyeSprAllocated = false;
 
 void drawAlmondEye(int cx, int cy, int w, int h, float pX, float pY,
                    uint16_t c1, uint16_t c2, uint16_t c3, float tiltL, float tiltR) {
+  h = (int)((float)h * currentBlinkMod);
+  if (h < 2) h = 2; // Prevent division by zero and inversion
+  
   float halfW = w / 2.0;
 
   // SUBMISSION 2: True Double-Buffering for Zero-Tear Eye Rendering
@@ -157,19 +162,24 @@ void drawAlmondEye(int cx, int cy, int w, int h, float pX, float pY,
   int px = scx + (int)pX;
   int py = scy + (int)pY;
   
+  float squish = (float)h / EYE_H;
+  int p_h = (int)(PUPIL_H * squish);
+  if (p_h < 2) p_h = 2;
+  
   // Advanced Detailing: Rich Iris depth ring
-  eyeSpr.fillRoundRect(px - PUPIL_W/2 - 2, py - PUPIL_H/2 - 2, PUPIL_W + 4, PUPIL_H + 4, (PUPIL_W+4)/2, 0xFEA0);
-  eyeSpr.drawRoundRect(px - PUPIL_W/2 - 3, py - PUPIL_H/2 - 3, PUPIL_W + 6, PUPIL_H + 6, (PUPIL_W+6)/2, 0x8260);
+  eyeSpr.fillRoundRect(px - PUPIL_W/2 - 2, py - p_h/2 - 2, PUPIL_W + 4, p_h + 4, (PUPIL_W+4)/2, 0xFEA0);
+  eyeSpr.drawRoundRect(px - PUPIL_W/2 - 3, py - p_h/2 - 3, PUPIL_W + 6, p_h + 6, (PUPIL_W+6)/2, 0x8260);
   
   // Deep Black pill pupil
-  eyeSpr.fillRoundRect(px - PUPIL_W/2, py - PUPIL_H/2, PUPIL_W, PUPIL_H, PUPIL_W/2, TFT_BLACK);
+  eyeSpr.fillRoundRect(px - PUPIL_W/2, py - p_h/2, PUPIL_W, p_h, PUPIL_W/2, TFT_BLACK);
   
   // Primary reflection (top-right curved glass highlight)
-  eyeSpr.fillCircle(px + 4, py - 6, 3, TFT_WHITE);
-  eyeSpr.fillCircle(px + 3, py - 9, 2, TFT_WHITE);
-  
-  // Secondary bounce reflection (bottom-left)
-  eyeSpr.fillCircle(px - 2, py + 6, 2, 0x6B4D);
+  if (squish > 0.3) {
+    eyeSpr.fillCircle(px + 4, py - (int)(6 * squish), 3, TFT_WHITE);
+    eyeSpr.fillCircle(px + 3, py - (int)(9 * squish), 2, TFT_WHITE);
+    // Secondary bounce reflection (bottom-left)
+    eyeSpr.fillCircle(px - 2, py + (int)(6 * squish), 2, 0x6B4D);
+  }
 
   // Push completed tear-free frame to screen
   eyeSpr.pushSprite(cx - scx, cy - scy);
@@ -460,27 +470,20 @@ void updateEyes() {
   
   if (isBlinking) {
     blinkPhase++;
-    // CRITICAL FIX: Blink wiper rects MUST be strictly per-eye columns.
-    // A full-width fillRect was causing the left-to-right black slider artifact.
-    int coverY = EYE_Y - EYE_H - 6; // Stay in eye zone
-    int coverH = 0;
-    int maxH = (EYE_H + 6) * 2;
-    int eyeColW = EYE_W + 16;  // Slight padding, but NOT screen-wide
     
     // Physics-based rapid blink speed for 160MHz tickrate
-    if (blinkPhase <= 2) coverH = maxH * blinkPhase / 2;
-    else if (blinkPhase <= 4) coverH = maxH * (4 - blinkPhase) / 2;
-    else {
+    if (blinkPhase <= 2) {
+      currentBlinkMod = 1.0 - ((float)blinkPhase / 2.0);
+    } else if (blinkPhase <= 4) {
+      currentBlinkMod = (float)(blinkPhase - 2) / 2.0;
+    } else {
+      currentBlinkMod = 1.0;
       isBlinking = false;
       lastBlink = now;
-      // Redraw eyes ONCE natively without sweeping the background
-      drawEyes();
-      return;
     }
     
-    // FIXED: Wipe per-eye column ONLY — two small rects, never full-width
-    tft.fillRect(LEFT_EYE_X - EYE_W/2 - 8, coverY, eyeColW, coverH, COLOR_BG);
-    tft.fillRect(RIGHT_EYE_X - EYE_W/2 - 8, coverY, eyeColW, coverH, COLOR_BG);
+    // Smoothly push the modified sprite to screen, zero flicker!
+    drawEyes();
   } else if (moved) {
     // Redraw natively - no fillScreen = zero frame strobe.
     drawEyes();

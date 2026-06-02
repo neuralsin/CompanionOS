@@ -15,7 +15,7 @@ TFT_eSPI tft = TFT_eSPI();
 XPT2046_Touchscreen ts(TOUCH_CS);
 WiFiUDP udp;
 
-// V6 Page Architecture — 11 pages
+// V6 Page Architecture — 12 pages
 enum AppState {
   STATE_EYES,          // 0
   STATE_SPOTIFY,       // 1
@@ -27,8 +27,9 @@ enum AppState {
   STATE_GAMING,        // 7
   STATE_SOCIAL,        // 8
   STATE_PRODUCTIVITY,  // 9
-  STATE_SETTINGS,      // 10
-  STATE_COUNT          // = 11 pages
+  STATE_NETWORK,       // 10
+  STATE_SETTINGS,      // 11
+  STATE_COUNT          // = 12 pages
 };
 
 extern AppState currentState;
@@ -141,5 +142,9 @@ extern int weatherCode;
 
 // Backward-compat: exoticMode is always false (themes removed)
 #define exoticMode false
+
+// ── Theme System ──
+// 0 = Original (Theme 1), 1 = Theme 2 (alternate eyes + spotify skin)
+int activeTheme = 0;
 
 #endif

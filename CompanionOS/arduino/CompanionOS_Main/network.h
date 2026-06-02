@@ -5,6 +5,7 @@
 #include <WiFiManager.h>
 #include <WiFiUdp.h>
 #include <ArduinoJson.h>
+#include <NTPClient.h>
 
 #include "globals.h"
 #include "eyes.h"
@@ -15,6 +16,12 @@
 
 extern char udpBuffer[2048];
 String pcIPStr = DEFAULT_PC_IP;
+
+// ── NTP Time Sync ──
+WiFiUDP ntpUDP;
+// IST = UTC + 5:30 = 19800 seconds
+NTPClient timeClient(ntpUDP, "pool.ntp.org", 19800, 300000); // sync every 5 min
+unsigned long lastNTPSync = 0;
 
 // Global data states
 String currentTrack = "";
@@ -43,6 +50,7 @@ extern void drawStatusBar();
 extern void processArtChunk(int chunkIdx, String hexData);
 extern void completeAlbumArt();
 extern void showFlashNotification(String text);
+extern void renderCurrentPage();
 
 // Safe string extraction to prevent nullptr crash on ESP
 #define SAFESTR(dest, src, sz) do { const char* _s = (src).as<const char*>(); if (_s) { strncpy(dest, _s, sz-1); dest[sz-1] = '\0'; } } while(0)
@@ -101,6 +109,20 @@ void setupWiFi() {
     tft.setTextColor(TFT_GREEN);
     tft.drawCentreString("WiFi Connected!", SCREEN_W/2, SCREEN_H/2 - 20, 2);
     tft.drawCentreString(WiFi.localIP().toString(), SCREEN_W/2, SCREEN_H/2 + 10, 2);
+    
+    // ── NTP Time Sync (immediate) ──
+    timeClient.begin();
+    if (timeClient.update()) {
+      displayHour = timeClient.getHours();
+      displayMinute = timeClient.getMinutes();
+      displaySecond = timeClient.getSeconds();
+      timeReceived = true;
+      lastTimeUpdateMillis = millis();
+      lastNTPSync = millis();
+      Serial.printf("NTP synced: %02d:%02d:%02d IST\n", displayHour, displayMinute, displaySecond);
+    } else {
+      Serial.println(F("NTP initial sync failed, will retry"));
+    }
   } else {
     Serial.println(F(" FAILED"));
     tft.setTextColor(TFT_RED);
@@ -129,6 +151,19 @@ bool pcFound = false;
 unsigned long lastDiscoveryShout = 0;
 
 void handleNetwork() {
+  // ── Periodic NTP re-sync (every 5 minutes) ──
+  if (wifiConnected && millis() - lastNTPSync >= 300000) {
+    if (timeClient.update()) {
+      displayHour = timeClient.getHours();
+      displayMinute = timeClient.getMinutes();
+      displaySecond = timeClient.getSeconds();
+      timeReceived = true;
+      lastTimeUpdateMillis = millis();
+      Serial.printf("NTP resync: %02d:%02d:%02d IST\n", displayHour, displayMinute, displaySecond);
+    }
+    lastNTPSync = millis();
+  }
+  
   // Auto-discovery
   if (!pcFound && millis() - lastDiscoveryShout > 3000) {
     udp.beginPacket("255.255.255.255", UDP_PORT_TX);
@@ -166,8 +201,15 @@ void handleNetwork() {
         }
         
         // Instant Progressive Hardware Rendering straight onto the physical display
-        int imgX = (currentState == STATE_GAMING) ? 110 : 10;
-        int imgY = (currentState == STATE_GAMING) ? 32 : 25;
+        int imgX = 10;
+        int imgY = 25;
+        if (currentState == STATE_GAMING) {
+          imgX = 110;
+          imgY = 32;
+        } else if (currentState == STATE_SPOTIFY && activeTheme == 1) {
+          imgX = 140; // T2S_ART_X
+          imgY = 20;  // T2S_ART_Y
+        }
         
         int yStart = startPixel / imgWidth;
         int maxRows = pixelsInChunk / imgWidth;
@@ -195,14 +237,15 @@ void handleNetwork() {
 void handleCommand(String msg) {
     if (msg.startsWith("EMOTION:")) {
       String emo = msg.substring(8);
-      if (emo == "HAPPY") setEmotion(EMO_HAPPY);
-      else if (emo == "SAD") setEmotion(EMO_SAD);
-      else if (emo == "EXCITED") setEmotion(EMO_EXCITED);
-      else if (emo == "LOVE") setEmotion(EMO_LOVE);
-      else if (emo == "SLEEPY") setEmotion(EMO_SLEEPY);
-      else if (emo == "ANGRY") setEmotion(EMO_ANGRY);
-      else if (emo == "SURPRISED") setEmotion(EMO_SURPRISED);
-      else if (emo == "NEUTRAL") setEmotion(EMO_NEUTRAL);
+      Emotion e = EMO_NEUTRAL;
+      if (emo == "HAPPY") e = EMO_HAPPY;
+      else if (emo == "SAD") e = EMO_SAD;
+      else if (emo == "EXCITED") e = EMO_EXCITED;
+      else if (emo == "LOVE") e = EMO_LOVE;
+      else if (emo == "SLEEPY") e = EMO_SLEEPY;
+      else if (emo == "ANGRY") e = EMO_ANGRY;
+      else if (emo == "SURPRISED") e = EMO_SURPRISED;
+      if (activeTheme == 1) t2_setEmotion(e); else setEmotion(e);
     }
     // ── V4: Antigravity Agent Status ──────────────────
     else if (msg.startsWith("AGENT:")) {
@@ -215,9 +258,15 @@ void handleCommand(String msg) {
         agentOverlayActive = true;
         lastInteractionTime = millis();
         
-        if (agentStatus == "thinking") setEmotion(EMO_EXCITED);
-        else if (agentStatus == "done") setEmotion(EMO_HAPPY);
-        else if (agentStatus == "error") setEmotion(EMO_SAD);
+        if (agentStatus == "thinking") {
+          if (activeTheme == 1) t2_setEmotion(EMO_EXCITED); else setEmotion(EMO_EXCITED);
+        }
+        else if (agentStatus == "done") {
+          if (activeTheme == 1) t2_setEmotion(EMO_HAPPY); else setEmotion(EMO_HAPPY);
+        }
+        else if (agentStatus == "error") {
+          if (activeTheme == 1) t2_setEmotion(EMO_SAD); else setEmotion(EMO_SAD);
+        }
       }
     }
     else if (msg.startsWith("TRACK:")) {
@@ -228,7 +277,8 @@ void handleCommand(String msg) {
         currentArtist = doc["artist"].as<String>();
         playDuration = doc["duration"].as<int>();
         musicPlaying = true;
-        redrawSpotifyPartial();
+        extern void t2_redrawSpotifyPartial();
+        if (activeTheme == 1) t2_redrawSpotifyPartial(); else redrawSpotifyPartial();
       }
     }
     else if (msg.startsWith("ART_START:")) {
@@ -246,7 +296,8 @@ void handleCommand(String msg) {
         playProgress = doc["progress"].as<int>();
         isPlaying = doc["playing"].as<bool>();
         musicPlaying = isPlaying;
-        redrawSpotifyPartial();
+        extern void t2_redrawSpotifyPartial();
+        if (activeTheme == 1) t2_redrawSpotifyPartial(); else redrawSpotifyPartial();
       }
     }
     else if (msg.startsWith("LYRICS:")) {
@@ -267,7 +318,8 @@ void handleCommand(String msg) {
           currentLyricsLine2 = "";
           prevLyricsLine = "";
         }
-        redrawSpotifyPartial();
+        extern void t2_redrawSpotifyPartial();
+        if (activeTheme == 1) t2_redrawSpotifyPartial(); else redrawSpotifyPartial();
       }
     }
     else if (msg.startsWith("WEATHER:")) {
@@ -420,6 +472,38 @@ void handleCommand(String msg) {
         if (doc.containsKey("active"))       taskActive = doc["active"].as<bool>();
         if (doc.containsKey("progress"))     taskProgressPct = doc["progress"].as<uint8_t>();
         redrawProductivityPartial();
+      }
+    }
+    // ═══════════════════════════════════════════════════════
+    // Theme 2: Extended Data Handlers
+    // ═══════════════════════════════════════════════════════
+    else if (msg.startsWith("T2SPOT:")) {
+      String json = msg.substring(7);
+      DynamicJsonDocument doc(512);
+      if (!deserializeJson(doc, json)) {
+        extern uint8_t t2_volume;
+        extern bool t2_shuffle;
+        extern uint8_t t2_repeat;
+        extern char t2_device[24];
+        if (doc.containsKey("vol"))    t2_volume = doc["vol"].as<uint8_t>();
+        if (doc.containsKey("shuf"))   t2_shuffle = doc["shuf"].as<bool>();
+        if (doc.containsKey("rep"))    t2_repeat = doc["rep"].as<uint8_t>();
+        if (doc.containsKey("dev"))    SAFESTR(t2_device, doc["dev"], 24);
+        extern void t2_redrawSpotifyPartial();
+        extern bool t2s_overlayDrawn;
+        t2s_overlayDrawn = false; // Force volume/device sidebar refresh
+        if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
+      }
+    }
+    else if (msg.startsWith("THEME:")) {
+      int t = msg.substring(6).toInt();
+      if (t == 0 || t == 1) {
+        activeTheme = t;
+        EEPROM.begin(EEPROM_SIZE);
+        EEPROM.write(EEPROM_ACTIVE_THEME_ADDR, activeTheme);
+        EEPROM.commit();
+        EEPROM.end();
+        renderCurrentPage();
       }
     }
 }

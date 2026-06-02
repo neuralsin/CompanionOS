@@ -50,8 +50,12 @@ class SpotifyIntegration:
                     redirect_uri=self.redirect_uri,
                     scope=self.scope,
                     open_browser=False,
-                    cache_path=cache_path
-                )
+                    cache_path=cache_path,
+                    requests_timeout=15
+                ),
+                requests_timeout=15,
+                retries=3,
+                backoff_factor=0.3
             )
             sp.current_user()
             self.client = sp
@@ -116,38 +120,47 @@ class SpotifyIntegration:
         self, track_name: str, artist_name: str, track_id: str | None = None
     ) -> list[dict]:
         """Fetch lyrics dynamically from the public LRCLIB network."""
-        try:
-            url = "https://lrclib.net/api/get"
-            params = {"track_name": track_name, "artist_name": artist_name}
-            response = requests.get(url, params=params, timeout=5)
+        import time
+        for attempt in range(3):
+            try:
+                url = "https://lrclib.net/api/get"
+                params = {"track_name": track_name, "artist_name": artist_name}
+                response = requests.get(url, params=params, timeout=15)
 
-            if response.status_code == 200:
-                data = response.json()
-                synced = data.get("syncedLyrics")
-                if synced:
-                    parsed = []
-                    lines = synced.split("\n")
-                    for l in lines:
-                        if l.startswith("[") and "]" in l:
-                            parts = l.split("]", 1)
-                            time_str = parts[0][1:]
-                            words = parts[1].strip()
-                            if words:
-                                try:
-                                    m, s = time_str.split(":")
-                                    sec, ms_val = s.split(".") if "." in s else (s, "0")
-                                    time_ms = int(m)*60000 + int(sec)*1000 + int(str(ms_val).ljust(3, "0")[:3])  # type: ignore
-                                    parsed.append({"time": time_ms, "words": words})
-                                except Exception:
-                                    pass
-                    if parsed:
-                        return parsed
-                elif data.get("plainLyrics"):
-                    return [{"time": 0, "words": "♪ Unsynced lyrics available ♪"}]
-            return [{"time": 0, "words": "♪ Instrumental ♪"}]
-        except Exception as e:
-            print(f"Lyrics Engine (LRCLIB) Error: {e}")
-            return [{"time": 0, "words": "♪ Lyrics unavailable ♪"}]
+                if response.status_code == 200:
+                    data = response.json()
+                    synced = data.get("syncedLyrics")
+                    if synced:
+                        parsed = []
+                        lines = synced.split("\n")
+                        for l in lines:
+                            if l.startswith("[") and "]" in l:
+                                parts = l.split("]", 1)
+                                time_str = parts[0][1:]
+                                words = parts[1].strip()
+                                if words:
+                                    try:
+                                        m, s = time_str.split(":")
+                                        sec, ms_val = s.split(".") if "." in s else (s, "0")
+                                        time_ms = int(m)*60000 + int(sec)*1000 + int(str(ms_val).ljust(3, "0")[:3])  # type: ignore
+                                        parsed.append({"time": time_ms, "words": words})
+                                    except Exception:
+                                        pass
+                        if parsed:
+                            return parsed
+                    elif data.get("plainLyrics"):
+                        return [{"time": 0, "words": "♪ Unsynced lyrics available ♪"}]
+                return [{"time": 0, "words": "♪ Instrumental ♪"}]
+            except requests.exceptions.Timeout:
+                if attempt < 2:
+                    time.sleep(1)
+                    continue
+                print(f"Lyrics Engine (LRCLIB) Error: Request timed out after 3 attempts.")
+                return [{"time": 0, "words": "♪ Lyrics unavailable ♪"}]
+            except Exception as e:
+                print(f"Lyrics Engine (LRCLIB) Error: {e}")
+                return [{"time": 0, "words": "♪ Lyrics unavailable ♪"}]
+        return [{"time": 0, "words": "♪ Lyrics unavailable ♪"}]
 
     def process_album_art(self, image_url: str, size: int = 96) -> list[int] | None:
         """Returns a list of RGB565 integer pixels."""
