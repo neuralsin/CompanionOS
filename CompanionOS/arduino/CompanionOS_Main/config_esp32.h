@@ -76,4 +76,33 @@
 #define SCREEN_W   160
 #define SCREEN_H   128
 
+// ═══════════════════════════════════════════════════════════
+// DR. HACK PERIPHERAL PINS (ESP32 only)
+// nRF24L01, CC1101 sub-GHz, M5Stack IR Unit
+// ═══════════════════════════════════════════════════════════
+
+// Shared SPI bus (same as TFT): SCK=18, MOSI=23, MISO=19
+// Each module uses its own CS/CSN pin.
+
+// nRF24L01 #1 — 2.4GHz radio (primary)
+// NOTE: Original firmware used GPIO27/GPIO14 but those are
+// CompanionOS buttons. Reassigned to GPIO32/GPIO33.
+#define NRF1_CE_PIN   32
+#define NRF1_CSN_PIN  33
+
+// nRF24L01 #2 — 2.4GHz radio (secondary, for jammer)
+#define NRF2_CE_PIN   17
+#define NRF2_CSN_PIN  16
+
+// M5Stack IR Unit
+// GPIO26 = TX output from ESP32 to IR LED
+// GPIO34 = RX input from IR receiver (input-only pin, correct)
+#define IR_TX_PIN     26
+#define IR_RX_PIN     34
+
+// CC1101 sub-GHz radio (315/433/868/915 MHz)
+#define CC1101_CSN_PIN     21
+#define CC1101_GDO0_PIN    35   // RX data / edges (input-only, correct)
+#define CC1101_TX_DATA_PIN 25   // Optional jumper for Lab Replay OOK TX
+
 #endif

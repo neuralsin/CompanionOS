@@ -78,22 +78,39 @@ extern Emotion currentEmotion;
 
 // ═══════════════════════════════════════════════════════════
 // DR. HACK SUB-STATE MACHINE (ESP32 only)
+// 48 tools across 6 pages of 8 tools each
 // ═══════════════════════════════════════════════════════════
 #ifdef ESP32
+
+#define DH_TOOLS_PER_PAGE 8
+#define DH_MENU_PAGES     6
+#define DH_TOTAL_TOOLS    48
+
 enum DrHackSubState {
-  DH_MENU,           // Main tool selector grid
-  DH_WIFI_SCANNER,   // Scan nearby APs, RSSI, channel, encryption
-  DH_PORT_SCANNER,   // TCP port scan target IP
-  DH_BEACON_SPAM,    // Broadcast fake AP names
-  DH_DEAUTH,         // Deauth frames (ESP32 only, legal on your own network)
-  DH_PACKET_MONITOR, // Raw 802.11 packet counter by type
-  DH_BT_SCANNER,     // BLE device scanner
-  DH_INFO,           // System info: chip ID, MAC, free heap, CPU freq
-  DH_ABOUT           // About / version screen (8th grid cell)
+  DH_MENU,
+  // Page 1: WiFi Tools
+  DH_WIFI_SCANNER,     DH_CHANNEL_SCAN,     DH_WIFI_RADAR,       DH_WIFI_DIRECTION,
+  DH_BEACON_SPAM,      DH_DEAUTH,           DH_EVIL_PORTAL,      DH_PROBE_SNIFFER,
+  // Page 2: WiFi+ & BLE
+  DH_KARMA,            DH_WIFI_CONFIG,       DH_BT_SCANNER,       DH_BLE_INSPECTOR,
+  DH_BLE_SPAM,         DH_BT_DISRUPTOR,      DH_IPHONE_REMOTE,    DH_BT_JAMMER,
+  // Page 3: Radio & IR
+  DH_JAMMER_24,        DH_RADIO_SCANNER,     DH_IR_CAPTURE,        DH_IR_REPLAY,
+  DH_IR_TX_TEST,       DH_IR_ANALYZER,       DH_IR_SNIFFER,        DH_IR_PROTOCOL,
+  // Page 4: IR+ & CC1101
+  DH_IR_NIGHT,         DH_IR_PROXIMITY,      DH_IR_REMOTES,        DH_IR_SAVED,
+  DH_CC_DIAG,          DH_CC_SPECTRUM,        DH_CC_WATERFALL,      DH_CC_FREQ_MON,
+  // Page 5: CC1101+ & RF
+  DH_CC_FINDER,        DH_CC_BRUTE,          DH_CC_CODE_CHECK,     DH_CC_RF_ANALYZE,
+  DH_CC_RAW_VIEW,      DH_CC_RF_LIVE,        DH_CC_LAB_REPLAY,     DH_CC_TEST_BEACON,
+  // Page 6: System
+  DH_PORT_SCANNER,     DH_PACKET_MONITOR,    DH_INFO,              DH_WEB_DASHBOARD,
+  DH_HW_DIAG,          DH_INPUT_MONITOR,     DH_ABOUT,             DH_RESERVED
 };
 
 extern DrHackSubState dhCurrentState;
 extern int dhCursorIndex;
+extern int dhMenuPage;
 #endif
 
 // ═══════════════════════════════════════════════════════════

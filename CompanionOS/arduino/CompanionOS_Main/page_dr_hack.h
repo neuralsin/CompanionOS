@@ -15,6 +15,16 @@
 #include <BLEDevice.h>
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
+#include <RF24.h>
+
+// DR. HACK TOOL MODULES
+#include "dh_wifi_tools.h"
+#include "dh_evil_portal.h"
+#include "dh_ble_tools.h"
+#include "dh_radio_tools.h"
+#include "dh_ir_tools.h"
+#include "dh_cc1101_tools.h"
+#include "dh_web_dashboard.h"
 
 // ═══════════════════════════════════════════════════════════
 // STATE
@@ -22,15 +32,54 @@
 
 DrHackSubState dhCurrentState = DH_MENU;
 int dhCursorIndex = 0;
+int dhMenuPage = 0;
 
-#define DH_TOOL_COUNT 8
-static const char* DH_TOOL_NAMES[DH_TOOL_COUNT] = {
-  "WiFi Scan", "Port Scan", "Beacon", "Deauth",
-  "Pkt Mon", "BLE Scan", "Sys Info", "About"
+// Page titles
+static const char* DH_PAGE_TITLES[DH_MENU_PAGES] = {
+  "WiFi", "WiFi+BLE", "Radio+IR", "IR+CC1101", "CC1101+RF", "System"
 };
-static const uint16_t DH_TOOL_COLORS[DH_TOOL_COUNT] = {
-  CLR_PRIMARY, CLR_WARNING, CLR_SECONDARY, CLR_SECONDARY,
-  CLR_SUCCESS, 0x051F, CLR_TEXT_MED, CLR_PRIMARY
+
+// Tool names per page (8 per page × 6 pages)
+static const char* DH_TOOL_NAMES[DH_TOTAL_TOOLS] = {
+  // Page 1: WiFi
+  "WiFi Scan", "CH Scan", "WiFi Radar", "Direction",
+  "Beacon", "Deauth", "Evil Portal", "Probe Sniff",
+  // Page 2: WiFi+ & BLE
+  "KARMA", "WiFi Config", "BLE Scan", "BLE Inspect",
+  "BLE Spam", "BT Disrupt", "iPhone Rem", "BT Jammer",
+  // Page 3: Radio & IR
+  "2.4G Jammer", "Radio Scan", "IR Capture", "IR Replay",
+  "IR TX Test", "IR Analyze", "IR Sniffer", "IR Protocol",
+  // Page 4: IR+ & CC1101
+  "Night IR", "IR Proximity", "IR Remotes", "Saved IR",
+  "CC1101 Diag", "CC Spectrum", "CC Waterfall", "Freq Mon",
+  // Page 5: CC1101+ & RF
+  "Freq Finder", "Brute Search", "Code Check", "RF Analyze",
+  "RF Raw View", "RF Live", "Lab Replay", "Test Beacon",
+  // Page 6: System
+  "Port Scan", "Pkt Monitor", "Sys Info", "Web Dash",
+  "HW Diag", "Input Mon", "About", "--"
+};
+
+static const uint16_t DH_TOOL_COLORS[DH_TOTAL_TOOLS] = {
+  // Page 1
+  CLR_PRIMARY, CLR_PRIMARY, CLR_PRIMARY, CLR_PRIMARY,
+  CLR_SECONDARY, CLR_SECONDARY, CLR_SECONDARY, CLR_SUCCESS,
+  // Page 2
+  CLR_SECONDARY, CLR_PRIMARY, 0x051F, 0x051F,
+  CLR_SECONDARY, CLR_SECONDARY, 0x051F, CLR_WARNING,
+  // Page 3
+  CLR_WARNING, CLR_SUCCESS, CLR_SECONDARY, CLR_SECONDARY,
+  CLR_SUCCESS, CLR_PRIMARY, CLR_PRIMARY, CLR_PRIMARY,
+  // Page 4
+  0x780F, CLR_PRIMARY, CLR_SECONDARY, CLR_PRIMARY,
+  CLR_WARNING, CLR_WARNING, CLR_WARNING, CLR_WARNING,
+  // Page 5
+  CLR_SUCCESS, CLR_WARNING, CLR_PRIMARY, CLR_PRIMARY,
+  CLR_PRIMARY, CLR_SUCCESS, CLR_WARNING, CLR_WARNING,
+  // Page 6
+  CLR_WARNING, CLR_SUCCESS, CLR_TEXT_MED, CLR_PRIMARY,
+  CLR_PRIMARY, CLR_PRIMARY, CLR_PRIMARY, CLR_BORDER
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -91,24 +140,31 @@ void drawDrHackTile() {
 static void dhDrawMenu() {
   tft.fillScreen(CLR_BG);
 
-  // Header bar (top 14px): red gradient, "DR.HACK" title
+  // Header bar: red gradient, "DR.HACK" + page indicator
   drawGradientCard(0, 0, SCR_W, SCALE_Y(14), CLR_SECONDARY, darkenColor(CLR_SECONDARY, 40), 0);
   tft.setTextColor(CLR_TEXT_HI);
   tft.drawString("DR.HACK", SCALE_X(4), SCALE_Y(2), 1);
 
-  // Signal/connection indicator right side
-  tft.setTextColor(wifiConnected ? CLR_SUCCESS : CLR_SECONDARY);
-  tft.drawString(wifiConnected ? "WiFi" : "NoWF", SCR_W - SCALE_X(30), SCALE_Y(2), 1);
+  // Page indicator: "1/6 WiFi"
+  char pgBuf[20];
+  sprintf(pgBuf, "%d/%d %s", dhMenuPage + 1, DH_MENU_PAGES, DH_PAGE_TITLES[dhMenuPage]);
+  tft.setTextColor(CLR_PRIMARY);
+  tft.drawString(pgBuf, SCR_W - SCALE_X(54), SCALE_Y(2), 1);
 
-  // Tool grid: 2 columns × 4 rows (fills 128×~130px area)
+  // Tool grid: 2 columns × 4 rows
   int gridX = SCALE_X(4);
   int gridY = SCALE_Y(18);
   int tileW = SCALE_X(58);
-  int tileH = SCALE_Y(28);
+  int tileH = SCALE_Y(24);
   int gapX = SCALE_X(4);
-  int gapY = SCALE_Y(3);
+  int gapY = SCALE_Y(2);
 
-  for (int i = 0; i < DH_TOOL_COUNT; i++) {
+  int pageStart = dhMenuPage * DH_TOOLS_PER_PAGE;
+
+  for (int i = 0; i < DH_TOOLS_PER_PAGE; i++) {
+    int globalIdx = pageStart + i;
+    if (globalIdx >= DH_TOTAL_TOOLS) break;
+
     int col = i % 2;
     int row = i / 2;
     int x = gridX + col * (tileW + gapX);
@@ -117,7 +173,6 @@ static void dhDrawMenu() {
     bool selected = (i == dhCursorIndex);
 
     if (selected) {
-      // Red highlight border
       tft.drawRoundRect(x - 1, y - 1, tileW + 2, tileH + 2, 3, CLR_SECONDARY);
       tft.fillRoundRect(x, y, tileW, tileH, 3, darkenColor(CLR_SECONDARY, 70));
     } else {
@@ -125,24 +180,26 @@ static void dhDrawMenu() {
       tft.drawRoundRect(x, y, tileW, tileH, 3, CLR_BORDER);
     }
 
-    // Tool color indicator dot
-    tft.fillCircle(x + SCALE_X(6), y + SCALE_Y(8), 2, DH_TOOL_COLORS[i]);
+    // Tool color dot
+    tft.fillCircle(x + SCALE_X(6), y + SCALE_Y(6), 2, DH_TOOL_COLORS[globalIdx]);
 
     // Tool name
     tft.setTextColor(selected ? CLR_TEXT_HI : CLR_TEXT_MED);
-    tft.drawString(DH_TOOL_NAMES[i], x + SCALE_X(12), y + SCALE_Y(4), 1);
+    tft.drawString(DH_TOOL_NAMES[globalIdx], x + SCALE_X(12), y + SCALE_Y(4), 1);
 
-    // Tiny icon hint on second line
+    // Tool index
+    char idxBuf[4]; sprintf(idxBuf, "%d", globalIdx + 1);
     tft.setTextColor(CLR_TEXT_LO);
-    const char* hints[] = {"APs", "Ports", "SSIDs", "Frames", "802.11", "BLE", "ESP32", "v7.0"};
-    tft.drawString(hints[i], x + SCALE_X(12), y + SCALE_Y(16), 1);
+    tft.drawString(idxBuf, x + SCALE_X(12), y + SCALE_Y(14), 1);
   }
 
-  // Exit button (bottom 14px)
-  int exitY = SCR_H - SCALE_Y(14);
-  tft.fillRoundRect(SCR_W / 2 - SCALE_X(25), exitY, SCALE_X(50), SCALE_Y(12), 4, CLR_SUCCESS);
-  tft.setTextColor(CLR_BG);
-  tft.drawCentreString("EXIT", SCR_W / 2, exitY + SCALE_Y(2), 1);
+  // Page navigation arrows + exit
+  int footY = SCR_H - SCALE_Y(12);
+  tft.setTextColor(CLR_TEXT_LO);
+  if (dhMenuPage > 0) tft.drawString("<", SCALE_X(4), footY, 1);
+  if (dhMenuPage < DH_MENU_PAGES - 1) tft.drawString(">", SCR_W - SCALE_X(10), footY, 1);
+  tft.setTextColor(CLR_TEXT_LO);
+  tft.drawCentreString("HOLD:Exit", SCR_CX, footY, 1);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1018,7 +1075,7 @@ static void dhDrawAbout() {
   y += SCALE_Y(8);
 
   tft.setTextColor(CLR_TEXT_LO);
-  tft.drawString("Tools: 7", SCALE_X(8), y, 1); y += lineH;
+  tft.drawString("Tools: 48", SCALE_X(8), y, 1); y += lineH;
   tft.drawString("Platform: ESP32", SCALE_X(8), y, 1); y += lineH;
 
   char heapBuf[24];
@@ -1035,8 +1092,17 @@ static void dhDrawAbout() {
 void dhNavigate(int delta) {
   if (dhCurrentState == DH_MENU) {
     dhCursorIndex += delta;
-    if (dhCursorIndex < 0) dhCursorIndex = DH_TOOL_COUNT - 1;
-    if (dhCursorIndex >= DH_TOOL_COUNT) dhCursorIndex = 0;
+    // Wrap within page
+    if (dhCursorIndex < 0) {
+      // Go to previous page
+      if (dhMenuPage > 0) { dhMenuPage--; dhCursorIndex = DH_TOOLS_PER_PAGE - 1; }
+      else { dhMenuPage = DH_MENU_PAGES - 1; dhCursorIndex = DH_TOOLS_PER_PAGE - 1; }
+    }
+    if (dhCursorIndex >= DH_TOOLS_PER_PAGE) {
+      // Go to next page
+      if (dhMenuPage < DH_MENU_PAGES - 1) { dhMenuPage++; dhCursorIndex = 0; }
+      else { dhMenuPage = 0; dhCursorIndex = 0; }
+    }
     dhDrawMenu();
   }
   else if (dhCurrentState == DH_WIFI_SCANNER) {
@@ -1057,17 +1123,77 @@ void dhNavigate(int delta) {
   }
 }
 
+// Macro: run tool, return to menu
+#define DH_RUN_TOOL(state, func) \
+  dhCurrentState = state; func; dhCurrentState = DH_MENU; dhDrawMenu(); break;
+
+// Macro: enter tool with own loop (user navigates within)
+#define DH_ENTER_TOOL(state, func) \
+  dhCurrentState = state; func; break;
+
 void dhSelect() {
   if (dhCurrentState == DH_MENU) {
-    switch (dhCursorIndex) {
-      case 0: dhCurrentState = DH_WIFI_SCANNER; dhRunWifiScan(); break;
-      case 1: dhCurrentState = DH_PORT_SCANNER;  dhRunPortScan(); break;
-      case 2: dhCurrentState = DH_BEACON_SPAM;   dhRunBeaconSpam(); dhCurrentState = DH_MENU; dhDrawMenu(); break;
-      case 3: dhCurrentState = DH_DEAUTH;        dhRunDeauth(); dhCurrentState = DH_MENU; dhDrawMenu(); break;
-      case 4: dhCurrentState = DH_PACKET_MONITOR; dhRunPacketMonitor(); dhCurrentState = DH_MENU; dhDrawMenu(); break;
-      case 5: dhCurrentState = DH_BT_SCANNER;    dhRunBleScan(); break;
-      case 6: dhCurrentState = DH_INFO;          dhDrawSysInfo(); break;
-      case 7: dhCurrentState = DH_ABOUT;         dhDrawAbout(); break;
+    int globalIdx = dhMenuPage * DH_TOOLS_PER_PAGE + dhCursorIndex;
+    switch (globalIdx) {
+      // Page 1: WiFi Tools
+      case 0:  DH_ENTER_TOOL(DH_WIFI_SCANNER, dhRunWifiScan())
+      case 1:  DH_RUN_TOOL(DH_CHANNEL_SCAN, dhRunChannelScan())
+      case 2:  DH_RUN_TOOL(DH_WIFI_RADAR, dhRunWifiRadar())
+      case 3:  DH_RUN_TOOL(DH_WIFI_DIRECTION, dhRunWifiDirection())
+      case 4:  DH_RUN_TOOL(DH_BEACON_SPAM, dhRunBeaconSpam())
+      case 5:  DH_RUN_TOOL(DH_DEAUTH, dhRunDeauth())
+      case 6:  DH_RUN_TOOL(DH_EVIL_PORTAL, dhRunEvilPortal())
+      case 7:  DH_RUN_TOOL(DH_PROBE_SNIFFER, dhRunProbeSniffer())
+
+      // Page 2: WiFi+ & BLE
+      case 8:  DH_RUN_TOOL(DH_KARMA, dhRunKarma())
+      case 9:  DH_RUN_TOOL(DH_WIFI_CONFIG, dhRunWifiConfig())
+      case 10: DH_ENTER_TOOL(DH_BT_SCANNER, dhRunBleScan())
+      case 11: DH_RUN_TOOL(DH_BLE_INSPECTOR, dhRunBleInspector())
+      case 12: DH_RUN_TOOL(DH_BLE_SPAM, dhRunBleSpam())
+      case 13: DH_RUN_TOOL(DH_BT_DISRUPTOR, dhRunBtDisruptor())
+      case 14: DH_RUN_TOOL(DH_IPHONE_REMOTE, dhRunIphoneRemote())
+      case 15: DH_RUN_TOOL(DH_BT_JAMMER, dhRunBtJammer())
+
+      // Page 3: Radio & IR
+      case 16: DH_RUN_TOOL(DH_JAMMER_24, dhRunJammer24())
+      case 17: DH_RUN_TOOL(DH_RADIO_SCANNER, dhRunRadioScanner())
+      case 18: DH_RUN_TOOL(DH_IR_CAPTURE, dhRunIrCapture())
+      case 19: DH_RUN_TOOL(DH_IR_REPLAY, dhRunIrReplay())
+      case 20: DH_RUN_TOOL(DH_IR_TX_TEST, dhRunIrTxTest())
+      case 21: DH_RUN_TOOL(DH_IR_ANALYZER, dhRunIrAnalyzer())
+      case 22: DH_RUN_TOOL(DH_IR_SNIFFER, dhRunIrSniffer())
+      case 23: DH_RUN_TOOL(DH_IR_PROTOCOL, dhRunIrProtocol())
+
+      // Page 4: IR+ & CC1101
+      case 24: DH_RUN_TOOL(DH_IR_NIGHT, dhRunIrNight())
+      case 25: DH_RUN_TOOL(DH_IR_PROXIMITY, dhRunIrProximity())
+      case 26: DH_RUN_TOOL(DH_IR_REMOTES, dhRunIrRemotes())
+      case 27: DH_RUN_TOOL(DH_IR_SAVED, dhRunIrSaved())
+      case 28: DH_RUN_TOOL(DH_CC_DIAG, dhRunCcDiag())
+      case 29: DH_RUN_TOOL(DH_CC_SPECTRUM, dhRunCcSpectrum())
+      case 30: DH_RUN_TOOL(DH_CC_WATERFALL, dhRunCcWaterfall())
+      case 31: DH_RUN_TOOL(DH_CC_FREQ_MON, dhRunCcFreqMon())
+
+      // Page 5: CC1101+ & RF
+      case 32: DH_RUN_TOOL(DH_CC_FINDER, dhRunCcFinder())
+      case 33: DH_RUN_TOOL(DH_CC_BRUTE, dhRunCcBrute())
+      case 34: DH_RUN_TOOL(DH_CC_CODE_CHECK, dhRunCcCodeCheck())
+      case 35: DH_RUN_TOOL(DH_CC_RF_ANALYZE, dhRunCcRfAnalyze())
+      case 36: DH_RUN_TOOL(DH_CC_RAW_VIEW, dhRunCcRawView())
+      case 37: DH_RUN_TOOL(DH_CC_RF_LIVE, dhRunCcRfLive())
+      case 38: DH_RUN_TOOL(DH_CC_LAB_REPLAY, dhRunCcLabReplay())
+      case 39: DH_RUN_TOOL(DH_CC_TEST_BEACON, dhRunCcTestBeacon())
+
+      // Page 6: System
+      case 40: DH_ENTER_TOOL(DH_PORT_SCANNER, dhRunPortScan())
+      case 41: DH_RUN_TOOL(DH_PACKET_MONITOR, dhRunPacketMonitor())
+      case 42: DH_ENTER_TOOL(DH_INFO, dhDrawSysInfo())
+      case 43: DH_RUN_TOOL(DH_WEB_DASHBOARD, dhRunWebDashboard())
+      case 44: DH_RUN_TOOL(DH_HW_DIAG, dhRunHwDiag())
+      case 45: DH_RUN_TOOL(DH_INPUT_MONITOR, dhRunInputMonitor())
+      case 46: DH_ENTER_TOOL(DH_ABOUT, dhDrawAbout())
+      case 47: break; // Reserved slot
     }
   }
   else {
@@ -1091,6 +1217,7 @@ void redrawDrHackPartial() {
 void initDrHack() {
   dhCurrentState = DH_MENU;
   dhCursorIndex = 0;
+  dhMenuPage = 0;
   dhEntryScanline();
   dhDrawMenu();
 }
