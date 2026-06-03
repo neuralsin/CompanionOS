@@ -1,7 +1,7 @@
 #ifndef PAGE_NETWORK_H
 #define PAGE_NETWORK_H
 #include "globals.h"
-#include <ESP8266WiFi.h>
+// WiFi.h / ESP8266WiFi.h already included via config.h → globals.h
 
 extern void drawPageIndicator(int current, int total);
 

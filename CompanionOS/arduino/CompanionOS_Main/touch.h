@@ -123,7 +123,9 @@ void handleTouch() {
             }
           }
           else if (currentState == STATE_EYES) {
-            if (activeTheme == 1) {
+            if (activeTheme == 2) {
+              t3_nextExpression();
+            } else if (activeTheme == 1) {
               t2_nextExpression();
             } else {
               setEmotion((Emotion)((currentEmotion + 1) % EMO_COUNT));
@@ -168,7 +170,7 @@ void handleTouch() {
             int themeSliderY = 25 - settingsScrollY + 20 + 14 + 20 + 20 + 14 + 14 + 20 + 20 + 14 + 20 + 20 + 40 + 22;
             if (lastTouchY >= themeSliderY && lastTouchY < themeSliderY + 28
                 && lastTouchX >= 10 && lastTouchX <= 130) {
-              activeTheme = activeTheme == 0 ? 1 : 0;
+              activeTheme = (activeTheme + 1) % THEME_COUNT;
               EEPROM.begin(EEPROM_SIZE);
               EEPROM.write(EEPROM_ACTIVE_THEME_ADDR, activeTheme);
               EEPROM.commit();
@@ -179,16 +181,14 @@ void handleTouch() {
               resetSpotifyDrawState();
               t2_resetSpotifyDrawState();
               t2_initialized = false;
+              // Animate theme slider transition
+              int segW = 120 / THEME_COUNT;
               for (int f = 0; f < 6; f++) {
-                int interpX;
-                int slideRange = 120 - 54 - 4;
-                if (activeTheme == 1)
-                  interpX = 12 + (f * slideRange / 5);
-                else
-                  interpX = 12 + slideRange - (f * slideRange / 5);
-                tft.fillRoundRect(10, themeSliderY, 120, 24, 12,
-                                  activeTheme ? 0x4810 : 0x2104);
-                tft.fillRoundRect(interpX, themeSliderY + 2, 54, 20, 10, TFT_WHITE);
+                int targetX = 12 + (activeTheme * segW);
+                int thumbW = segW - 4;
+                uint16_t trackCol = (activeTheme == 0) ? 0x2104 : (activeTheme == 1) ? 0x4810 : 0x1848;
+                tft.fillRoundRect(10, themeSliderY, 120, 24, 12, trackCol);
+                tft.fillRoundRect(targetX, themeSliderY + 2, thumbW, 20, 10, TFT_WHITE);
                 delay(25);
               }
               redrawSettingsPartial();

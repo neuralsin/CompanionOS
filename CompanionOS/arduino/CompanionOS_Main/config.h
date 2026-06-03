@@ -56,7 +56,7 @@ const int UDP_PORT_TX = 8889;
 // EEPROM addresses
 #define EEPROM_EXOTIC_ADDR 0       // 1 byte: legacy
 #define EEPROM_THEME_ADDR 1        // 1 byte: unused (themes removed)
-#define EEPROM_ACTIVE_THEME_ADDR 2 // 1 byte: 0 = Theme 1, 1 = Theme 2
+#define EEPROM_ACTIVE_THEME_ADDR 2 // 1 byte: 0 = Theme 1, 1 = Theme 2, 2 = Theme 3 (RoboEyes)
 #define EEPROM_SIZE 8              // Total EEPROM bytes used
 
 // ═══════════════════════════════════════════════════════════

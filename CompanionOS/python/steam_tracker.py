@@ -375,7 +375,26 @@ class SteamTracker:
         return f'{minutes:02d}:{elapsed % 60:02d}'
 
     def get_game_cover_url(self, title):
-        """Fetch capsule image url from Steam Store API by title. No token required."""
+        """
+        V7 Cover Art Waterfall:
+        1. Steam Store Search (free, no key)
+        2. IGDB via Twitch OAuth (needs client_id + client_secret)
+        3. None (ESP shows placeholder gradient)
+        """
+        # Tier 1: Steam Store Search (free, no API key)
+        url = self._steam_cover_search(title)
+        if url:
+            return url
+
+        # Tier 2: IGDB via Twitch OAuth
+        url = self._igdb_cover_search(title)
+        if url:
+            return url
+
+        return None
+
+    def _steam_cover_search(self, title):
+        """Tier 1: Steam Store search (no key required)."""
         try:
             url = "https://store.steampowered.com/api/storesearch/"
             params = {"term": title, "l": "english", "cc": "US"}
@@ -385,18 +404,86 @@ class SteamTracker:
                 if data.get('total', 0) > 0 and 'items' in data:
                     img_url = data['items'][0].get('tiny_image')
                     if img_url:
-                        # Convert to https if it's protocol relative or http
                         if img_url.startswith('//'):
                             return 'https:' + img_url
                         return img_url
         except Exception as e:
-            print(f"Error fetching game cover for {title}: {e}")
+            print(f"Steam cover search error for '{title}': {e}")
         return None
+
+    def _igdb_cover_search(self, title):
+        """
+        Tier 2: IGDB cover art via Twitch OAuth.
+        Requires TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET env vars.
+        GAP-02: These are prompted during install.py setup flow.
+        """
+        client_id = os.environ.get('TWITCH_CLIENT_ID', '')
+        client_secret = os.environ.get('TWITCH_CLIENT_SECRET', '')
+        if not client_id or not client_secret:
+            return None
+
+        try:
+            # Get Twitch OAuth token (cached for 60 days)
+            if not hasattr(self, '_igdb_token') or not self._igdb_token:
+                token_resp = requests.post(
+                    'https://id.twitch.tv/oauth2/token',
+                    params={
+                        'client_id': client_id,
+                        'client_secret': client_secret,
+                        'grant_type': 'client_credentials'
+                    },
+                    timeout=10
+                )
+                if token_resp.status_code == 200:
+                    self._igdb_token = token_resp.json().get('access_token', '')
+                else:
+                    return None
+
+            # Query IGDB for game cover
+            headers = {
+                'Client-ID': client_id,
+                'Authorization': f'Bearer {self._igdb_token}'
+            }
+            body = f'search "{title}"; fields cover.url; limit 1;'
+            resp = requests.post(
+                'https://api.igdb.com/v4/games',
+                headers=headers,
+                data=body,
+                timeout=10
+            )
+            if resp.status_code == 200:
+                games = resp.json()
+                if games and 'cover' in games[0]:
+                    cover_url = games[0]['cover'].get('url', '')
+                    if cover_url:
+                        # IGDB returns //images.igdb.com/... → convert to https, upscale
+                        cover_url = cover_url.replace('t_thumb', 't_cover_big')
+                        if cover_url.startswith('//'):
+                            cover_url = 'https:' + cover_url
+                        return cover_url
+        except Exception as e:
+            print(f"IGDB cover search error for '{title}': {e}")
+        return None
+
+    def get_recently_played_formatted(self):
+        """
+        Get recently played games formatted for ESP recent games list.
+        Returns list of {"name": str, "time": int (minutes)} dicts.
+        """
+        recent = self.get_recently_played()
+        result = []
+        for game in recent[:3]:
+            result.append({
+                'name': game.get('name', 'Unknown')[:23],
+                'time': game.get('playtime_2weeks', 0)  # minutes
+            })
+        return result
 
     def get_gaming_state(self):
         """
-        Get complete gaming state for ESP display.
+        V7: Get complete gaming state for ESP display.
         Returns dict ready for JSON serialization.
+        Now includes 'recent' array for ESP recent games list.
         """
         result = {
             'title': '',
@@ -404,7 +491,8 @@ class SteamTracker:
             'achieve': 0,
             'friends': 0,
             'active': False,
-            'status': 'Offline'
+            'status': 'Offline',
+            'recent': []  # V7: recent games for gaming dashboard
         }
 
         # 1. Steam API check (gets game title, state, friends)
@@ -429,6 +517,12 @@ class SteamTracker:
                     result['status'] = 'Offline'
 
             result['friends'] = min(self.get_friends_online(), 255)
+
+            # V7: Get recently played for gaming dashboard
+            try:
+                result['recent'] = self.get_recently_played_formatted()
+            except Exception:
+                result['recent'] = []
 
         # 2. Local process fallback
         local_game = self.detect_local_game()

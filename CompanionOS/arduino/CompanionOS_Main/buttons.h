@@ -39,6 +39,8 @@ extern void renderCurrentPage();
 extern void setEmotion(Emotion e);
 extern void t2_nextExpression();
 extern void t2_setEmotion(Emotion e);
+extern void t3_nextExpression();
+extern void t3_setEmotion(Emotion e);
 
 // ── Init ─────────────────────────────────────────────────
 
@@ -114,7 +116,9 @@ void handleButtons() {
   if (consumeXLong(btnSelect)) {
     // Cycle through emotions
     Emotion next = (Emotion)((currentEmotion + 1) % EMO_COUNT);
-    if (activeTheme == 1) {
+    if (activeTheme == 2) {
+      t3_setEmotion(next);
+    } else if (activeTheme == 1) {
       t2_setEmotion(next);
     } else {
       setEmotion(next);
@@ -207,7 +211,9 @@ void handleButtons() {
 
     // Page-specific SELECT actions
     if (currentState == STATE_EYES) {
-      if (activeTheme == 1) {
+      if (activeTheme == 2) {
+        t3_nextExpression();
+      } else if (activeTheme == 1) {
         t2_nextExpression();
       } else {
         setEmotion((Emotion)((currentEmotion + 1) % EMO_COUNT));

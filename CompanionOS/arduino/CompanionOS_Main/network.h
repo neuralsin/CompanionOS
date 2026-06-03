@@ -70,6 +70,10 @@ extern void processArtChunk(int chunkIdx, String hexData);
 extern void completeAlbumArt();
 extern void showFlashNotification(String text);
 extern void renderCurrentPage();
+extern void changePage(int direction);
+extern void setEmotion(Emotion e);
+extern void t2_nextExpression();
+extern bool flashNotifEnabled;
 
 // Safe string extraction to prevent nullptr crash
 #define SAFESTR(dest, src, sz) do { const char* _s = (src).as<const char*>(); if (_s) { strncpy(dest, _s, sz-1); dest[sz-1] = '\0'; } } while(0)
@@ -101,6 +105,84 @@ extern String notifTimes[3];
 extern int notifTotal;
 
 void handleCommand(String msg);
+void sendCommand(String cmd);
+
+void handleVirtualButton(String btn) {
+  btn.trim();
+  btn.toUpperCase();
+
+  if (btn == "HOME") {
+    if (currentState != STATE_EYES) {
+      changePage(-(int)currentState);
+    }
+    lastInteractionTime = millis();
+    return;
+  }
+
+  if (btn == "LEFT") {
+    #ifdef ESP32
+    if (currentState == STATE_DR_HACK) {
+      extern void dhNavigate(int delta);
+      dhNavigate(-1);
+      lastInteractionTime = millis();
+      return;
+    }
+    #endif
+
+    if (currentState == STATE_SPOTIFY) sendCommand("PREV");
+    else changePage(-1);
+    lastInteractionTime = millis();
+    return;
+  }
+
+  if (btn == "RIGHT") {
+    #ifdef ESP32
+    if (currentState == STATE_DR_HACK) {
+      extern void dhNavigate(int delta);
+      dhNavigate(1);
+      lastInteractionTime = millis();
+      return;
+    }
+    #endif
+
+    if (currentState == STATE_SPOTIFY) sendCommand("NEXT");
+    else changePage(1);
+    lastInteractionTime = millis();
+    return;
+  }
+
+  if (btn == "SELECT") {
+    #ifdef ESP32
+    if (currentState == STATE_DR_HACK) {
+      extern void dhSelect();
+      dhSelect();
+      lastInteractionTime = millis();
+      return;
+    }
+    #endif
+
+    if (currentState == STATE_EYES) {
+      if (activeTheme == 2) t3_nextExpression();
+      else if (activeTheme == 1) t2_nextExpression();
+      else setEmotion((Emotion)((currentEmotion + 1) % EMO_COUNT));
+    } else if (currentState == STATE_SPOTIFY) {
+      sendCommand("PLAY_PAUSE");
+    } else if (currentState == STATE_POMODORO) {
+      sendCommand(pomoActive ? "POMO:PAUSE" : "POMO:START");
+    } else if (currentState == STATE_NOTIFICATIONS) {
+      flashNotifEnabled = !flashNotifEnabled;
+      redrawNotificationsPartial();
+    } else if (currentState == STATE_SETTINGS) {
+      activeTheme = (activeTheme + 1) % THEME_COUNT;
+      EEPROM.begin(EEPROM_SIZE);
+      EEPROM.write(EEPROM_ACTIVE_THEME_ADDR, activeTheme);
+      EEPROM.commit();
+      EEPROM.end();
+      renderCurrentPage();
+    }
+    lastInteractionTime = millis();
+  }
+}
 
 // ═══════════════════════════════════════════════════════════
 // WiFi SETUP — Platform-aware
@@ -266,16 +348,21 @@ void handleNetwork() {
     if (len > 3 && (unsigned char)udpBuffer[0] == 0xFE) {
       int chunkIdx = ((unsigned char)udpBuffer[1] << 8) | ((unsigned char)udpBuffer[2]);
       int pixelsInChunk = (len - 3) / 2;
-      int imgWidth = (currentState == STATE_GAMING) ? 100 : 96;
-      int pixels_per_chunk = imgWidth * 2;
-      int startPixel = chunkIdx * pixels_per_chunk;
+      int imgWidth = (currentState == STATE_GAMING) ? 100 : ALBUM_ART_W;
+      int imgHeight = (currentState == STATE_GAMING) ? 60 : ALBUM_ART_H;
+      int imagePixels = imgWidth * imgHeight;
+      int maxPixels = ALBUM_ART_W * ALBUM_ART_H;
+      int pixelsPerChunk = imgWidth * 2;
+      int startPixel = chunkIdx * pixelsPerChunk;
 
-      if (startPixel < 9216) {
+      if (startPixel >= 0 && startPixel < imagePixels && startPixel < maxPixels) {
         uint16_t* dest = albumArt + startPixel;
+        int safePixels = min(pixelsInChunk, min(imagePixels - startPixel, maxPixels - startPixel));
+        if (safePixels <= 0) return;
 
-        for (int i = 0; i < pixelsInChunk; i++) {
+        for (int i = 0; i < safePixels; i++) {
           int offset = 3 + (i * 2);
-          dest[i] = (unsigned char)udpBuffer[offset] | ((unsigned char)udpBuffer[offset+1] << 8);
+          dest[i] = ((uint16_t)(unsigned char)udpBuffer[offset] << 8) | (unsigned char)udpBuffer[offset + 1];
         }
 
         // Progressive rendering
@@ -290,7 +377,7 @@ void handleNetwork() {
         }
 
         int yStart = startPixel / imgWidth;
-        int maxRows = pixelsInChunk / imgWidth;
+        int maxRows = safePixels / imgWidth;
 
         if (currentState == STATE_SPOTIFY || currentState == STATE_GAMING) {
           if (maxRows > 0) {
@@ -334,7 +421,7 @@ void handleCommand(String msg) {
       else if (emo == "SLEEPY") e = EMO_SLEEPY;
       else if (emo == "ANGRY") e = EMO_ANGRY;
       else if (emo == "SURPRISED") e = EMO_SURPRISED;
-      if (activeTheme == 1) t2_setEmotion(e); else setEmotion(e);
+      if (activeTheme == 2) t3_setEmotion(e); else if (activeTheme == 1) t2_setEmotion(e); else setEmotion(e);
     }
     // V4: Antigravity Agent Status
     else if (msg.startsWith("AGENT:")) {
@@ -348,13 +435,13 @@ void handleCommand(String msg) {
         lastInteractionTime = millis();
 
         if (agentStatus == "thinking") {
-          if (activeTheme == 1) t2_setEmotion(EMO_EXCITED); else setEmotion(EMO_EXCITED);
+          if (activeTheme == 2) t3_setEmotion(EMO_EXCITED); else if (activeTheme == 1) t2_setEmotion(EMO_EXCITED); else setEmotion(EMO_EXCITED);
         }
         else if (agentStatus == "done") {
-          if (activeTheme == 1) t2_setEmotion(EMO_HAPPY); else setEmotion(EMO_HAPPY);
+          if (activeTheme == 2) t3_setEmotion(EMO_HAPPY); else if (activeTheme == 1) t2_setEmotion(EMO_HAPPY); else setEmotion(EMO_HAPPY);
         }
         else if (agentStatus == "error") {
-          if (activeTheme == 1) t2_setEmotion(EMO_SAD); else setEmotion(EMO_SAD);
+          if (activeTheme == 2) t3_setEmotion(EMO_SAD); else if (activeTheme == 1) t2_setEmotion(EMO_SAD); else setEmotion(EMO_SAD);
         }
       }
     }
@@ -600,32 +687,7 @@ void handleCommand(String msg) {
     // BTN: — Web remote virtual button press
     else if (msg.startsWith("BTN:")) {
       String btn = msg.substring(4);
-      btn.trim();
-      if (btn == "LEFT") {
-        #ifdef ESP32
-        extern void handleButtons();
-        btnLeft.wasPressed = true;
-        #endif
-        changePage(-1);
-      }
-      else if (btn == "RIGHT") {
-        #ifdef ESP32
-        btnRight.wasPressed = true;
-        #endif
-        changePage(1);
-      }
-      else if (btn == "SELECT") {
-        #ifdef ESP32
-        btnSelect.wasPressed = true;
-        #endif
-      }
-      else if (btn == "HOME") {
-        if (currentState != STATE_EYES) {
-          extern void changePage(int delta);
-          changePage(-(int)currentState);
-        }
-      }
-      lastInteractionTime = millis();
+      handleVirtualButton(btn);
     }
 
     // PAGE: — Direct page navigation from web remote
@@ -661,7 +723,7 @@ void handleCommand(String msg) {
     }
     else if (msg.startsWith("THEME:")) {
       int t = msg.substring(6).toInt();
-      if (t == 0 || t == 1) {
+      if (t >= 0 && t < THEME_COUNT) {
         activeTheme = t;
         EEPROM.begin(EEPROM_SIZE);
         EEPROM.write(EEPROM_ACTIVE_THEME_ADDR, activeTheme);

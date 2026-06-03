@@ -116,7 +116,19 @@ void showLoadingScreen(const char* message) {
 // PAGE INDICATOR DOTS — Bottom center
 // ═══════════════════════════════════════════════════════════
 
+int getEffectivePageCount() {
+  #ifdef ESP32
+    return STATE_COUNT;
+  #else
+    return STATE_DR_HACK;
+  #endif
+}
+
 void drawPageIndicator(int current, int total) {
+  int effectiveTotal = getEffectivePageCount();
+  if (total <= 0 || total > effectiveTotal) total = effectiveTotal;
+  if (current >= total) current = total - 1;
+
   int spacing = SCALE_X(8);
   int startX = (SCR_W - ((total - 1) * spacing)) / 2;
   int y = SCR_H - SCALE_Y(6);

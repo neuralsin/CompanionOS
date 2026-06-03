@@ -2,6 +2,7 @@
 #define EYES_H
 
 #include "globals.h"
+#include "ui_components.h"
 #include <math.h>
 
 // ═══════════════════════════════════════════════════════════

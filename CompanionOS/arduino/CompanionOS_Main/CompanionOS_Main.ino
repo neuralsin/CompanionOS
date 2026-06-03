@@ -13,9 +13,11 @@
  * ═══════════════════════════════════════════════════════════
  */
 
-#include "network.h"
 #include "globals.h"
+#include "ui_components.h"
+#include "network.h"
 #include "eyes.h"
+#include "theme3_eyes.h"
 #include "thought_engine.h"
 #include "pages.h"
 #include "ui.h"
@@ -238,7 +240,7 @@ void setup() {
   // EEPROM
   EEPROM.begin(EEPROM_SIZE);
   activeTheme = EEPROM.read(EEPROM_ACTIVE_THEME_ADDR);
-  if (activeTheme > 1) activeTheme = 0;  // Sanitize on first boot (0xFF → 0)
+  if (activeTheme >= THEME_COUNT) activeTheme = 0;  // Sanitize on first boot (0xFF → 0)
   EEPROM.end();
 
   // Network (WiFi + BT on ESP32)
@@ -280,7 +282,9 @@ void loop() {
     lastFrameTime = millis();
 
     if (currentState == STATE_EYES) {
-      if (activeTheme == 1) {
+      if (activeTheme == 2) {
+        t3_updateEyes();
+      } else if (activeTheme == 1) {
         t2_updateEyes();
       } else {
         updateEyes();

@@ -184,7 +184,7 @@ void redrawSpotifyPartial() {
 
   // Play/Pause Circle
   static bool lastPlaying = false;
-  if (isPlaying != lastPlaying || true) { // Always update circle just in case
+  if (isPlaying != lastPlaying) { // HIGH-04 FIX: removed || true that caused per-frame redraws
     tft.fillCircle(ctrlX, ctrlY, 14, TFT_WHITE);
     if (isPlaying) drawIconPause(ctrlX, ctrlY, COLOR_BG);
     else drawIconPlay(ctrlX + 2, ctrlY, COLOR_BG);
@@ -367,24 +367,27 @@ void completeAlbumArt() {
   }
 }
 
-// High-frequency trigonometric subpixel calculation for a perfectly smooth vector ring
+// CRIT-02 FIX: Fast arc drawing using line segments instead of O(n²) pixel loop.
+// Original used sqrt()+atan2() per pixel (~12,100 iterations) freezing ESP for 1-2s.
 void drawSmoothRing(int cx, int cy, int r, int thickness, float percent, uint16_t fgColor, uint16_t bgColor) {
-  float endAngle = percent * 360.0;
-  for (int y = -r; y <= r; y++) {
-    for (int x = -r; x <= r; x++) {
-      float dist = sqrt(x*x + y*y);
-      if (dist >= r - thickness && dist <= r) {
-        float angle = atan2(y, x) * 180.0 / PI;
-        angle += 90.0; // Start at 12 o'clock
-        if (angle < 0) angle += 360.0;
-        
-        if (angle <= endAngle) {
-          tft.drawPixel(cx + x, cy + y, fgColor);
-        } else {
-          tft.drawPixel(cx + x, cy + y, bgColor);
-        }
-      }
+  // Draw background ring (full circle)
+  for (int angle = 0; angle < 360; angle += 2) {
+    float rad = (angle - 90) * PI / 180.0;  // Start at 12 o'clock
+    for (int t = 0; t < thickness; t++) {
+      int px = cx + cos(rad) * (r - t);
+      int py = cy + sin(rad) * (r - t);
+      tft.drawPixel(px, py, bgColor);
     }
+  }
+  // Draw foreground arc (progress portion)
+  int endAngle = (int)(percent * 360.0);
+  for (int angle = 0; angle < endAngle; angle += 2) {
+    float rad = (angle - 90) * PI / 180.0;
+    int x1 = cx + cos(rad) * (r - thickness);
+    int y1 = cy + sin(rad) * (r - thickness);
+    int x2 = cx + cos(rad) * r;
+    int y2 = cy + sin(rad) * r;
+    tft.drawLine(x1, y1, x2, y2, fgColor);
   }
 }
 
@@ -470,62 +473,62 @@ void redrawWeatherPartial() {
   
   tft.fillRect(0, 18, SCREEN_W, SCREEN_H - 35, COLOR_BG);
   
-  // City name
-  tft.setTextColor(0x8410);
+  // City name — HIGH-01 FIX: use 2-arg setTextColor to prevent ghost text
+  tft.setTextColor(0x8410, COLOR_BG);
   tft.drawString(weatherCity, 15, 22, 2);
   
   // Big temperature
   char tempStr[8];
   sprintf(tempStr, "%d", weatherTemp);
-  tft.setTextColor(TFT_WHITE);
+  tft.setTextColor(TFT_WHITE, COLOR_BG);
   tft.drawString(tempStr, 15, 48, 7);  // Font 7 = big numbers
   
   // Degree symbol + C
   int tw = tft.textWidth(tempStr, 7);
-  tft.setTextColor(0x8410);
+  tft.setTextColor(0x8410, COLOR_BG);
   tft.drawString("C", 15 + tw + 8, 48, 4);
   tft.drawCircle(15 + tw + 4, 50, 3, 0x8410);
   
   // Condition text
   uint16_t condColor = getWeatherColor(weatherCode);
-  tft.setTextColor(condColor);
+  tft.setTextColor(condColor, COLOR_BG);
   tft.drawString(weatherCondition, 15, 110, 2);
   
   // Details column
   int dx = 175;
-  tft.setTextColor(0x6B4D);
+  tft.setTextColor(0x6B4D, COLOR_BG);
   tft.drawString("Feels like", dx, 30, 1);
-  tft.setTextColor(TFT_WHITE);
+  tft.setTextColor(TFT_WHITE, COLOR_BG);
   char fb[8]; sprintf(fb, "%d C", weatherFeels);
   tft.drawString(fb, dx, 42, 2);
   
-  tft.setTextColor(0x6B4D);
+  tft.setTextColor(0x6B4D, COLOR_BG);
   tft.drawString("Humidity", dx, 65, 1);
-  tft.setTextColor(TFT_CYAN);
+  tft.setTextColor(TFT_CYAN, COLOR_BG);
   char hb[8]; sprintf(hb, "%d%%", weatherHumidity);
   tft.drawString(hb, dx, 77, 2);
   
-  tft.setTextColor(0x6B4D);
+  tft.setTextColor(0x6B4D, COLOR_BG);
   tft.drawString("Wind", dx, 100, 1);
-  tft.setTextColor(TFT_WHITE);
+  tft.setTextColor(TFT_WHITE, COLOR_BG);
   char wb[12]; sprintf(wb, "%d km/h", weatherWind);
   tft.drawString(wb, dx, 112, 2);
   
-  tft.setTextColor(0x6B4D);
+  tft.setTextColor(0x6B4D, COLOR_BG);
   tft.drawString("Hi / Lo", dx, 135, 1);
-  tft.setTextColor(TFT_WHITE);
+  tft.setTextColor(TFT_WHITE, COLOR_BG);
   char hlb[12]; sprintf(hlb, "%d / %d", weatherHigh, weatherLow);
   tft.drawString(hlb, dx, 147, 2);
   
   // Sunrise/Sunset
-  tft.setTextColor(TFT_YELLOW);
+  tft.setTextColor(TFT_YELLOW, COLOR_BG);
   tft.drawString("^", 15, 145, 2);
-  tft.setTextColor(0x8410);
+  tft.setTextColor(0x8410, COLOR_BG);
   tft.drawString(weatherSunrise, 30, 145, 1);
   
-  tft.setTextColor(0xFBE0);
+  tft.setTextColor(0xFBE0, COLOR_BG);
   tft.drawString("v", 15, 160, 2);
-  tft.setTextColor(0x8410);
+  tft.setTextColor(0x8410, COLOR_BG);
   tft.drawString(weatherSunset, 30, 160, 1);
 }
 
@@ -584,24 +587,8 @@ void redrawNotificationsPartial() {
   tft.drawCentreString(flashNotifEnabled ? "Flash: ON" : "Flash: OFF", SCREEN_W/2, SCREEN_H - 28, 1);
 }
 
-// Flash notification overlay (shows for 5s on eyes page)
-void showFlashNotification(String text) {
-  if (!flashNotifEnabled) return;
-  flashNotifActive = true;
-  flashNotifStart = millis();
-  flashNotifText = text;
-  
-  if (currentState == STATE_EYES) {
-    // Draw overlay at top
-    tft.fillRoundRect(10, 5, SCREEN_W - 20, 35, 6, 0x1082);
-    tft.fillRect(10, 5, 4, 35, TFT_CYAN);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawString(text.substring(0, 30), 20, 14, 2);
-  }
-}
-
 void updateFlashNotification() {
-  if (flashNotifActive && millis() - flashNotifStart > 5000) {
+  if (flashNotifActive && millis() - flashNotifStart >= 5000) { // HIGH-07 FIX: >= prevents edge-case stuck overlay
     flashNotifActive = false;
     if (currentState == STATE_EYES) {
       // Clear overlay area and redraw eyes
@@ -630,7 +617,9 @@ void redrawNotesPartial() {
   }
   
   tft.setTextColor(0x4208);
-  tft.drawCentreString("Edit at http://YOUR_IP:5555", SCREEN_W/2, SCREEN_H - 28, 1);
+  // HIGH-02 FIX: Show actual ESP IP instead of placeholder
+  String notesUrl = "http://" + WiFi.localIP().toString() + ":5555";
+  tft.drawCentreString(notesUrl.c_str(), SCREEN_W/2, SCREEN_H - 28, 1);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -750,7 +739,7 @@ void redrawSettingsPartial() {
     }
   }
 
-  // ── Theme Switcher ──
+  // ── Theme Switcher (3-way) ──
   y += 40;
   if (y > -20 && y < SCREEN_H) {
     tft.setTextColor(TFT_CYAN);
@@ -758,26 +747,29 @@ void redrawSettingsPartial() {
   }
   y += 22;
   if (y > -20 && y < SCREEN_H) {
-    // Pill-shaped slider track
+    // 3-segment selector track
     int sliderX = 10, sliderW = 120, sliderH = 24;
-    int thumbW = 54, thumbH = 20;
-    int thumbX = activeTheme == 0 ? sliderX + 2 : sliderX + sliderW - thumbW - 2;
+    int segW = sliderW / THEME_COUNT;  // 40px per segment
+    int thumbW = segW - 4, thumbH = 20;
+    int thumbX = sliderX + 2 + (activeTheme * segW);
     
-    // Track background (purple-tinted for T2, dark for T1)
-    tft.fillRoundRect(sliderX, y, sliderW, sliderH, sliderH/2,
-                      activeTheme == 0 ? 0x2104 : 0x4810);
+    // Track background (color changes per theme)
+    uint16_t trackCol = (activeTheme == 0) ? 0x2104 : (activeTheme == 1) ? 0x4810 : 0x1848;
+    tft.fillRoundRect(sliderX, y, sliderW, sliderH, sliderH/2, trackCol);
     // Thumb
     tft.fillRoundRect(thumbX, y + 2, thumbW, thumbH, thumbH/2, TFT_WHITE);
     
-    // Labels
-    tft.setTextColor(activeTheme == 0 ? TFT_BLACK : 0x4208);
-    tft.drawCentreString("OG", sliderX + 29, y + 5, 2);
-    tft.setTextColor(activeTheme == 1 ? TFT_BLACK : 0x4208);
-    tft.drawCentreString("T2", sliderX + sliderW - 29, y + 5, 2);
+    // Labels inside track segments
+    const char* labels[] = {"OG", "T2", "RB"};
+    for (int i = 0; i < THEME_COUNT; i++) {
+      tft.setTextColor(activeTheme == i ? TFT_BLACK : 0x4208);
+      tft.drawCentreString(labels[i], sliderX + (i * segW) + segW/2, y + 5, 2);
+    }
     
     // Current theme label
+    const char* themeNames[] = {"Original", "Alternate", "RoboEyes"};
     tft.setTextColor(0x8410);
-    tft.drawString(activeTheme == 0 ? "Original" : "Alternate", sliderX + sliderW + 10, y + 4, 2);
+    tft.drawString(themeNames[activeTheme], sliderX + sliderW + 6, y + 4, 1);
   }
 }
 
@@ -786,6 +778,7 @@ void redrawSettingsPartial() {
 // ═══════════════════════════════════════════════════════════
 
 void drawEyesPage() {
+  if (activeTheme == 2) { t3_drawEyesPage(); drawStatusBar(); return; }
   if (activeTheme == 1) { t2_drawEyesPage(); drawStatusBar(); return; }
   tft.fillRect(0, 16, SCREEN_W, SCREEN_H - 16, COLOR_BG);
   drawStarfield();
@@ -904,6 +897,9 @@ void changePage(int direction) {
   if (next >= maxPage) next = 0;
   if (next < 0) next = maxPage - 1;
   currentState = (AppState)next;
+  // HIGH-06 FIX: Reset all page draw states on page change to prevent stale partial redraws
+  resetSpotifyDrawState();
+  settingsScrollY = 0;
   #ifdef ESP32
   // Reset Dr. Hack state when leaving
   if (currentState != STATE_DR_HACK) {

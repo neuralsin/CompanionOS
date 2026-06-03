@@ -4,13 +4,13 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
+#include "config.h"
 #include <TFT_eSPI.h>
 #if HAS_TOUCH
   #include <XPT2046_Touchscreen.h>
 #endif
 #include <WiFiUdp.h>
 #include <EEPROM.h>
-#include "config.h"
 
 // ═══════════════════════════════════════════════════════════
 // RESOLUTION-AWARE LAYOUT HELPERS
@@ -248,7 +248,9 @@ extern int weatherCode;
 #define exoticMode false
 
 // Theme System
-// 0 = Original (Theme 1), 1 = Theme 2 (alternate eyes + spotify skin)
+// 0 = Original (Theme 1), 1 = Theme 2 (alternate eyes + spotify skin), 2 = Theme 3 (RoboEyes)
+#define THEME_COUNT 3
 int activeTheme = 0;
+int t3EyeVariant = 0;  // Theme 3 eye variant index (0–5)
 
 #endif

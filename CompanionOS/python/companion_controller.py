@@ -49,6 +49,13 @@ SPOTIFY_SCOPE = config['spotify']['scope']
 GITHUB_USERNAME = os.getenv("GITHUB_USERNAME", config['github']['username'])
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", config['github'].get('token', ''))
 
+gaming_cfg = config.get('gaming', {})
+if gaming_cfg.get('twitch_client_id'):
+    os.environ['TWITCH_CLIENT_ID'] = gaming_cfg.get('twitch_client_id', '')
+if gaming_cfg.get('twitch_client_secret'):
+    os.environ['TWITCH_CLIENT_SECRET'] = gaming_cfg.get('twitch_client_secret', '')
+
+
 WEATHER_KEY = config.get('weather', {}).get('api_key', '')
 WEATHER_CITY = config.get('weather', {}).get('city', 'auto:ip')
 
