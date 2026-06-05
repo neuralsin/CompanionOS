@@ -1,24 +1,27 @@
 # CompanionOS v7 Live Audit Ledger
 
-Audited: 2026-06-04
+Audited: 2026-06-05
 Scope: CompanionOS firmware, Python bridge, web remote, config, and V7 prompt compliance.
 Rule: Active checklist contains unresolved work only. Completed defects are removed from the active list and recorded in the change log.
 
 ## Active Checklist
 
-- [ ] FW-05: Make 320x240-only pages usable on the 160x128 ESP32 mini display, starting with Stocks and Network.
-- [ ] FW-06: Remove blocking Dr. Hack active-tool loops or add bounded timeouts and non-stuck exit paths.
+- [ ] FW-06: Remove blocking Dr. Hack active-tool loops or add bounded timeouts and non-stuck exit paths. (Confirmed: `while (true)` loops remain in `page_dr_hack.h`, `dh_wifi_tools.h`, `dh_ir_tools.h`, `dh_evil_portal.h`, `dh_cc1101_tools.h`, `dh_rfid_tools.h`).
+- [ ] FW-07: Make `page_social.h` usable on the 160x128 ESP32 mini display. Currently uses an unscaled, hardcoded layout (e.g., `cardH = 185`, `cardY = 24`) that clips on 160x128 screens.
+- [ ] FW-08: Potential Memory Waste. `theme2_eyes.h` allocates a `TFT_eSprite` using `new` but provides no `delete` mechanism, wasting RAM when switching themes.
 - [ ] PY-01: Add missing `psutil` dependency to `requirements.txt`.
-- [ ] PY-02: Remove committed real API secrets from `python/config.json`; use environment variables and safe config fallbacks.
-- [ ] PY-03: Inject Twitch/IGDB credentials from config/environment before `steam_tracker.py` uses `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET`.
-- [ ] PY-04: Shrink or split `STOCKS:` and `GAMING:` UDP payloads so they cannot exceed the ESP parser budget.
-- [ ] PY-05: Fix UDP port conflicts: `web_remote.py` discovery must not bind to controller port 8889, and `bluetooth_bridge.py` must not bind to ESP outbound port 8888.
+- [ ] PY-02: Remove committed real API secrets from `python/config.json` (GitHub PAT, Spotify secrets, Weather API key); use environment variables and safe config fallbacks.
+- [ ] PY-03: `config.json` lacks a `twitch_client_id` and `twitch_client_secret` under the `gaming` block, rendering the `TWITCH_` environment variable injection in `companion_controller.py` partially incomplete.
+- [ ] PY-04: Shrink or split `STOCKS:` and `GAMING:` UDP payloads in Python so they cannot exceed the ESP parser budget. No size-checking logic exists in `stock_manager.py` or `steam_tracker.py` UDP sends.
+- [ ] PY-05: Fix UDP port conflicts: `web_remote.py` discovery (`LOCAL_PORT = 8889`), `bluetooth_bridge.py` (`UDP_PORT_RX = 8889`), and `companion_controller.py` (`PC_PORT_RX = 8889`) all conflict by binding to the same PC receive port.
 - [ ] PY-06: Fix Pomodoro timing drift by tracking integer milliseconds instead of subtracting floats.
 - [ ] UI-01: Polish no-touch UX: physical buttons and web e-buttons must cover navigation, page selection, Spotify, emotion, and thought workflows.
-- [ ] VERIFY-01: Run Python compile/lint checks and document Arduino verification status. `arduino-cli` and `pio` are not installed locally as of this audit.
+- [ ] VERIFY-01: Run Python compile/lint checks and document Arduino verification status.
 
 ## Change Log
 
+- 2026-06-05: Fixed FW-05. Made `page_network.h`, `page_stocks.h`, `pages.h` (Spotify, Weather, Notifications), and `page_productivity.h` layout-aware for 160x128 via `SCREEN_W > 200` conditional logic.
+- 2026-06-05: Audited the entire codebase for mismatch bugs, old code residue, and failures. Appended FW-07 and FW-08 to the active checklist. Confirmed presence of blocking loops (FW-06) and Python UDP port binding conflicts (PY-05).
 - 2026-06-04: Initialized this live audit ledger from the stale full report, keeping only verified unresolved issues as active checklist items.
 - 2026-06-04: Verified Python syntax with `python -m compileall -q CompanionOS\python`; no Python syntax errors at audit start.
 - 2026-06-04: Verified local Arduino build tooling is absent: `arduino-cli` and `pio` commands are not installed, so firmware compilation cannot be executed in this CLI until one is installed.

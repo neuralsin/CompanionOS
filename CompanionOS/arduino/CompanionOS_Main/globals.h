@@ -9,6 +9,24 @@
 #if HAS_TOUCH
   #include <XPT2046_Touchscreen.h>
 #endif
+
+// ESP32 Core 3.x: Network library must be loaded BEFORE any WiFi headers.
+// WiFiGeneric.h uses Network types (network_event_handle_t, NetworkInterface,
+// arduino_event_id_t) via macros without including them.
+#ifdef ESP32
+#include <NetworkInterface.h>
+#include <NetworkEvents.h>
+#include <NetworkManager.h>
+#include <NetworkClient.h>
+#include <NetworkServer.h>
+#include <NetworkUdp.h>
+#endif
+
+// FS namespace fix: WebServer.h uses bare 'FS' but <FS.h> puts it in fs::
+#include <FS.h>
+using fs::FS;
+using fs::File;
+
 #include <WiFiUdp.h>
 #include <EEPROM.h>
 

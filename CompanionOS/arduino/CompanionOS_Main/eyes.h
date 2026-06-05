@@ -466,7 +466,7 @@ void updateEyes() {
   if (now - lastLDR > 5000) {
     lastLDR = now;
     #ifdef ESP32
-      ldrValue = analogRead(36);  // GPIO36 (SVP) = ADC1_CH0
+      ldrValue = analogRead(LDR_PIN);  // Uses config_esp32.h LDR_PIN (GPIO39)
     #else
       ldrValue = analogRead(A0);
     #endif

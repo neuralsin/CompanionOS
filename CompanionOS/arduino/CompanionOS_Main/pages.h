@@ -164,20 +164,20 @@ void redrawSpotifyPartial() {
 
   // ── CENTER COLUMN: Playback Controls ──
   // Raised main row slightly to fit the new bottom row
-  int ctrlY = 118;
-  int ctrlX = 160;
+  int ctrlY = SCALE_Y(118);
+  int ctrlX = SCALE_X(160);
   
   
   if (!controlsDrawn) {
-    tft.fillRect(110, ctrlY - 20, 100, 60, COLOR_BG); 
+    tft.fillRect(SCALE_X(110), ctrlY - 20, SCALE_X(100), 60, COLOR_BG); 
     
     // Main Row: Prev, (Play/Pause is drawn below), Next  — Wide spacing
-    drawIconPrev(130, ctrlY, TFT_WHITE);
-    drawIconNext(190, ctrlY, TFT_WHITE);
+    drawIconPrev(SCALE_X(130), ctrlY, TFT_WHITE);
+    drawIconNext(SCALE_X(190), ctrlY, TFT_WHITE);
     
     // Bottom Row: Shuffle, Repeat
-    drawIconShuffle(140, ctrlY + 24, 0x6B4D);
-    drawIconRepeat(180, ctrlY + 24, 0x6B4D);
+    drawIconShuffle(SCALE_X(140), ctrlY + 24, 0x6B4D);
+    drawIconRepeat(SCALE_X(180), ctrlY + 24, 0x6B4D);
     
     controlsDrawn = true;
   }
@@ -194,9 +194,9 @@ void redrawSpotifyPartial() {
   // ── CENTER COLUMN: Progress Bar + Waveform Pulse ──
   // SUBMISSION 2: Animated waveform pulse using sin() on song position
   // This requires 160MHz FPU to evaluate 8 waveform bars per frame without jitter.
-  int barX = 120;
-  int barY = 150;
-  int barW = 80;
+  int barX = SCALE_X(120);
+  int barY = SCALE_Y(150);
+  int barW = SCALE_X(80);
   
   // Draw scrubber track
   tft.fillRect(barX, barY - 2, barW + 10, 6, COLOR_BG);
@@ -235,11 +235,13 @@ void redrawSpotifyPartial() {
   tft.fillRect(barX + barW - 30, barY + 20, 40, 12, COLOR_BG);
   tft.drawRightString(t2, barX + barW + 5, barY + 20, 1);
 
-  // ── RIGHT COLUMN: Lyrics Card ──
-  int cardX = 210;
-  int cardY = 25;
-  int cardW = 105;
-  int cardH = 190;
+  // ── RIGHT COLUMN: Lyrics Card (only on large screens) ──
+  // On 160×128 screens there's no room for a 105px card to the right
+  if (SCREEN_W > 200) {
+  int cardX = SCALE_X(210);
+  int cardY = SCALE_Y(25);
+  int cardW = SCALE_X(105);
+  int cardH = SCALE_Y(190);
   
   if (!cardDrawn) {
     // Advanced 160MHz Premium Detailing: Drop Shadow
@@ -321,6 +323,7 @@ void redrawSpotifyPartial() {
     lastLyric2 = currentLyricsLine2;
     lastPrevLyric = prevLyricsLine;
   }
+  } // end if (SCREEN_W > 200) — lyrics card
 }
 
 // Reset static trackers when entering the Spotify page fresh
@@ -473,63 +476,70 @@ void redrawWeatherPartial() {
   
   tft.fillRect(0, 18, SCREEN_W, SCREEN_H - 35, COLOR_BG);
   
-  // City name — HIGH-01 FIX: use 2-arg setTextColor to prevent ghost text
+  // City name
   tft.setTextColor(0x8410, COLOR_BG);
-  tft.drawString(weatherCity, 15, 22, 2);
+  tft.drawString(weatherCity, SCALE_X(15), SCALE_Y(22), (SCREEN_W > 200) ? 2 : 1);
   
-  // Big temperature
+  // Big temperature — Font 4 on small screens (Font 7 overflows 160px)
   char tempStr[8];
   sprintf(tempStr, "%d", weatherTemp);
   tft.setTextColor(TFT_WHITE, COLOR_BG);
-  tft.drawString(tempStr, 15, 48, 7);  // Font 7 = big numbers
+  int tempFont = (SCREEN_W > 200) ? 7 : 4;
+  tft.drawString(tempStr, SCALE_X(15), SCALE_Y(48), tempFont);
   
   // Degree symbol + C
-  int tw = tft.textWidth(tempStr, 7);
+  int tw = tft.textWidth(tempStr, tempFont);
   tft.setTextColor(0x8410, COLOR_BG);
-  tft.drawString("C", 15 + tw + 8, 48, 4);
-  tft.drawCircle(15 + tw + 4, 50, 3, 0x8410);
+  tft.drawString("C", SCALE_X(15) + tw + SCALE_X(8), SCALE_Y(48), (SCREEN_W > 200) ? 4 : 2);
+  tft.drawCircle(SCALE_X(15) + tw + SCALE_X(4), SCALE_Y(50), SCALE_MIN(3), 0x8410);
   
   // Condition text
   uint16_t condColor = getWeatherColor(weatherCode);
   tft.setTextColor(condColor, COLOR_BG);
-  tft.drawString(weatherCondition, 15, 110, 2);
+  tft.drawString(weatherCondition, SCALE_X(15), SCALE_Y(110), (SCREEN_W > 200) ? 2 : 1);
   
-  // Details column
-  int dx = 175;
+  // Details column — right side on large, compact on small
+  int dx = (SCREEN_W > 200) ? 175 : SCALE_X(80);
+  int detailFont = (SCREEN_W > 200) ? 2 : 1;
+  int detailStep = (SCREEN_W > 200) ? 35 : SCALE_Y(18);
+  int dy0 = (SCREEN_W > 200) ? 30 : SCALE_Y(30);
+  
   tft.setTextColor(0x6B4D, COLOR_BG);
-  tft.drawString("Feels like", dx, 30, 1);
+  tft.drawString("Feels", dx, dy0, 1);
   tft.setTextColor(TFT_WHITE, COLOR_BG);
   char fb[8]; sprintf(fb, "%d C", weatherFeels);
-  tft.drawString(fb, dx, 42, 2);
+  tft.drawString(fb, dx, dy0 + 10, detailFont);
   
   tft.setTextColor(0x6B4D, COLOR_BG);
-  tft.drawString("Humidity", dx, 65, 1);
+  tft.drawString("Humid", dx, dy0 + detailStep, 1);
   tft.setTextColor(TFT_CYAN, COLOR_BG);
   char hb[8]; sprintf(hb, "%d%%", weatherHumidity);
-  tft.drawString(hb, dx, 77, 2);
+  tft.drawString(hb, dx, dy0 + detailStep + 10, detailFont);
   
   tft.setTextColor(0x6B4D, COLOR_BG);
-  tft.drawString("Wind", dx, 100, 1);
+  tft.drawString("Wind", dx, dy0 + detailStep * 2, 1);
   tft.setTextColor(TFT_WHITE, COLOR_BG);
   char wb[12]; sprintf(wb, "%d km/h", weatherWind);
-  tft.drawString(wb, dx, 112, 2);
+  tft.drawString(wb, dx, dy0 + detailStep * 2 + 10, detailFont);
   
   tft.setTextColor(0x6B4D, COLOR_BG);
-  tft.drawString("Hi / Lo", dx, 135, 1);
+  tft.drawString("Hi/Lo", dx, dy0 + detailStep * 3, 1);
   tft.setTextColor(TFT_WHITE, COLOR_BG);
-  char hlb[12]; sprintf(hlb, "%d / %d", weatherHigh, weatherLow);
-  tft.drawString(hlb, dx, 147, 2);
+  char hlb[12]; sprintf(hlb, "%d/%d", weatherHigh, weatherLow);
+  tft.drawString(hlb, dx, dy0 + detailStep * 3 + 10, detailFont);
   
-  // Sunrise/Sunset
-  tft.setTextColor(TFT_YELLOW, COLOR_BG);
-  tft.drawString("^", 15, 145, 2);
-  tft.setTextColor(0x8410, COLOR_BG);
-  tft.drawString(weatherSunrise, 30, 145, 1);
-  
-  tft.setTextColor(0xFBE0, COLOR_BG);
-  tft.drawString("v", 15, 160, 2);
-  tft.setTextColor(0x8410, COLOR_BG);
-  tft.drawString(weatherSunset, 30, 160, 1);
+  // Sunrise/Sunset — only if screen is tall enough
+  if (SCREEN_H > 160) {
+    tft.setTextColor(TFT_YELLOW, COLOR_BG);
+    tft.drawString("^", 15, 145, 2);
+    tft.setTextColor(0x8410, COLOR_BG);
+    tft.drawString(weatherSunrise, 30, 145, 1);
+    
+    tft.setTextColor(0xFBE0, COLOR_BG);
+    tft.drawString("v", 15, 160, 2);
+    tft.setTextColor(0x8410, COLOR_BG);
+    tft.drawString(weatherSunset, 30, 160, 1);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -575,7 +585,8 @@ void redrawNotificationsPartial() {
     
     // Title (white, larger)
     tft.setTextColor(TFT_WHITE);
-    tft.drawString(notifTitles[i].substring(0, 28), 20, cardY + 22, 2);
+    int maxNotifChars = (SCREEN_W > 200) ? 28 : 14;
+    tft.drawString(notifTitles[i].substring(0, maxNotifChars), 20, cardY + 22, (SCREEN_W > 200) ? 2 : 1);
     
     // Dismiss X
     tft.setTextColor(0x4208);

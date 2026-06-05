@@ -90,49 +90,72 @@ void drawStocksPage() {
   tft.drawFastHLine(0, 15, SCREEN_W, STK_DIVIDER);
 
   tft.setTextColor(TFT_WHITE);
-  tft.drawString(stockSymbol, STK_PAD, 22, 4);
+  tft.drawString(stockSymbol, STK_PAD, SCALE_Y(22), (SCREEN_W > 200) ? 4 : 2);
 
   uint16_t priceColor = stockIsUp ? STK_GREEN : STK_RED;
   tft.setTextColor(priceColor);
-  tft.drawString(stockPrice, STK_PAD, 50, 4);
+  tft.drawString(stockPrice, STK_PAD, SCALE_Y(50), (SCREEN_W > 200) ? 4 : 2);
 
-  int deltaY = 82;
+  int deltaY = SCALE_Y(82);
   drawStockArrow(STK_PAD + 6, deltaY + 6, stockIsUp, priceColor);
   tft.setTextColor(priceColor);
-  tft.drawString(stockDelta, STK_PAD + 16, deltaY, 2);
+  tft.drawString(stockDelta, STK_PAD + 16, deltaY, (SCREEN_W > 200) ? 2 : 1);
 
   if (stockPctChg[0]) {
     tft.setTextColor(STK_DIM);
-    tft.drawString(stockPctChg, STK_PAD + 16, deltaY + 18, 1);
+    tft.drawString(stockPctChg, STK_PAD + 16, deltaY + SCALE_Y(18), 1);
   }
 
-  tft.drawFastHLine(STK_PAD, 118, 145, STK_DIVIDER);
-  drawSparkline(STK_PAD, 124, 145, 70);
+  if (SCREEN_W > 200) {
+    // ── LARGE SCREEN: Original dual-column layout ──
+    tft.drawFastHLine(STK_PAD, 118, 145, STK_DIVIDER);
+    drawSparkline(STK_PAD, 124, 145, 70);
 
-  tft.setTextColor(STK_DIM);
-  tft.drawString("1D", STK_PAD, 198, 1);
-  tft.drawRightString("Now", 155, 198, 1);
+    tft.setTextColor(STK_DIM);
+    tft.drawString("1D", STK_PAD, 198, 1);
+    tft.drawRightString("Now", 155, 198, 1);
 
-  int rx = 165;
-  tft.drawFastVLine(160, 16, SCREEN_H - 32, STK_DIVIDER);
+    int rx = 165;
+    tft.drawFastVLine(160, 16, SCREEN_H - 32, STK_DIVIDER);
 
-  tft.setTextColor(STK_DIM);
-  tft.drawString("WATCHLIST", rx, 20, 1);
-  tft.drawFastHLine(rx, 32, 145, STK_DIVIDER);
+    tft.setTextColor(STK_DIM);
+    tft.drawString("WATCHLIST", rx, 20, 1);
+    tft.drawFastHLine(rx, 32, 145, STK_DIVIDER);
 
-  for (int i = 0; i < 3; i++) {
-    int wy = 40 + i * 52;
-    tft.fillRoundRect(rx, wy, 145, 44, 4, STK_CARD_BG);
-    uint16_t wColor = wlIsUp[i] ? STK_GREEN : STK_RED;
-    tft.fillRect(rx, wy, 3, 44, wColor);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawString(wlSymbol[i], rx + 10, wy + 5, 2);
-    tft.setTextColor(wColor);
-    tft.drawString(wlPrice[i], rx + 10, wy + 24, 2);
-    if (wlDelta[i][0]) {
-      tft.drawRightString(wlDelta[i], rx + 138, wy + 5, 1);
+    for (int i = 0; i < 3; i++) {
+      int wy = 40 + i * 52;
+      tft.fillRoundRect(rx, wy, 145, 44, 4, STK_CARD_BG);
+      uint16_t wColor = wlIsUp[i] ? STK_GREEN : STK_RED;
+      tft.fillRect(rx, wy, 3, 44, wColor);
+      tft.setTextColor(TFT_WHITE);
+      tft.drawString(wlSymbol[i], rx + 10, wy + 5, 2);
+      tft.setTextColor(wColor);
+      tft.drawString(wlPrice[i], rx + 10, wy + 24, 2);
+      if (wlDelta[i][0]) {
+        tft.drawRightString(wlDelta[i], rx + 138, wy + 5, 1);
+      }
+      drawStockArrow(rx + 134, wy + 28, wlIsUp[i], wColor);
     }
-    drawStockArrow(rx + 134, wy + 28, wlIsUp[i], wColor);
+  } else {
+    // ── SMALL SCREEN (160×128): Compact single-column ──
+    int chartW = SCREEN_W - STK_PAD * 2;
+    int chartY = SCALE_Y(62);
+    tft.drawFastHLine(STK_PAD, chartY - 2, chartW, STK_DIVIDER);
+    drawSparkline(STK_PAD, chartY, chartW, SCALE_Y(30));
+
+    // Watchlist — compact rows below chart
+    int wy = chartY + SCALE_Y(34);
+    tft.setTextColor(STK_DIM);
+    tft.drawString("WATCH", STK_PAD, wy, 1);
+    wy += 10;
+    for (int i = 0; i < min(3, (int)((SCREEN_H - wy) / 12)); i++) {
+      uint16_t wColor = wlIsUp[i] ? STK_GREEN : STK_RED;
+      tft.setTextColor(TFT_WHITE);
+      tft.drawString(wlSymbol[i], STK_PAD, wy, 1);
+      tft.setTextColor(wColor);
+      tft.drawRightString(wlPrice[i], SCREEN_W - STK_PAD, wy, 1);
+      wy += 12;
+    }
   }
 
   drawPageIndicator(STATE_STOCKS, STATE_COUNT);
@@ -143,43 +166,51 @@ void redrawStocksPartial() {
   if (currentState != STATE_STOCKS) return;
 
   if (strcmp(stockPrice, lastStockPrice) != 0) {
-    uint16_t priceColor = stockIsUp ? STK_GREEN : STK_RED;
+    if (SCREEN_W > 200) {
+      // Large screen: targeted partial redraw
+      uint16_t priceColor = stockIsUp ? STK_GREEN : STK_RED;
 
-    tft.fillRect(STK_PAD, 50, 150, 26, 0x0841);
-    tft.setTextColor(priceColor);
-    tft.drawString(stockPrice, STK_PAD, 50, 4);
+      tft.fillRect(STK_PAD, 50, 150, 26, 0x0841);
+      tft.setTextColor(priceColor);
+      tft.drawString(stockPrice, STK_PAD, 50, 4);
 
-    tft.fillRect(STK_PAD, 82, 150, 24, 0x0841);
-    drawStockArrow(STK_PAD + 6, 88, stockIsUp, priceColor);
-    tft.setTextColor(priceColor);
-    tft.drawString(stockDelta, STK_PAD + 16, 82, 2);
+      tft.fillRect(STK_PAD, 82, 150, 24, 0x0841);
+      drawStockArrow(STK_PAD + 6, 88, stockIsUp, priceColor);
+      tft.setTextColor(priceColor);
+      tft.drawString(stockDelta, STK_PAD + 16, 82, 2);
 
-    if (stockPctChg[0]) {
-      tft.setTextColor(STK_DIM);
-      tft.drawString(stockPctChg, STK_PAD + 16, 100, 1);
+      if (stockPctChg[0]) {
+        tft.setTextColor(STK_DIM);
+        tft.drawString(stockPctChg, STK_PAD + 16, 100, 1);
+      }
+
+      strcpy(lastStockPrice, stockPrice);
+      strcpy(lastStockDelta, stockDelta);
+
+      tft.fillRect(STK_PAD, 124, 145, 70, 0x0841);
+      drawSparkline(STK_PAD, 124, 145, 70);
+
+      int rx = 165;
+      for (int i = 0; i < 3; i++) {
+        int wy = 40 + i * 52;
+        uint16_t wColor = wlIsUp[i] ? STK_GREEN : STK_RED;
+        tft.fillRoundRect(rx, wy, 145, 44, 4, STK_CARD_BG);
+        tft.fillRect(rx, wy, 3, 44, wColor);
+        tft.setTextColor(TFT_WHITE);
+        tft.drawString(wlSymbol[i], rx + 10, wy + 5, 2);
+        tft.setTextColor(wColor);
+        tft.drawString(wlPrice[i], rx + 10, wy + 24, 2);
+        if (wlDelta[i][0]) {
+          tft.drawRightString(wlDelta[i], rx + 138, wy + 5, 1);
+        }
+        drawStockArrow(rx + 134, wy + 28, wlIsUp[i], wColor);
+      }
+    } else {
+      // Small screen: full redraw is safer
+      strcpy(lastStockPrice, stockPrice);
+      strcpy(lastStockDelta, stockDelta);
+      drawStocksPage();
     }
-
-    strcpy(lastStockPrice, stockPrice);
-    strcpy(lastStockDelta, stockDelta);
-
-    tft.fillRect(STK_PAD, 124, 145, 70, 0x0841);
-    drawSparkline(STK_PAD, 124, 145, 70);
-  }
-
-  int rx = 165;
-  for (int i = 0; i < 3; i++) {
-    int wy = 40 + i * 52;
-    uint16_t wColor = wlIsUp[i] ? STK_GREEN : STK_RED;
-    tft.fillRoundRect(rx, wy, 145, 44, 4, STK_CARD_BG);
-    tft.fillRect(rx, wy, 3, 44, wColor);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawString(wlSymbol[i], rx + 10, wy + 5, 2);
-    tft.setTextColor(wColor);
-    tft.drawString(wlPrice[i], rx + 10, wy + 24, 2);
-    if (wlDelta[i][0]) {
-      tft.drawRightString(wlDelta[i], rx + 138, wy + 5, 1);
-    }
-    drawStockArrow(rx + 134, wy + 28, wlIsUp[i], wColor);
   }
 }
 

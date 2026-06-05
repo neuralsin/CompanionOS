@@ -440,9 +440,11 @@ static void dhRunPortScan() {
 // Adapted from BeaconSpam.cpp — fake AP broadcast
 // ═══════════════════════════════════════════════════════════
 
-extern "C" int ieee80211_raw_frame_sanity_check(int32_t, int32_t, int32_t) {
-  return 0;  // bypass validation for raw frame TX
-}
+// ESP32 Core 3.x defines this internally in libnet80211.a
+// extern "C" int ieee80211_raw_frame_sanity_check(int32_t, int32_t, int32_t) {
+//   return 0;  // bypass validation for raw frame TX
+// }
+
 
 static const char* DH_SPAM_SSIDS[] = {
   "Free WiFi Here", "FBI Surveillance Van",
@@ -913,20 +915,20 @@ static void dhRunBleScan() {
   scan->setInterval(100);
   scan->setWindow(80);
 
-  BLEScanResults results = scan->start(5, false);  // 5 second scan
-  int n = results.getCount();
+  BLEScanResults* results = scan->start(5, false);  // 5 second scan
+  int n = results->getCount();
   if (n > DH_BLE_MAX) n = DH_BLE_MAX;
 
   dhBleCount = 0;
   for (int i = 0; i < n; i++) {
-    BLEAdvertisedDevice d = results.getDevice(i);
+    BLEAdvertisedDevice d = results->getDevice(i);
     DH_BleDevice& out = dhBleDevices[dhBleCount++];
     out.name = d.haveName() ? String(d.getName().c_str()) : "";
     out.address = String(d.getAddress().toString().c_str());
     out.rssi = d.getRSSI();
     out.companyId = 0xFFFF;
     if (d.haveManufacturerData()) {
-      const std::string data = d.getManufacturerData();
+      String data = d.getManufacturerData();
       if (data.length() >= 2) {
         out.companyId = (uint8_t)data[0] | ((uint16_t)(uint8_t)data[1] << 8);
       }

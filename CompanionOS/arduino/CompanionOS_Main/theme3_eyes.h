@@ -289,7 +289,7 @@ void t3_setEmotion(Emotion e) {
       t3_curious = true;
       break;
     case EMO_SAD:
-    case EMO_TIRED:
+    case EMO_SLEEPY:
       t3_setMood(T3_MOOD_TIRED);
       t3_curious = false;
       break;

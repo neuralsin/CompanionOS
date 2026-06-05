@@ -81,85 +81,140 @@ void drawProductivityPage() {
   tft.fillScreen(PRD_BG);
 
   tft.setTextColor(PRD_RED);
-  tft.drawString("Productivity", 10, 2, 2);
+  tft.drawString("Productivity", 10, 2, (SCREEN_W > 200) ? 2 : 1);
 
   if (timeReceived) {
     char hdrTime[6];
     sprintf(hdrTime, "%02d:%02d", displayHour, displayMinute);
     tft.setTextColor(TFT_WHITE);
-    tft.drawRightString(hdrTime, SCREEN_W - 10, 3, 2);
+    tft.drawRightString(hdrTime, SCREEN_W - 10, 3, (SCREEN_W > 200) ? 2 : 1);
   }
 
   tft.drawFastHLine(0, 18, SCREEN_W, PRD_DIVIDER);
 
-  drawProductivityClock(30, 45);
+  if (SCREEN_W > 200) {
+    // ── LARGE SCREEN (320×240): Original layout ──
+    drawProductivityClock(30, 45);
 
-  tft.setTextColor(PRD_BLUE);
-  tft.drawString("THU", 30, 208, 2);
-  tft.setTextColor(PRD_DIM);
-  tft.drawString("APR 03", 75, 208, 2);
-
-  int rx = 150;
-  tft.drawFastVLine(145, 19, SCREEN_H - 35, PRD_DIVIDER);
-
-  tft.setTextColor(PRD_BLUE);
-  tft.drawString("NOW", rx, 24, 1);
-
-  if (taskCurrent[0]) {
-    tft.fillRoundRect(rx, 36, 162, 58, 4, PRD_ACTIVE);
-    tft.drawRoundRect(rx, 36, 162, 58, 4, PRD_BLUE);
-    drawTaskProgress(rx + 4, 38, 154, taskProgressPct);
-    tft.setTextColor(TFT_WHITE);
-    String tTitle = String(taskCurrent);
-    tft.drawString(tTitle.substring(0, 20), rx + 8, 46, 2);
     tft.setTextColor(PRD_BLUE);
-    tft.drawString(taskCurrentTime, rx + 8, 66, 1);
-    float pulse = (sin(millis() * 0.003f) + 1.0f) * 0.5f;
-    uint16_t dotColor = blendColor(PRD_BLUE, TFT_WHITE, pulse);
-    tft.fillCircle(rx + 150, 46, 3, dotColor);
+    tft.drawString("THU", 30, 208, 2);
+    tft.setTextColor(PRD_DIM);
+    tft.drawString("APR 03", 75, 208, 2);
+
+    int rx = 150;
+    tft.drawFastVLine(145, 19, SCREEN_H - 35, PRD_DIVIDER);
+
+    tft.setTextColor(PRD_BLUE);
+    tft.drawString("NOW", rx, 24, 1);
+
+    if (taskCurrent[0]) {
+      tft.fillRoundRect(rx, 36, 162, 58, 4, PRD_ACTIVE);
+      tft.drawRoundRect(rx, 36, 162, 58, 4, PRD_BLUE);
+      drawTaskProgress(rx + 4, 38, 154, taskProgressPct);
+      tft.setTextColor(TFT_WHITE);
+      String tTitle = String(taskCurrent);
+      tft.drawString(tTitle.substring(0, 20), rx + 8, 46, 2);
+      tft.setTextColor(PRD_BLUE);
+      tft.drawString(taskCurrentTime, rx + 8, 66, 1);
+      float pulse = (sin(millis() * 0.003f) + 1.0f) * 0.5f;
+      uint16_t dotColor = blendColor(PRD_BLUE, TFT_WHITE, pulse);
+      tft.fillCircle(rx + 150, 46, 3, dotColor);
+    } else {
+      tft.fillRoundRect(rx, 36, 162, 58, 4, PRD_CARD);
+      tft.setTextColor(PRD_DIM);
+      tft.drawCentreString("No active task", rx + 81, 55, 2);
+    }
+
+    tft.setTextColor(PRD_DIM);
+    tft.drawString("NEXT", rx, 102, 1);
+    tft.drawFastHLine(rx, 114, 160, PRD_DIVIDER);
+
+    if (taskNext1[0]) {
+      tft.fillCircle(rx + 6, 127, 2, PRD_BLUE);
+      tft.setTextColor(TFT_WHITE);
+      tft.drawString(String(taskNext1).substring(0, 18), rx + 14, 120, 2);
+      tft.setTextColor(PRD_DIM);
+      tft.drawRightString(taskNext1Time, rx + 158, 121, 1);
+    }
+
+    tft.drawFastHLine(rx + 14, 140, 146, PRD_DIVIDER);
+
+    if (taskNext2[0]) {
+      tft.fillCircle(rx + 6, 154, 2, PRD_DIM);
+      tft.setTextColor(0x8410);
+      tft.drawString(String(taskNext2).substring(0, 18), rx + 14, 147, 2);
+      tft.setTextColor(PRD_DIM);
+      tft.drawRightString(taskNext2Time, rx + 158, 148, 1);
+    }
+
+    tft.drawFastHLine(rx, 172, 160, PRD_DIVIDER);
+    tft.setTextColor(PRD_DIM);
+    tft.drawString("Today", rx, 178, 1);
+
+    int timelineY = 192;
+    tft.fillRect(rx, timelineY, 160, 4, PRD_DIVIDER);
+    if (timeReceived) {
+      int pos = map(displayHour * 60 + displayMinute, 0, 1440, 0, 160);
+      tft.fillRect(rx, timelineY, pos, 4, PRD_BLUE);
+      tft.fillCircle(rx + pos, timelineY + 2, 3, TFT_WHITE);
+    }
+
+    tft.setTextColor(PRD_DIM);
+    tft.drawString("6AM", rx, timelineY + 8, 1);
+    tft.drawRightString("12AM", rx + 158, timelineY + 8, 1);
+
   } else {
-    tft.fillRoundRect(rx, 36, 162, 58, 4, PRD_CARD);
+    // ── SMALL SCREEN (160×128): Compact layout ──
+    // Big time centered
+    if (timeReceived) {
+      char bigTime[6];
+      sprintf(bigTime, "%02d:%02d", displayHour, displayMinute);
+      tft.setTextColor(TFT_WHITE);
+      tft.drawCentreString(bigTime, SCREEN_W / 2, 22, 4);
+    }
+
+    // Current task card
+    int ty = 50;
+    if (taskCurrent[0]) {
+      tft.fillRoundRect(4, ty, SCREEN_W - 8, 28, 3, PRD_ACTIVE);
+      drawTaskProgress(8, ty + 2, SCREEN_W - 16, taskProgressPct);
+      tft.setTextColor(TFT_WHITE);
+      tft.drawString(String(taskCurrent).substring(0, 16), 8, ty + 8, 1);
+      tft.setTextColor(PRD_BLUE);
+      tft.drawRightString(taskCurrentTime, SCREEN_W - 8, ty + 8, 1);
+    } else {
+      tft.fillRoundRect(4, ty, SCREEN_W - 8, 28, 3, PRD_CARD);
+      tft.setTextColor(PRD_DIM);
+      tft.drawCentreString("No task", SCREEN_W / 2, ty + 8, 1);
+    }
+
+    // Next tasks
+    int ny = ty + 32;
     tft.setTextColor(PRD_DIM);
-    tft.drawCentreString("No active task", rx + 81, 55, 2);
+    tft.drawString("NEXT", 4, ny, 1);
+    ny += 10;
+    if (taskNext1[0]) {
+      tft.fillCircle(8, ny + 4, 2, PRD_BLUE);
+      tft.setTextColor(TFT_WHITE);
+      tft.drawString(String(taskNext1).substring(0, 14), 14, ny, 1);
+      ny += 12;
+    }
+    if (taskNext2[0]) {
+      tft.fillCircle(8, ny + 4, 2, PRD_DIM);
+      tft.setTextColor(0x8410);
+      tft.drawString(String(taskNext2).substring(0, 14), 14, ny, 1);
+    }
+
+    // Timeline bar at bottom
+    int tlY = SCREEN_H - 18;
+    int tlW = SCREEN_W - 8;
+    tft.fillRect(4, tlY, tlW, 3, PRD_DIVIDER);
+    if (timeReceived) {
+      int pos = map(displayHour * 60 + displayMinute, 0, 1440, 0, tlW);
+      tft.fillRect(4, tlY, pos, 3, PRD_BLUE);
+      tft.fillCircle(4 + pos, tlY + 1, 2, TFT_WHITE);
+    }
   }
-
-  tft.setTextColor(PRD_DIM);
-  tft.drawString("NEXT", rx, 102, 1);
-  tft.drawFastHLine(rx, 114, 160, PRD_DIVIDER);
-
-  if (taskNext1[0]) {
-    tft.fillCircle(rx + 6, 127, 2, PRD_BLUE);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawString(String(taskNext1).substring(0, 18), rx + 14, 120, 2);
-    tft.setTextColor(PRD_DIM);
-    tft.drawRightString(taskNext1Time, rx + 158, 121, 1);
-  }
-
-  tft.drawFastHLine(rx + 14, 140, 146, PRD_DIVIDER);
-
-  if (taskNext2[0]) {
-    tft.fillCircle(rx + 6, 154, 2, PRD_DIM);
-    tft.setTextColor(0x8410);
-    tft.drawString(String(taskNext2).substring(0, 18), rx + 14, 147, 2);
-    tft.setTextColor(PRD_DIM);
-    tft.drawRightString(taskNext2Time, rx + 158, 148, 1);
-  }
-
-  tft.drawFastHLine(rx, 172, 160, PRD_DIVIDER);
-  tft.setTextColor(PRD_DIM);
-  tft.drawString("Today", rx, 178, 1);
-
-  int timelineY = 192;
-  tft.fillRect(rx, timelineY, 160, 4, PRD_DIVIDER);
-  if (timeReceived) {
-    int pos = map(displayHour * 60 + displayMinute, 0, 1440, 0, 160);
-    tft.fillRect(rx, timelineY, pos, 4, PRD_BLUE);
-    tft.fillCircle(rx + pos, timelineY + 2, 3, TFT_WHITE);
-  }
-
-  tft.setTextColor(PRD_DIM);
-  tft.drawString("6AM", rx, timelineY + 8, 1);
-  tft.drawRightString("12AM", rx + 158, timelineY + 8, 1);
 
   drawPageIndicator(STATE_PRODUCTIVITY, STATE_COUNT);
   prodPageDrawn = true;
@@ -169,24 +224,27 @@ void redrawProductivityPartial() {
   if (currentState != STATE_PRODUCTIVITY) return;
 
   if (displayMinute != lastProdMinute && timeReceived) {
-    // Clear and redraw the clock at the SAME position as initial draw
-    tft.fillRect(28, 43, 80, 160, PRD_BG);
-    drawProductivityClock(30, 45);
-    
-    // Update the header time (top-right)
-    tft.fillRect(SCREEN_W - 60, 2, 55, 16, PRD_BG);
-    char hdrTime[6];
-    sprintf(hdrTime, "%02d:%02d", displayHour, displayMinute);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawRightString(hdrTime, SCREEN_W - 10, 3, 2);
-    
-    // Update the timeline bar
-    int rx = 150;
-    int timelineY = 192;
-    tft.fillRect(rx, timelineY, 160, 4, PRD_DIVIDER);
-    int pos = map(displayHour * 60 + displayMinute, 0, 1440, 0, 160);
-    tft.fillRect(rx, timelineY, pos, 4, PRD_BLUE);
-    tft.fillCircle(rx + pos, timelineY + 2, 3, TFT_WHITE);
+    if (SCREEN_W > 200) {
+      // Large screen: targeted redraw
+      tft.fillRect(28, 43, 80, 160, PRD_BG);
+      drawProductivityClock(30, 45);
+      
+      tft.fillRect(SCREEN_W - 60, 2, 55, 16, PRD_BG);
+      char hdrTime[6];
+      sprintf(hdrTime, "%02d:%02d", displayHour, displayMinute);
+      tft.setTextColor(TFT_WHITE);
+      tft.drawRightString(hdrTime, SCREEN_W - 10, 3, 2);
+      
+      int rx = 150;
+      int timelineY = 192;
+      tft.fillRect(rx, timelineY, 160, 4, PRD_DIVIDER);
+      int pos = map(displayHour * 60 + displayMinute, 0, 1440, 0, 160);
+      tft.fillRect(rx, timelineY, pos, 4, PRD_BLUE);
+      tft.fillCircle(rx + pos, timelineY + 2, 3, TFT_WHITE);
+    } else {
+      // Small screen: redraw full page
+      drawProductivityPage();
+    }
     
     lastProdMinute = displayMinute;
   }
@@ -197,8 +255,12 @@ void redrawProductivityPartial() {
   }
 
   if (taskActive && taskCurrent[0]) {
-    int rx = 150;
-    drawTaskProgress(rx + 4, 38, 154, taskProgressPct);
+    if (SCREEN_W > 200) {
+      int rx = 150;
+      drawTaskProgress(rx + 4, 38, 154, taskProgressPct);
+    } else {
+      drawTaskProgress(8, 52, SCREEN_W - 16, taskProgressPct);
+    }
   }
 }
 

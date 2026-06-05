@@ -15,7 +15,7 @@
 
 #include "globals.h"
 #include "ui_components.h"
-#include "network.h"
+#include "companion_net.h"
 #include "eyes.h"
 #include "theme3_eyes.h"
 #include "thought_engine.h"
@@ -27,6 +27,8 @@
 #endif
 #ifdef ESP32
   #include "buttons.h"
+  #include "soc/soc.h"
+  #include "soc/rtc_cntl_reg.h"
 #endif
 
 // Define uninitialized globals
@@ -195,24 +197,45 @@ void updateTimeFromUDP(String t) {
 // ═══════════════════════════════════════════════════════════
 
 void setup() {
+  #ifdef ESP32
+    WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // Disable brownout detector to prevent reboot loop on WiFi connect
+  #endif
+  
   Serial.begin(115200);
+  delay(1000); // Wait for serial to settle
+  Serial.println(F("BOOTING... STEP 1"));
+
   Serial.println(F("\n\n╔════════════════════════════════════════╗"));
   Serial.println(F("║   COMPANION OS v7.0 - " PLATFORM_NAME "            ║"));
   Serial.println(F("╚════════════════════════════════════════╝\n"));
 
+  Serial.println(F("BOOTING... STEP 2 (Display Init)"));
   // Display init
   Serial.print(F("Display... "));
+  #ifdef ESP32
+    #ifdef TFT_BL
+      // Use PWM to reduce backlight current draw (prevents GPIO15 overload and brownouts)
+      #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+        ledcAttach(TFT_BL, 5000, 8);
+        ledcWrite(TFT_BL, 128); // 50% brightness
+      #else
+        ledcSetup(0, 5000, 8);
+        ledcAttachPin(TFT_BL, 0);
+        ledcWrite(0, 128); // 50% brightness
+      #endif
+    #endif
+  #endif
+  
   tft.init();
   #ifdef ESP32
-    // 🔴 BUG-03 FIX: Landscape (rotation=1) = 160w×128h
-    // Matches original ESP8266 aspect ratio. SCALE_X/Y normalize cleanly.
     tft.setRotation(1);
   #else
-    tft.setRotation(1);   // ILI9341 320×240 landscape
+    tft.setRotation(1);
   #endif
   tft.fillScreen(CLR_BG);
   Serial.println(F("OK"));
 
+  Serial.println(F("BOOTING... STEP 3 (Input Init)"));
   // Input init
   #if HAS_TOUCH
     Serial.print(F("Touch... "));
@@ -224,34 +247,34 @@ void setup() {
   #ifdef ESP32
     Serial.print(F("Buttons... "));
     initButtons();
-    Serial.println(F("OK (GPIO34/35/36)"));
+    Serial.println(F("OK (GPIO13/14/27)"));
   #endif
 
-  // [LEGACY - v6.0] TOUCH_LEFT/TOUCH_RIGHT sensor init REMOVED
-  // Pins GPIO0/GPIO2 freed (see config_esp8266.h)
-
-  // LDR analog sensor
   #ifdef ESP32
-    // LDR on GPIO39 (ADC1, input-only)
-    analogReadResolution(10);  // 10-bit for parity with ESP8266
+    analogReadResolution(10);
   #endif
   Serial.println(F("Sensors... OK"));
 
+  Serial.println(F("BOOTING... STEP 4 (EEPROM Init)"));
   // EEPROM
   EEPROM.begin(EEPROM_SIZE);
   activeTheme = EEPROM.read(EEPROM_ACTIVE_THEME_ADDR);
   if (activeTheme >= THEME_COUNT) activeTheme = 0;  // Sanitize on first boot (0xFF → 0)
   EEPROM.end();
 
+  Serial.println(F("BOOTING... STEP 5 (Network Init)"));
   // Network (WiFi + BT on ESP32)
   setupWiFi();
   #ifdef ESP32
+    delay(2000); // Stagger BT RF init to prevent power spikes
     setupBluetooth();
   #endif
 
+  Serial.println(F("BOOTING... STEP 6 (Boot Sequence)"));
   // Boot sequence animation
   runBootSequence();
 
+  Serial.println(F("BOOTING... STEP 7 (Thought Engine)"));
   // Initialize thought engine
   initThoughtScheduler();
 

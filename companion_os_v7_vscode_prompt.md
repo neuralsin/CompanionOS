@@ -876,14 +876,7 @@ All new code must compile without warnings under:
 
 As requested, here is the complete checklist of what is left to implement, verify, and fix across the entire CompanionOS v7.0 project. **No code has been modified during this audit phase.**
 
-### 1. Theme 3 Architecture (New Eyes System)
-- [ ] Implement a completely new "Theme 3" system for a new collection of eyes.
-- [ ] Create a dedicated renderer for Theme 3.
-- [ ] Implement support for multiple eye variants within Theme 3.
-- [ ] Add internal switching logic to cycle between Theme 3's variants.
-- [ ] Ensure Theme 3 behaves identically to Theme 2 (shares all CompanionOS functionality, page navigation, sleep/idle logic, weather, etc.).
-
-### 2. Simulated Outputs & Visual Audit (`OUTPUT` folder)
+### 1. Simulated Outputs & Visual Audit (`OUTPUT` folder)
 - [ ] Generate 1:1 simulated renderings (e.g., HTML/CSS or images) for every page and state to match the real 1.8" TFT screen perfectly.
 - [ ] Render all Theme 1 (classic eyes) states and emotions.
 - [ ] Render all Theme 2 (current multi-eye) states and variations.
@@ -894,19 +887,19 @@ As requested, here is the complete checklist of what is left to implement, verif
 - [ ] Review each rendered output for visual, scaling, or UX inconsistencies.
 - [ ] Log findings in corresponding `OUTPUT` subfiles (e.g., `findings_report.md`).
 
-### 3. Python Bridge Fixes & Refactors
+### 2. Python Bridge Fixes & Refactors
 - [ ] **Dependency Fix**: Add `psutil` to `requirements.txt` to fix the `ModuleNotFoundError` in `steam_tracker.py` during local GPU game detection.
 - [ ] **Environment Variables**: Update `companion_controller.py` to read Twitch credentials (`TWITCH_CLIENT_ID`, etc.) from `config.json` and inject them into `os.environ` so `steam_tracker.py`'s IGDB fallback doesn't silently fail.
 - [ ] **Step 11 Rewrite**: Complete the `steam_tracker.py` rewrite (3-tier detection).
 
-### 4. Remaining Prompt Enhancements (Tasks 9.4 - 9.7 & Step 8)
+### 3. Remaining Prompt Enhancements (Tasks 9.4 - 9.7 & Step 8)
 - [ ] **Task 9.4**: Redesign the Boot Sequence (ASCII art logo fade, system stats slide, horizontal progress bar).
 - [ ] **Task 9.5**: Weather Page enhancements (animated icons, 7-day mini forecast strip, sunrise/sunset arc, wind compass).
 - [ ] **Task 9.6**: Pomodoro enhancements (large MM:SS digits, session count dots, tick animation, work/break color toggle).
 - [ ] **Task 9.7**: Eyes Page enhancements (reactive idle animations, ambient particle starfield, emotion indicator dot, heartbeat pulse).
 - [ ] **Step 8**: Complete the Slideshow/gallery enhancement.
 
-### 5. Final Verification & Compilation (Step 16)
+### 4. Final Verification & Compilation (Step 16)
 - [ ] Ensure `arduino-cli` or `pio` is configured in the environment.
 - [ ] Run a full compilation check targeting the **ESP32 DevKit V1** to guarantee no syntax/linker errors.
 - [ ] Run a full compilation check targeting the **ESP8266** fallback to ensure compatibility.

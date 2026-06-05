@@ -89,13 +89,13 @@ void drawNetworkPage() {
   bool connected = (WiFi.status() == WL_CONNECTED);
   tft.fillCircle(SCREEN_W - 20, 7, 3, connected ? NET_GREEN : NET_RED);
   tft.setTextColor(connected ? NET_GREEN : NET_RED);
-  tft.drawRightString(connected ? "CONNECTED" : "OFFLINE", SCREEN_W - 28, 2, 1);
+  tft.drawRightString(connected ? "ONLINE" : "OFFLINE", SCREEN_W - 28, 2, 1);
   
   tft.drawFastHLine(0, 15, SCREEN_W, NET_DIVIDER);
   
   if (!connected) {
     tft.setTextColor(NET_RED);
-    tft.drawCentreString("No WiFi Connection", SCREEN_W / 2, SCREEN_H / 2 - 10, 2);
+    tft.drawCentreString("No WiFi", SCREEN_W / 2, SCREEN_H / 2 - 10, 2);
     drawPageIndicator(STATE_NETWORK, STATE_COUNT);
     networkPageDrawn = true;
     return;
@@ -104,137 +104,199 @@ void drawNetworkPage() {
   int rssi = WiFi.RSSI();
   
   // ═══════════════════════════════════════════════════════════
-  // LEFT PANEL — Signal Strength Hero Card
+  // RESOLUTION-AWARE LAYOUT
   // ═══════════════════════════════════════════════════════════
-  int lx = NET_PAD, ly = 20;
-  tft.fillRoundRect(lx, ly, 148, 95, 4, NET_CARD);
-  
-  // Signal bars visualization
-  drawSignalArc(lx + 10, ly + 8, rssi);
-  
-  // dBm value (big)
-  char dbmStr[12];
-  sprintf(dbmStr, "%d", rssi);
-  tft.setTextColor(getSignalColor(rssi));
-  tft.drawString(dbmStr, lx + 55, ly + 10, 4);
-  tft.setTextColor(NET_DIM);
-  tft.drawString("dBm", lx + 55 + tft.textWidth(dbmStr, 4) + 4, ly + 18, 1);
-  
-  // Quality label
-  tft.setTextColor(getSignalColor(rssi));
-  tft.drawString(getSignalLabel(rssi), lx + 10, ly + 50, 2);
-  
-  // Signal percentage
-  int pct = min(100, max(0, 2 * (rssi + 100)));
-  char pctStr[8];
-  sprintf(pctStr, "%d%%", pct);
-  tft.setTextColor(TFT_WHITE);
-  tft.drawRightString(pctStr, lx + 140, ly + 50, 2);
-  
-  // Signal bar (full width of card)
-  int barW = 130;
-  int filledW = barW * pct / 100;
-  tft.fillRoundRect(lx + 10, ly + 75, barW, 8, 3, 0x2104);
-  tft.fillRoundRect(lx + 10, ly + 75, filledW, 8, 3, getSignalColor(rssi));
-  
-  // ═══════════════════════════════════════════════════════════
-  // RIGHT PANEL — Connection Details
-  // ═══════════════════════════════════════════════════════════
-  int rx = 164, ry = 20;
-  tft.fillRoundRect(rx, ry, 148, 95, 4, NET_CARD);
-  
-  char buf[32];
-  
-  // SSID
-  tft.setTextColor(NET_DIM);
-  tft.drawString("SSID", rx + 8, ry + 6, 1);
-  tft.setTextColor(NET_CYAN);
-  String ssid = WiFi.SSID();
-  if (ssid.length() > 16) ssid = ssid.substring(0, 16);
-  tft.drawString(ssid.c_str(), rx + 8, ry + 18, 2);
-  
-  tft.drawFastHLine(rx + 8, ry + 36, 132, NET_DIVIDER);
-  
-  // Channel
-  sprintf(buf, "CH %d", WiFi.channel());
-  tft.setTextColor(NET_DIM);
-  tft.drawString("Channel", rx + 8, ry + 42, 1);
-  tft.setTextColor(TFT_WHITE);
-  tft.drawRightString(buf, rx + 140, ry + 42, 1);
-  
-  // BSSID (AP MAC)
-  tft.setTextColor(NET_DIM);
-  tft.drawString("BSSID", rx + 8, ry + 56, 1);
-  tft.setTextColor(TFT_WHITE);
-  String bssid = WiFi.BSSIDstr();
-  // Shorten to last 8 chars (xx:xx:xx)
-  if (bssid.length() > 8) bssid = bssid.substring(bssid.length() - 8);
-  tft.drawRightString(bssid.c_str(), rx + 140, ry + 56, 1);
-  
-  // Hostname
-  tft.setTextColor(NET_DIM);
-  tft.drawString("Host", rx + 8, ry + 70, 1);
-  tft.setTextColor(TFT_WHITE);
-  tft.drawRightString("CompanionOS", rx + 140, ry + 70, 1);
-  
-  // Free Heap
-  sprintf(buf, "%dB", ESP.getFreeHeap());
-  tft.setTextColor(NET_DIM);
-  tft.drawString("Heap", rx + 8, ry + 82, 1);
-  tft.setTextColor(NET_GREEN);
-  tft.drawRightString(buf, rx + 140, ry + 82, 1);
-  
-  // ═══════════════════════════════════════════════════════════
-  // BOTTOM PANEL — IP / Gateway / DNS / MAC / Uptime
-  // ═══════════════════════════════════════════════════════════
-  int by2 = 122;
-  tft.fillRoundRect(NET_PAD, by2, 304, 90, 4, NET_CARD);
-  
-  int col1x = NET_PAD + 10;
-  int col2x = NET_PAD + 160;
-  
-  // Row 1
-  tft.setTextColor(NET_DIM);
-  tft.drawString("IP Address", col1x, by2 + 8, 1);
-  tft.setTextColor(NET_CYAN);
-  tft.drawString(WiFi.localIP().toString().c_str(), col1x, by2 + 20, 2);
-  
-  tft.setTextColor(NET_DIM);
-  tft.drawString("Gateway", col2x, by2 + 8, 1);
-  tft.setTextColor(TFT_WHITE);
-  tft.drawString(WiFi.gatewayIP().toString().c_str(), col2x, by2 + 20, 2);
-  
-  // Divider
-  tft.drawFastHLine(col1x, by2 + 40, 284, NET_DIVIDER);
-  
-  // Row 2
-  tft.setTextColor(NET_DIM);
-  tft.drawString("Subnet", col1x, by2 + 46, 1);
-  tft.setTextColor(TFT_WHITE);
-  tft.drawString(WiFi.subnetMask().toString().c_str(), col1x, by2 + 58, 1);
-  
-  tft.setTextColor(NET_DIM);
-  tft.drawString("DNS", col2x, by2 + 46, 1);
-  tft.setTextColor(TFT_WHITE);
-  tft.drawString(WiFi.dnsIP().toString().c_str(), col2x, by2 + 58, 1);
-  
-  // Row 3
-  tft.setTextColor(NET_DIM);
-  tft.drawString("MAC", col1x, by2 + 72, 1);
-  tft.setTextColor(TFT_WHITE);
-  tft.drawString(WiFi.macAddress().c_str(), col1x + 28, by2 + 72, 1);
-  
-  // Uptime
-  unsigned long uptimeSec = millis() / 1000;
-  int uh = uptimeSec / 3600;
-  int um = (uptimeSec % 3600) / 60;
-  int us = uptimeSec % 60;
-  char uptStr[16];
-  sprintf(uptStr, "%02d:%02d:%02d", uh, um, us);
-  tft.setTextColor(NET_DIM);
-  tft.drawString("Uptime", col2x, by2 + 72, 1);
-  tft.setTextColor(NET_GREEN);
-  tft.drawRightString(uptStr, col2x + 130, by2 + 72, 1);
+
+  if (SCREEN_W > 200) {
+    // ── LARGE SCREEN (320×240): Original dual-column layout ──
+    int lx = NET_PAD, ly = 20;
+    tft.fillRoundRect(lx, ly, 148, 95, 4, NET_CARD);
+    drawSignalArc(lx + 10, ly + 8, rssi);
+    
+    char dbmStr[12];
+    sprintf(dbmStr, "%d", rssi);
+    tft.setTextColor(getSignalColor(rssi));
+    tft.drawString(dbmStr, lx + 55, ly + 10, 4);
+    tft.setTextColor(NET_DIM);
+    tft.drawString("dBm", lx + 55 + tft.textWidth(dbmStr, 4) + 4, ly + 18, 1);
+    
+    tft.setTextColor(getSignalColor(rssi));
+    tft.drawString(getSignalLabel(rssi), lx + 10, ly + 50, 2);
+    
+    int pct = min(100, max(0, 2 * (rssi + 100)));
+    char pctStr[8]; sprintf(pctStr, "%d%%", pct);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawRightString(pctStr, lx + 140, ly + 50, 2);
+    
+    int barW = 130;
+    int filledW = barW * pct / 100;
+    tft.fillRoundRect(lx + 10, ly + 75, barW, 8, 3, 0x2104);
+    tft.fillRoundRect(lx + 10, ly + 75, filledW, 8, 3, getSignalColor(rssi));
+    
+    // Right panel
+    int rx = 164, ry = 20;
+    tft.fillRoundRect(rx, ry, 148, 95, 4, NET_CARD);
+    
+    char buf[32];
+    tft.setTextColor(NET_DIM);
+    tft.drawString("SSID", rx + 8, ry + 6, 1);
+    tft.setTextColor(NET_CYAN);
+    String ssid = WiFi.SSID();
+    if (ssid.length() > 16) ssid = ssid.substring(0, 16);
+    tft.drawString(ssid.c_str(), rx + 8, ry + 18, 2);
+    
+    tft.drawFastHLine(rx + 8, ry + 36, 132, NET_DIVIDER);
+    
+    sprintf(buf, "CH %d", WiFi.channel());
+    tft.setTextColor(NET_DIM);
+    tft.drawString("Channel", rx + 8, ry + 42, 1);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawRightString(buf, rx + 140, ry + 42, 1);
+    
+    tft.setTextColor(NET_DIM);
+    tft.drawString("BSSID", rx + 8, ry + 56, 1);
+    tft.setTextColor(TFT_WHITE);
+    String bssid = WiFi.BSSIDstr();
+    if (bssid.length() > 8) bssid = bssid.substring(bssid.length() - 8);
+    tft.drawRightString(bssid.c_str(), rx + 140, ry + 56, 1);
+    
+    tft.setTextColor(NET_DIM);
+    tft.drawString("Host", rx + 8, ry + 70, 1);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawRightString("CompanionOS", rx + 140, ry + 70, 1);
+    
+    sprintf(buf, "%dB", ESP.getFreeHeap());
+    tft.setTextColor(NET_DIM);
+    tft.drawString("Heap", rx + 8, ry + 82, 1);
+    tft.setTextColor(NET_GREEN);
+    tft.drawRightString(buf, rx + 140, ry + 82, 1);
+    
+    // Bottom panel
+    int by2 = 122;
+    tft.fillRoundRect(NET_PAD, by2, 304, 90, 4, NET_CARD);
+    
+    int col1x = NET_PAD + 10;
+    int col2x = NET_PAD + 160;
+    
+    tft.setTextColor(NET_DIM);
+    tft.drawString("IP Address", col1x, by2 + 8, 1);
+    tft.setTextColor(NET_CYAN);
+    tft.drawString(WiFi.localIP().toString().c_str(), col1x, by2 + 20, 2);
+    
+    tft.setTextColor(NET_DIM);
+    tft.drawString("Gateway", col2x, by2 + 8, 1);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawString(WiFi.gatewayIP().toString().c_str(), col2x, by2 + 20, 2);
+    
+    tft.drawFastHLine(col1x, by2 + 40, 284, NET_DIVIDER);
+    
+    tft.setTextColor(NET_DIM);
+    tft.drawString("Subnet", col1x, by2 + 46, 1);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawString(WiFi.subnetMask().toString().c_str(), col1x, by2 + 58, 1);
+    
+    tft.setTextColor(NET_DIM);
+    tft.drawString("DNS", col2x, by2 + 46, 1);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawString(WiFi.dnsIP().toString().c_str(), col2x, by2 + 58, 1);
+    
+    tft.setTextColor(NET_DIM);
+    tft.drawString("MAC", col1x, by2 + 72, 1);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawString(WiFi.macAddress().c_str(), col1x + 28, by2 + 72, 1);
+    
+    unsigned long uptimeSec = millis() / 1000;
+    int uh = uptimeSec / 3600;
+    int um = (uptimeSec % 3600) / 60;
+    int us = uptimeSec % 60;
+    char uptStr[16];
+    sprintf(uptStr, "%02d:%02d:%02d", uh, um, us);
+    tft.setTextColor(NET_DIM);
+    tft.drawString("Uptime", col2x, by2 + 72, 1);
+    tft.setTextColor(NET_GREEN);
+    tft.drawRightString(uptStr, col2x + 130, by2 + 72, 1);
+
+  } else {
+    // ── SMALL SCREEN (160×128): Single-column compact layout ──
+    int y = 18;
+    int pad = 4;
+    int cardW = SCREEN_W - pad * 2;
+    char buf[32];
+    
+    // Signal hero row
+    tft.fillRoundRect(pad, y, cardW, 28, 3, NET_CARD);
+    drawSignalArc(pad + 6, y + 4, rssi);
+    
+    char dbmStr[12]; sprintf(dbmStr, "%d", rssi);
+    tft.setTextColor(getSignalColor(rssi));
+    tft.drawString(dbmStr, pad + 50, y + 4, 2);
+    tft.setTextColor(NET_DIM);
+    tft.drawString("dBm", pad + 50 + tft.textWidth(dbmStr, 2) + 2, y + 8, 1);
+    
+    int pct = min(100, max(0, 2 * (rssi + 100)));
+    tft.setTextColor(getSignalColor(rssi));
+    tft.drawRightString(getSignalLabel(rssi), SCREEN_W - pad - 4, y + 4, 1);
+    
+    // Signal bar
+    int barW2 = cardW - 12;
+    int filledW2 = barW2 * pct / 100;
+    tft.fillRoundRect(pad + 6, y + 20, barW2, 4, 2, 0x2104);
+    tft.fillRoundRect(pad + 6, y + 20, filledW2, 4, 2, getSignalColor(rssi));
+    y += 32;
+    
+    // Info rows
+    tft.fillRoundRect(pad, y, cardW, 72, 3, NET_CARD);
+    int ix = pad + 6;
+    int iy = y + 4;
+    int rowH = 12;
+    
+    // SSID
+    tft.setTextColor(NET_DIM);
+    tft.drawString("SSID", ix, iy, 1);
+    tft.setTextColor(NET_CYAN);
+    String ssid = WiFi.SSID();
+    if (ssid.length() > 12) ssid = ssid.substring(0, 12);
+    tft.drawRightString(ssid.c_str(), SCREEN_W - pad - 6, iy, 1);
+    iy += rowH;
+    
+    // IP
+    tft.setTextColor(NET_DIM);
+    tft.drawString("IP", ix, iy, 1);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawRightString(WiFi.localIP().toString().c_str(), SCREEN_W - pad - 6, iy, 1);
+    iy += rowH;
+    
+    // Gateway
+    tft.setTextColor(NET_DIM);
+    tft.drawString("GW", ix, iy, 1);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawRightString(WiFi.gatewayIP().toString().c_str(), SCREEN_W - pad - 6, iy, 1);
+    iy += rowH;
+    
+    // Channel
+    sprintf(buf, "CH %d", WiFi.channel());
+    tft.setTextColor(NET_DIM);
+    tft.drawString("Chan", ix, iy, 1);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawRightString(buf, SCREEN_W - pad - 6, iy, 1);
+    iy += rowH;
+    
+    // Heap
+    sprintf(buf, "%dB", ESP.getFreeHeap());
+    tft.setTextColor(NET_DIM);
+    tft.drawString("Heap", ix, iy, 1);
+    tft.setTextColor(NET_GREEN);
+    tft.drawRightString(buf, SCREEN_W - pad - 6, iy, 1);
+    iy += rowH;
+    
+    // Uptime
+    unsigned long uptimeSec = millis() / 1000;
+    sprintf(buf, "%02d:%02d:%02d", (int)(uptimeSec/3600), (int)((uptimeSec%3600)/60), (int)(uptimeSec%60));
+    tft.setTextColor(NET_DIM);
+    tft.drawString("Up", ix, iy, 1);
+    tft.setTextColor(NET_GREEN);
+    tft.drawRightString(buf, SCREEN_W - pad - 6, iy, 1);
+  }
   
   drawPageIndicator(STATE_NETWORK, STATE_COUNT);
   networkPageDrawn = true;

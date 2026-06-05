@@ -152,7 +152,7 @@ static void dhRunIrCapture() {
   // Draw signal waveform
   int waveY = y, waveH = SCALE_Y(20);
   tft.drawRect(SCALE_X(2), waveY, SCR_W - SCALE_X(4), waveH, CLR_BORDER);
-  int maxEdges = min(dhIrEdgeCount, (int)(SCR_W - SCALE_X(8)));
+  int maxEdges = min((int)dhIrEdgeCount, (int)(SCR_W - SCALE_X(8)));
   int waveW = SCR_W - SCALE_X(8);
   for (int i = 0; i < maxEdges; i++) {
     int x = SCALE_X(4) + (i * waveW) / maxEdges;
@@ -162,7 +162,7 @@ static void dhRunIrCapture() {
 
   tft.setTextColor(CLR_TEXT_LO);
   tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
-  while (digitalRead(BTN_SELECT) == HIGH) delay(20);
+  dhWaitSelectPress();
   delay(200);
 }
 
@@ -181,7 +181,7 @@ static void dhRunIrReplay() {
     tft.drawCentreString("Use IR Capture first", SCR_CX, SCALE_Y(56), 1);
     tft.setTextColor(CLR_TEXT_LO);
     tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
-    while (digitalRead(BTN_SELECT) == HIGH) delay(20);
+    dhWaitSelectPress();
     delay(200); return;
   }
 
@@ -263,7 +263,7 @@ static void dhRunIrTxTest() {
 
   tft.setTextColor(CLR_TEXT_LO);
   tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
-  while (digitalRead(BTN_SELECT) == HIGH) delay(20);
+  dhWaitSelectPress();
   delay(200);
 }
 
@@ -450,14 +450,14 @@ static void dhRunIrProtocol() {
 
   // Average bit time
   uint32_t sum = 0;
-  for (int i = 2; i < min(dhIrEdgeCount, 20); i++) sum += dhIrEdges[i];
-  int avg = (dhIrEdgeCount > 2) ? sum / min(dhIrEdgeCount - 2, 18) : 0;
+  for (int i = 2; i < min((int)dhIrEdgeCount, 20); i++) sum += dhIrEdges[i];
+  int avg = (dhIrEdgeCount > 2) ? sum / min((int)dhIrEdgeCount - 2, 18) : 0;
   sprintf(buf, "AvgBit: %dus", avg);
   tft.drawString(buf, SCALE_X(4), y, 1);
 
   tft.setTextColor(CLR_TEXT_LO);
   tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
-  while (digitalRead(BTN_SELECT) == HIGH) delay(20);
+  dhWaitSelectPress();
   delay(200);
 }
 
@@ -822,7 +822,7 @@ static void dhRunHwDiag() {
 
   tft.setTextColor(CLR_TEXT_LO);
   tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
-  while (digitalRead(BTN_SELECT) == HIGH) delay(20);
+  dhWaitSelectPress();
   delay(200);
 }
 

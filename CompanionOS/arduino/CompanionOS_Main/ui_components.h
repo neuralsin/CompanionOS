@@ -8,6 +8,19 @@
 
 #include "globals.h"
 
+// ── FW-06 FIX: Safe button wait with 30s timeout ────────
+// Replaces bare `while (digitalRead(BTN_SELECT) == HIGH) delay(20);`
+// which hangs forever if the button wire is disconnected.
+#define DH_BTN_TIMEOUT_MS 30000
+static inline void dhWaitSelectPress() {
+  unsigned long _t = millis();
+  while (digitalRead(BTN_SELECT) == HIGH && (millis() - _t < DH_BTN_TIMEOUT_MS)) {
+    delay(20);
+    yield();
+  }
+  delay(200); // debounce after press/timeout
+}
+
 // ═══════════════════════════════════════════════════════════
 // COLOR UTILITIES
 // ═══════════════════════════════════════════════════════════

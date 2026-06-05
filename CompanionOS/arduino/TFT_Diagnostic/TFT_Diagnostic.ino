@@ -8,10 +8,22 @@ void setup() {
   Serial.println(F("    TFT_eSPI COMPILER PIN DIAGNOSTIC   "));
   Serial.println(F("══════════════════════════════════════════"));
   
-  #ifdef ILI9341_DRIVER
-    Serial.println(F("Driver: ILI9341 [CORRECT]"));
+  // Driver detection
+  #ifdef ST7735_DRIVER
+    Serial.println(F("Driver: ST7735 [ESP32 1.8\" TFT]"));
+  #elif defined(ILI9341_DRIVER)
+    Serial.println(F("Driver: ILI9341 [ESP8266 2.8\" TFT]"));
   #else
     Serial.println(F("Driver: UNKNOWN OR WRONG DRIVER"));
+  #endif
+
+  // Platform
+  #ifdef ESP32
+    Serial.println(F("Platform: ESP32"));
+  #elif defined(ESP8266)
+    Serial.println(F("Platform: ESP8266"));
+  #else
+    Serial.println(F("Platform: UNKNOWN"));
   #endif
 
   Serial.println(F("\n--- COMPILED PINS ---"));
@@ -36,6 +48,17 @@ void setup() {
   #endif
   #ifdef TOUCH_CS
     Serial.print(F("TOUCH_CS: ")); Serial.println(TOUCH_CS);
+  #else
+    Serial.println(F("TOUCH_CS: Not defined (no touch)"));
+  #endif
+  
+  // Screen dimensions
+  Serial.println(F("\n--- SCREEN CONFIG ---"));
+  #ifdef TFT_WIDTH
+    Serial.print(F("TFT_WIDTH: ")); Serial.println(TFT_WIDTH);
+  #endif
+  #ifdef TFT_HEIGHT
+    Serial.print(F("TFT_HEIGHT: ")); Serial.println(TFT_HEIGHT);
   #endif
   
   Serial.println(F("══════════════════════════════════════════"));

@@ -141,17 +141,19 @@ public:
   static TFT_eSprite* t2Spr;
 
   static void Draw(int16_t centerX, int16_t centerY, T2EyeConfig *cfg, uint16_t fg = TFT_WHITE) {
+    // Resolution-aware sprite size (scaled from 140 on 320×240)
+    static int sprSize = min((int)SCALE_X(140), min(SCREEN_W, SCREEN_H));
     if (!t2Spr) {
       t2Spr = new TFT_eSprite(&tft);
       t2Spr->setColorDepth(1);
-      t2Spr->createSprite(140, 140);
+      t2Spr->createSprite(sprSize, sprSize);
     }
     t2Spr->setBitmapColor(fg, COLOR_BG);
     t2Spr->fillSprite(0);
 
-    // Sprite local center
-    int16_t scx = 70;
-    int16_t scy = 70;
+    // Sprite local center (half of sprSize)
+    int16_t scx = sprSize / 2;
+    int16_t scy = sprSize / 2;
 
     int32_t dyt = cfg->Height * cfg->Slope_Top / 2.0;
     int32_t dyb = cfg->Height * cfg->Slope_Bottom / 2.0;
@@ -483,11 +485,11 @@ public:
 // T2 FACE — The whole face with two eyes + behavior
 // ═══════════════════════════════════════════════════════════
 
-// Layout for 320×240 screen (eyes centered in content area below status bar)
-#define T2_SCREEN_CX   160
-#define T2_SCREEN_CY   130  // Slightly above center to leave room for status
-#define T2_EYE_SIZE    100
-#define T2_EYE_GAP     10   // Inter-eye distance
+// Layout: Resolution-aware (scales from 320×240 reference)
+#define T2_SCREEN_CX   (SCREEN_W / 2)
+#define T2_SCREEN_CY   (SCREEN_H / 2 + SCALE_Y(10))
+#define T2_EYE_SIZE    SCALE_X(100)
+#define T2_EYE_GAP     SCALE_X(10)
 
 T2Eye t2_leftEye;
 T2Eye t2_rightEye;

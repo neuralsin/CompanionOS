@@ -481,7 +481,7 @@ static void dhRunWifiDirection() {
     tft.drawCentreString("SEL: Measure", SCR_CX, SCR_H - SCALE_Y(12), 1);
 
     // Wait for SELECT
-    while (digitalRead(BTN_SELECT) == HIGH) delay(20);
+    dhWaitSelectPress();
     delay(200);
 
     valid[i] = dhDirMeasure(values[i]);
@@ -525,7 +525,7 @@ static void dhRunWifiDirection() {
   tft.setTextColor(CLR_TEXT_LO);
   tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
 
-  while (digitalRead(BTN_SELECT) == HIGH) delay(20);
+  dhWaitSelectPress();
   delay(200);
 }
 
@@ -871,7 +871,7 @@ static void dhRunWifiConfig() {
   tft.setTextColor(CLR_TEXT_LO);
   tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
 
-  while (digitalRead(BTN_SELECT) == HIGH) delay(20);
+  dhWaitSelectPress();
   delay(200);
 }
 

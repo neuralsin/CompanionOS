@@ -35,8 +35,8 @@
 // ═══════════════════════════════════════════════════════════
 
 // WiFi Credentials
-const char* WIFI_SSID = "stuart";
-const char* WIFI_PASS = "12345678";
+const char* WIFI_SSID = "westendmall";
+const char* WIFI_PASS = "8840458355";
 
 // Network Settings
 const char* DEFAULT_PC_IP = "192.168.1.100";

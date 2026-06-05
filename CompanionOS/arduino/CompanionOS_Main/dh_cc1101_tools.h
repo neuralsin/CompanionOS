@@ -284,7 +284,7 @@ static bool dhCcShowError(const char* title) {
   tft.setTextColor(CLR_TEXT_LO);
   tft.drawCentreString(buf, SCR_CX, SCALE_Y(65), 1);
   tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
-  while (digitalRead(BTN_SELECT) == HIGH) delay(20);
+  dhWaitSelectPress();
   delay(200);
   return false;
 }
@@ -632,7 +632,7 @@ static void dhRunCcBrute() {
   tft.setTextColor(CLR_TEXT_LO);
   tft.drawString("SEL:Start", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
 
-  while (digitalRead(BTN_SELECT) == HIGH) delay(20);
+  dhWaitSelectPress();
   delay(200);
 
   if (!dhCcPrepareRx(300000)) { dhCcShowError("BRUTE"); return; }
@@ -697,7 +697,7 @@ static void dhRunCcBrute() {
 
   tft.setTextColor(CLR_TEXT_LO);
   tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
-  while (digitalRead(BTN_SELECT) == HIGH) delay(20);
+  dhWaitSelectPress();
   delay(200);
   dhCcStrobe(CC_SIDLE);
 }
@@ -785,7 +785,7 @@ static void dhRunCcCodeCheck() {
 
   tft.setTextColor(CLR_TEXT_LO);
   tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
-  while (digitalRead(BTN_SELECT) == HIGH) delay(20);
+  dhWaitSelectPress();
   delay(200);
   dhCcStrobe(CC_SIDLE);
 }
@@ -878,7 +878,7 @@ static void dhRunCcRfAnalyze() {
 
   tft.setTextColor(CLR_TEXT_LO);
   tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
-  while (digitalRead(BTN_SELECT) == HIGH) delay(20);
+  dhWaitSelectPress();
   delay(200);
   dhCcStrobe(CC_SIDLE);
 }
@@ -895,7 +895,7 @@ static void dhRunCcRawView() {
     tft.drawCentreString("Use RF Analyze first", SCR_CX, SCALE_Y(56), 1);
     tft.setTextColor(CLR_TEXT_LO);
     tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
-    while (digitalRead(BTN_SELECT) == HIGH) delay(20);
+    dhWaitSelectPress();
     delay(200); return;
   }
 
@@ -1182,7 +1182,7 @@ static void dhRunCcTestBeacon() {
 
   tft.setTextColor(CLR_TEXT_LO);
   tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
-  while (digitalRead(BTN_SELECT) == HIGH) delay(20);
+  dhWaitSelectPress();
   delay(200);
 }
 
