@@ -718,12 +718,12 @@ void t2_drawEyesPage() {
   if (!T2EyeDrawer::t2Canvas) {
     T2EyeDrawer::t2Canvas = new TFT_eSprite(&tft);
     T2EyeDrawer::t2Canvas->setColorDepth(16);
-    // Shift canvas down to Y=48 to leave room for Status Bar and Thought Bubble!
-    T2EyeDrawer::t2Canvas->createSprite(SCREEN_W, SCREEN_H - 48);
+    // Shift canvas down to Y=16 to leave room for Status Bar
+    T2EyeDrawer::t2Canvas->createSprite(SCREEN_W, SCREEN_H - 16);
   }
   
-  // Clear the area above the sprite (y=16 to 48) to prevent ghosting from other pages
-  tft.fillRect(0, 16, SCREEN_W, 32, COLOR_BG);
+  // Clear the area above the sprite (y=16 to 16, so none) to prevent ghosting from other pages
+  // tft.fillRect(0, 16, SCREEN_W, 32, COLOR_BG);
   
   T2EyeDrawer::t2Canvas->fillSprite(COLOR_BG);
 

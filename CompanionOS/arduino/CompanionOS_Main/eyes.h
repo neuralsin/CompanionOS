@@ -560,7 +560,7 @@ void updateEyes() {
   }
   
   // V7: Shooting star animation (background, non-blocking)
-  updateShootingStar();
+  // updateShootingStar();
   
   // V7: Heartbeat glow ring on LOVE emotion
   drawHeartbeatPulse();

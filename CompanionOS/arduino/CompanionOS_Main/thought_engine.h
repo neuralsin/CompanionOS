@@ -224,9 +224,10 @@ void renderThoughtBubble() {
   // ESP8266 320×240: x=180, y=20 (just below 16px status bar)
   // ESP32  160×128:  x=90,  y=18 (scaled)
 
-  int bubbleX = SCR_CX - 10;
+  int bubbleW = 78; // Roughly 50% of 160
+  int bubbleX = SCR_W - bubbleW - 2; // Shift to top right corner (x = 80)
   int bubbleY = 16;  // Ensure below status bar
-  int maxW = SCR_W - bubbleX - 2;
+  int maxW = bubbleW;
   
   int lineH = 9; // fixed line height for font 1
   int maxChars = (maxW - 6) / 6; // font 1 is 6px wide per char, minus padding
@@ -235,7 +236,6 @@ void renderThoughtBubble() {
   if (numLines > 4) numLines = 4;
   int padding = 3;
   int bubbleH = numLines * lineH + padding * 2;
-  int bubbleW = maxW;
 
   // Clamp to screen bounds
   if (bubbleY + bubbleH > 58) bubbleH = 58 - bubbleY;

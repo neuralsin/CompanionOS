@@ -130,6 +130,12 @@ void handleVirtualButton(String btn) {
     return;
   }
 
+  if (btn == "LEFT_LONG") {
+    if (currentState == STATE_SPOTIFY) sendCommand("PREV");
+    lastInteractionTime = millis();
+    return;
+  }
+
   if (btn == "LEFT") {
     virtualLeftPressed = true;
 #ifdef ESP32
@@ -141,8 +147,13 @@ void handleVirtualButton(String btn) {
     }
 #endif
 
-    if (currentState == STATE_SPOTIFY) sendCommand("PREV");
-    else changePage(-1);
+    changePage(-1);
+    lastInteractionTime = millis();
+    return;
+  }
+
+  if (btn == "RIGHT_LONG") {
+    if (currentState == STATE_SPOTIFY) sendCommand("NEXT");
     lastInteractionTime = millis();
     return;
   }
@@ -158,8 +169,16 @@ void handleVirtualButton(String btn) {
     }
 #endif
 
-    if (currentState == STATE_SPOTIFY) sendCommand("NEXT");
-    else changePage(1);
+    changePage(1);
+    lastInteractionTime = millis();
+    return;
+  }
+
+  if (btn == "SELECT_LONG") {
+    if (currentState == STATE_DR_HACK) {
+      extern void dhSelect();
+      dhSelect();
+    }
     lastInteractionTime = millis();
     return;
   }

@@ -143,7 +143,7 @@ def fetch_heavy_assets(track_name, artist_name, track_id, album_art_url):
     # 2. Fetch and Process Album Art (Slow HTTP Image CDN + Resize Array Math)
     if album_art_url:
         try:
-            album_size = 96
+            album_size = 64
             pixels = spotify_service.process_album_art(album_art_url, size=album_size)
             if not pixels: return
             
@@ -766,13 +766,13 @@ def start_notes_server():
                     return {'status': 'error', 'msg': 'No image file'}, 400
                 
                 file = request.files['image']
-                img = Image.open(io.BytesIO(file.read()))
-                img = img.resize((96, 96), getattr(Image, 'Resampling', Image).LANCZOS)
+                # Resize strictly to 64x64 to match ESP32 ALBUM_ART_W and prevent array corruption
+                img = img.resize((64, 64), getattr(Image, 'Resampling', Image).LANCZOS)
                 img = img.convert('RGB')
                 
                 pixels = []
-                for y in range(96):
-                    for x in range(96):
+                for y in range(64):
+                    for x in range(64):
                         r, g, b = img.getpixel((x, y))  # type: ignore
                         rgb565 = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
                         pixels.append(rgb565)

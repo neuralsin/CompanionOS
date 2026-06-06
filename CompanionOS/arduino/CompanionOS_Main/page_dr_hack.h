@@ -618,12 +618,12 @@ static void dhRunDeauth() {
   tft.fillScreen(CLR_BG);
   tft.drawRect(0, 0, SCR_W, SCR_H, CLR_SECONDARY);
   tft.setTextColor(CLR_SECONDARY);
-  tft.drawCentreString("DEAUTH WARNING", SCR_CX, SCALE_Y(10), 1);
+  tft.drawCentreString("DEAUTH WARNING", SCR_CX, 15, 1);
   tft.setTextColor(CLR_TEXT_MED);
-  tft.drawCentreString("Only use on YOUR", SCR_CX, SCALE_Y(35), 1);
-  tft.drawCentreString("own network!", SCR_CX, SCALE_Y(50), 1);
+  tft.drawCentreString("Only use on YOUR", SCR_CX, 40, 1);
+  tft.drawCentreString("own network!", SCR_CX, 55, 1);
   tft.setTextColor(CLR_WARNING);
-  tft.drawCentreString("SEL:Accept <:Cancel", SCR_CX, SCR_H - SCALE_Y(14), 1);
+  tft.drawCentreString("SEL:Accept <:Cancel", SCR_CX, SCR_H - 15, 1);
 
   // Wait for accept or cancel
   while (true) {
@@ -653,10 +653,10 @@ static void dhRunDeauth() {
   tft.fillScreen(CLR_BG);
   tft.drawRect(0, 0, SCR_W, SCR_H, CLR_SECONDARY);
   tft.setTextColor(CLR_SECONDARY);
-  tft.drawCentreString("DEAUTHING", SCR_CX, SCALE_Y(4), 1);
+  tft.drawCentreString("DEAUTHING", SCR_CX, 10, 1);
   
   tft.setTextColor(CLR_TEXT_MED);
-  drawTruncatedText(SCALE_X(4), SCALE_Y(20), ap.ssid.c_str(), SCR_W - SCALE_X(8), CLR_TEXT_MED, 1);
+  drawTruncatedText(10, 30, ap.ssid.c_str(), SCR_W - 20, CLR_TEXT_MED, 1);
 
   dhDeauthPkts = 0;
   uint8_t broadcast[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -675,17 +675,17 @@ static void dhRunDeauth() {
     if (millis() - lastDraw > 500) {
       char buf[32];
       sprintf(buf, "Pkts: %lu", dhDeauthPkts);
-      tft.fillRect(SCALE_X(4), SCALE_Y(50), SCR_W - SCALE_X(8), SCALE_Y(30), CLR_BG);
+      tft.fillRect(10, 50, SCR_W - 20, 20, CLR_BG);
       tft.setTextColor(CLR_SUCCESS);
-      tft.drawString(buf, SCALE_X(4), SCALE_Y(50), 1);
+      tft.drawString(buf, 10, 50, 1);
 
       // Activity indicator
-      int barW = random(10, SCR_W - SCALE_X(8));
-      tft.fillRect(SCALE_X(4), SCALE_Y(80), SCR_W - SCALE_X(8), SCALE_Y(4), CLR_SURFACE);
-      tft.fillRect(SCALE_X(4), SCALE_Y(80), barW, SCALE_Y(4), CLR_SECONDARY);
+      int barW = random(10, SCR_W - 20);
+      tft.fillRect(10, 80, SCR_W - 20, 4, CLR_SURFACE);
+      tft.fillRect(10, 80, barW, 4, CLR_SECONDARY);
 
       tft.setTextColor(CLR_TEXT_LO);
-      tft.drawString("HOLD SEL: stop", SCALE_X(4), SCR_H - SCALE_Y(12), 1);
+      tft.drawString("HOLD SEL: stop", 10, SCR_H - 12, 1);
       lastDraw = millis();
     }
 

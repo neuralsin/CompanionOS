@@ -126,6 +126,7 @@ String lastPrevLyric = "";
 bool artDrawn = false;
 static bool controlsDrawn = false;
 static bool cardDrawn = false;
+static bool lastPlaying = false;
 
 void redrawSpotifyPartial() {
   if (currentState != STATE_SPOTIFY) return;
@@ -133,8 +134,8 @@ void redrawSpotifyPartial() {
   // 1:1 Spotify Replication Layout for 160x128
   int alb_x = 4, alb_y = 18, alb_s = 64; // Use full 64x64 to prevent array corruption
   int infoY = alb_y + alb_s + 4; // Y = 86
-  String title = currentTrack.substring(0, 16);
-  String artist = currentArtist.substring(0, 16);
+  String title = currentTrack.substring(0, 24);
+  String artist = currentArtist.substring(0, 20);
   
   if (!artDrawn && albumArtReady) {
     tft.setSwapBytes(true);
@@ -227,7 +228,7 @@ void redrawSpotifyPartial() {
   }
 
   // ── BOTTOM: Playback Controls ──
-  int ctrlY = 110;
+  int ctrlY = 106;
   if (!controlsDrawn) {
     tft.fillRect(0, ctrlY - 8, 160, 16, COLOR_BG); 
     drawIconPrev(45, ctrlY, TFT_WHITE);
@@ -235,16 +236,15 @@ void redrawSpotifyPartial() {
     controlsDrawn = true;
   }
 
-  static bool lastPlaying = false;
-  if (isPlaying != lastPlaying) {
+  if (isPlaying != lastPlaying || !controlsDrawn) {
     tft.fillCircle(80, ctrlY, 9, TFT_WHITE);
     if (isPlaying) drawIconPause(80, ctrlY, COLOR_BG);
     else drawIconPlay(82, ctrlY, COLOR_BG);
     lastPlaying = isPlaying;
   }
 
-  // ── BOTTOM: Progress Bar + Waveform Pulse ──
-  int barX = 10, barY = 122, barW = 140;
+  // ── BOTTOM: Progress Bar ──
+  int barX = 10, barY = 120, barW = 140;
   
   tft.fillRect(barX, barY - 2, barW + 10, 6, COLOR_BG);
   tft.fillRect(barX, barY, barW, 2, 0x4208);
@@ -253,21 +253,6 @@ void redrawSpotifyPartial() {
     w = constrain(w, 0, barW);
     tft.fillRect(barX, barY, w, 2, TFT_WHITE);
     tft.fillCircle(barX + w, barY + 1, 2, TFT_WHITE);
-  }
-  
-  float phase = (float)(playProgress % 3000) / 3000.0 * 2.0 * PI;
-  tft.fillRect(barX, barY + 4, barW, 8, COLOR_BG);
-  int numBars = 16;
-  int barSpacing = barW / numBars;
-  for (int i = 0; i < numBars; i++) {
-    float wave = sin(phase + (float)i * 0.8f);
-    int barH = (int)(abs(wave) * 6.0f) + 2;
-    int bx = barX + i * barSpacing;
-    int by = barY + 4 + (8 - barH);
-    
-    int scrubberX = (playDuration > 0) ? map(playProgress, 0, playDuration, barX, barX + barW) : barX;
-    uint16_t bColor = (bx < scrubberX) ? 0x07E0 : 0x2104;
-    tft.fillRect(bx, by, barSpacing - 2, barH, bColor);
   }
 }
 
@@ -281,6 +266,7 @@ void resetSpotifyDrawState() {
   artDrawn = false;
   controlsDrawn = false;
   cardDrawn = false;
+  lastPlaying = !isPlaying; // Force a mismatch to ensure redraw
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -641,18 +627,20 @@ void redrawSettingsPartial() {
   }
   y += 20; // 16px font + 4px spacing
   if (y > -20 && y < SCREEN_H) {
+    int valX = (SCREEN_W > 200) ? 100 : 50;
     tft.setTextColor(0x8410);
     tft.drawString("IP:", SCALE_X(10), y, 1);
     tft.setTextColor(TFT_GREEN);
-    tft.drawString(WiFi.localIP().toString(), SCALE_X(30), y, 1);
+    tft.drawString(WiFi.localIP().toString(), valX, y, 1);
   }
   y += 15; // 8px font + 7px spacing
   if (y > -20 && y < SCREEN_H) {
+    int valX = (SCREEN_W > 200) ? 100 : 50;
     tft.setTextColor(0x8410);
     tft.drawString("RSSI:", SCALE_X(10), y, 1);
     tft.setTextColor(TFT_WHITE);
     char rssi[8]; sprintf(rssi, "%d dBm", WiFi.RSSI());
-    tft.drawString(rssi, SCALE_X(45), y, 1);
+    tft.drawString(rssi, valX, y, 1);
   }
   
   y += 25; // 15px section gap
@@ -663,28 +651,31 @@ void redrawSettingsPartial() {
   }
   y += 20;
   if (y > -20 && y < SCREEN_H) {
+    int valX = (SCREEN_W > 200) ? 100 : 50;
     tft.setTextColor(0x8410);
     tft.drawString("CPU:", SCALE_X(10), y, 1);
     tft.setTextColor(TFT_WHITE);
     char cpu[16]; sprintf(cpu, "%d MHz", ESP.getCpuFreqMHz());
-    tft.drawString(cpu, SCALE_X(35), y, 1);
+    tft.drawString(cpu, valX, y, 1);
   }
   y += 15;
   if (y > -20 && y < SCREEN_H) {
+    int valX = (SCREEN_W > 200) ? 100 : 50;
     tft.setTextColor(0x8410);
     tft.drawString("RAM:", SCALE_X(10), y, 1);
     tft.setTextColor(TFT_WHITE);
     char ram[16]; sprintf(ram, "%d bytes", ESP.getFreeHeap());
-    tft.drawString(ram, SCALE_X(35), y, 1);
+    tft.drawString(ram, valX, y, 1);
   }
   y += 15;
   if (y > -20 && y < SCREEN_H) {
+    int valX = (SCREEN_W > 200) ? 100 : 50;
     tft.setTextColor(0x8410);
     tft.drawString("Uptime:", SCALE_X(10), y, 1);
     unsigned long secs = millis() / 1000;
     char up[16]; sprintf(up, "%02dh%02dm%02ds", (int)(secs/3600), (int)((secs%3600)/60), (int)(secs%60));
     tft.setTextColor(TFT_WHITE);
-    tft.drawString(up, SCALE_X(50), y, 1);
+    tft.drawString(up, valX, y, 1);
   }
   
   y += 25;
@@ -695,11 +686,12 @@ void redrawSettingsPartial() {
   }
   y += 20;
   if (y > -20 && y < SCREEN_H) {
+    int valX = (SCREEN_W > 200) ? 100 : 50;
     tft.setTextColor(0x8410);
     tft.drawString("LDR:", SCALE_X(10), y, 1);
     tft.setTextColor(TFT_YELLOW);
     char ld[8]; sprintf(ld, "%d", ldrValue);
-    tft.drawString(ld, SCALE_X(35), y, 1);
+    tft.drawString(ld, valX, y, 1);
     // Visual bar
     int barLen = map(ldrValue, 0, 1024, 0, SCALE_X(100));
     tft.fillRect(SCALE_X(65), y + 1, barLen, 6, TFT_YELLOW);
