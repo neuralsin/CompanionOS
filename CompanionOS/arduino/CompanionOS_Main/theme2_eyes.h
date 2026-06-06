@@ -138,22 +138,17 @@ enum T2Corner { T2_TR, T2_TL, T2_BL, T2_BR };
 
 class T2EyeDrawer {
 public:
-  static TFT_eSprite* t2Spr;
+  static TFT_eSprite* t2Canvas;
 
   static void Draw(int16_t centerX, int16_t centerY, T2EyeConfig *cfg, uint16_t fg = TFT_WHITE) {
-    // Resolution-aware sprite size (scaled from 140 on 320×240)
-    static int sprSize = min((int)SCALE_X(140), min(SCREEN_W, SCREEN_H));
-    if (!t2Spr) {
-      t2Spr = new TFT_eSprite(&tft);
-      t2Spr->setColorDepth(1);
-      t2Spr->createSprite(sprSize, sprSize);
+    if (!t2Canvas) {
+      t2Canvas = new TFT_eSprite(&tft);
+      t2Canvas->setColorDepth(16);
+      t2Canvas->createSprite(SCREEN_W, SCREEN_H - 16);
     }
-    t2Spr->setBitmapColor(fg, COLOR_BG);
-    t2Spr->fillSprite(0);
 
-    // Sprite local center (half of sprSize)
-    int16_t scx = sprSize / 2;
-    int16_t scy = sprSize / 2;
+    int16_t scx = centerX + cfg->OffsetX;
+    int16_t scy = centerY - 16 + cfg->OffsetY;
 
     int32_t dyt = cfg->Height * cfg->Slope_Top / 2.0;
     int32_t dyb = cfg->Height * cfg->Slope_Bottom / 2.0;
@@ -182,51 +177,49 @@ public:
     int32_t maxCy = max(BLy, BRy);
 
     // Center fill
-    FillRect(minCx, minCy, maxCx, maxCy, 1);
+    FillRect(minCx, minCy, maxCx, maxCy, fg);
     // Extend to meet rounded corners
-    FillRect(TRx, TRy, BRx + rB, BRy, 1);
-    FillRect(TLx - rT, TLy, BLx, BLy, 1);
-    FillRect(TLx, TLy - rT, TRx, TRy, 1);
-    FillRect(BLx, BLy, BRx, BRy + rB, 1);
+    FillRect(TRx, TRy, BRx + rB, BRy, fg);
+    FillRect(TLx - rT, TLy, BLx, BLy, fg);
+    FillRect(TLx, TLy - rT, TRx, TRy, fg);
+    FillRect(BLx, BLy, BRx, BRy + rB, fg);
 
     // Slanted edges (top)
     if (cfg->Slope_Top > 0) {
-      FillTri(TLx, TLy-rT, TRx, TRy-rT, 0);
-      FillTri(TRx, TRy-rT, TLx, TLy-rT, 1);
+      FillTri(TLx, TLy-rT, TRx, TRy-rT, COLOR_BG);
+      FillTri(TRx, TRy-rT, TLx, TLy-rT, fg);
     } else if (cfg->Slope_Top < 0) {
-      FillTri(TRx, TRy-rT, TLx, TLy-rT, 0);
-      FillTri(TLx, TLy-rT, TRx, TRy-rT, 1);
+      FillTri(TRx, TRy-rT, TLx, TLy-rT, COLOR_BG);
+      FillTri(TLx, TLy-rT, TRx, TRy-rT, fg);
     }
     // Slanted edges (bottom)
     if (cfg->Slope_Bottom > 0) {
-      FillTri(BRx+rB, BRy+rB, BLx-rB, BLy+rB, 0);
-      FillTri(BLx-rB, BLy+rB, BRx+rB, BRy+rB, 1);
+      FillTri(BRx+rB, BRy+rB, BLx-rB, BLy+rB, COLOR_BG);
+      FillTri(BLx-rB, BLy+rB, BRx+rB, BRy+rB, fg);
     } else if (cfg->Slope_Bottom < 0) {
-      FillTri(BLx-rB, BLy+rB, BRx+rB, BRy+rB, 0);
-      FillTri(BRx+rB, BRy+rB, BLx-rB, BLy+rB, 1);
+      FillTri(BLx-rB, BLy+rB, BRx+rB, BRy+rB, COLOR_BG);
+      FillTri(BRx+rB, BRy+rB, BLx-rB, BLy+rB, fg);
     }
 
     // Rounded corners
     if (rT > 0) {
-      FillCorner(T2_TL, TLx, TLy, rT, rT, 1);
-      FillCorner(T2_TR, TRx, TRy, rT, rT, 1);
+      FillCorner(T2_TL, TLx, TLy, rT, rT, fg);
+      FillCorner(T2_TR, TRx, TRy, rT, rT, fg);
     }
     if (rB > 0) {
-      FillCorner(T2_BL, BLx, BLy, rB, rB, 1);
-      FillCorner(T2_BR, BRx, BRy, rB, rB, 1);
+      FillCorner(T2_BL, BLx, BLy, rB, rB, fg);
+      FillCorner(T2_BR, BRx, BRy, rB, rB, fg);
     }
-
-    t2Spr->pushSprite(centerX + cfg->OffsetX - scx, centerY + cfg->OffsetY - scy);
   }
 
   static void FillRect(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint16_t color) {
     int32_t l = min(x0,x1), r = max(x0,x1);
     int32_t t = min(y0,y1), b = max(y0,y1);
-    if (r-l > 0 && b-t > 0) t2Spr->fillRect(l, t, r-l, b-t, color);
+    if (r-l > 0 && b-t > 0) t2Canvas->fillRect(l, t, r-l, b-t, color);
   }
 
   static void FillTri(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint16_t color) {
-    t2Spr->fillTriangle(x0, y0, x1, y1, x1, y0, color);
+    t2Canvas->fillTriangle(x0, y0, x1, y1, x1, y0, color);
   }
 
   static void FillCorner(T2Corner corner, int16_t x0, int16_t y0, int32_t rx, int32_t ry, uint16_t color) {
@@ -237,44 +230,44 @@ public:
 
     if (corner == T2_TR) {
       for (x=0, y=ry, s=2*ry2+rx2*(1-2*ry); ry2*x<=rx2*y; x++) {
-        t2Spr->drawFastHLine(x0, y0-y, x, color);
+        t2Canvas->drawFastHLine(x0, y0-y, x, color);
         if (s>=0) { s+=fx2*(1-y); y--; } s+=ry2*((4*x)+6);
       }
       for (x=rx, y=0, s=2*rx2+ry2*(1-2*rx); rx2*y<=ry2*x; y++) {
-        t2Spr->drawFastHLine(x0, y0-y, x, color);
+        t2Canvas->drawFastHLine(x0, y0-y, x, color);
         if (s>=0) { s+=fy2*(1-x); x--; } s+=rx2*((4*y)+6);
       }
     } else if (corner == T2_BR) {
       for (x=0, y=ry, s=2*ry2+rx2*(1-2*ry); ry2*x<=rx2*y; x++) {
-        t2Spr->drawFastHLine(x0, y0+y-1, x, color);
+        t2Canvas->drawFastHLine(x0, y0+y-1, x, color);
         if (s>=0) { s+=fx2*(1-y); y--; } s+=ry2*((4*x)+6);
       }
       for (x=rx, y=0, s=2*rx2+ry2*(1-2*rx); rx2*y<=ry2*x; y++) {
-        t2Spr->drawFastHLine(x0, y0+y-1, x, color);
+        t2Canvas->drawFastHLine(x0, y0+y-1, x, color);
         if (s>=0) { s+=fy2*(1-x); x--; } s+=rx2*((4*y)+6);
       }
     } else if (corner == T2_TL) {
       for (x=0, y=ry, s=2*ry2+rx2*(1-2*ry); ry2*x<=rx2*y; x++) {
-        t2Spr->drawFastHLine(x0-x, y0-y, x, color);
+        t2Canvas->drawFastHLine(x0-x, y0-y, x, color);
         if (s>=0) { s+=fx2*(1-y); y--; } s+=ry2*((4*x)+6);
       }
       for (x=rx, y=0, s=2*rx2+ry2*(1-2*rx); rx2*y<=ry2*x; y++) {
-        t2Spr->drawFastHLine(x0-x, y0-y, x, color);
+        t2Canvas->drawFastHLine(x0-x, y0-y, x, color);
         if (s>=0) { s+=fy2*(1-x); x--; } s+=rx2*((4*y)+6);
       }
     } else if (corner == T2_BL) {
       for (x=0, y=ry, s=2*ry2+rx2*(1-2*ry); ry2*x<=rx2*y; x++) {
-        t2Spr->drawFastHLine(x0-x, y0+y-1, x, color);
+        t2Canvas->drawFastHLine(x0-x, y0+y-1, x, color);
         if (s>=0) { s+=fx2*(1-y); y--; } s+=ry2*((4*x)+6);
       }
       for (x=rx, y=0, s=2*rx2+ry2*(1-2*rx); rx2*y<=ry2*x; y++) {
-        t2Spr->drawFastHLine(x0-x, y0+y, x, color);
+        t2Canvas->drawFastHLine(x0-x, y0+y, x, color);
         if (s>=0) { s+=fy2*(1-x); x--; } s+=rx2*((4*y)+6);
       }
     }
   }
 };
-TFT_eSprite* T2EyeDrawer::t2Spr = nullptr;
+TFT_eSprite* T2EyeDrawer::t2Canvas = nullptr;
 
 // ═══════════════════════════════════════════════════════════
 // T2 EYE TRANSITION ENGINE (interpolates between presets)
@@ -687,7 +680,7 @@ void t2_setEmotion(Emotion emo) {
     default:            t2_goTo_Normal(); break;
   }
   if (currentState == STATE_EYES) {
-    tft.fillRect(0, 16, SCREEN_W, SCREEN_H - 16, COLOR_BG);
+    // handled by double buffering in update/draw
   }
 }
 
@@ -715,21 +708,34 @@ void t2_nextExpression() {
     case 17: t2_goTo_Awe(); break;
   }
   if (currentState == STATE_EYES) {
-    tft.fillRect(0, 16, SCREEN_W, SCREEN_H - 16, COLOR_BG);
+    // handled by double buffering in update/draw
   }
 }
 
 void t2_drawEyesPage() {
   if (!t2_initialized) t2_initEyes();
-  tft.fillRect(0, 16, SCREEN_W, SCREEN_H - 16, COLOR_BG);
+  
+  if (!T2EyeDrawer::t2Canvas) {
+    T2EyeDrawer::t2Canvas = new TFT_eSprite(&tft);
+    T2EyeDrawer::t2Canvas->setColorDepth(16);
+    // Shift canvas down to Y=48 to leave room for Status Bar and Thought Bubble!
+    T2EyeDrawer::t2Canvas->createSprite(SCREEN_W, SCREEN_H - 48);
+  }
+  
+  // Clear the area above the sprite (y=16 to 48) to prevent ghosting from other pages
+  tft.fillRect(0, 16, SCREEN_W, 32, COLOR_BG);
+  
+  T2EyeDrawer::t2Canvas->fillSprite(COLOR_BG);
 
   t2_leftEye.CenterX  = T2_SCREEN_CX - T2_EYE_SIZE/2 - T2_EYE_GAP;
-  t2_leftEye.CenterY  = T2_SCREEN_CY;
+  t2_leftEye.CenterY  = (SCREEN_H - 48) / 2;
   t2_rightEye.CenterX = T2_SCREEN_CX + T2_EYE_SIZE/2 + T2_EYE_GAP;
-  t2_rightEye.CenterY = T2_SCREEN_CY;
+  t2_rightEye.CenterY = (SCREEN_H - 48) / 2;
 
   t2_leftEye.Draw();
   t2_rightEye.Draw();
+
+  T2EyeDrawer::t2Canvas->pushSprite(0, 48);
 }
 
 void t2_updateEyes() {
@@ -754,13 +760,22 @@ void t2_updateEyes() {
   // Clear and redraw (now handled by double buffering)
   // tft.fillRect(0, 16, SCREEN_W, SCREEN_H - 16, COLOR_BG);
 
+  if (!T2EyeDrawer::t2Canvas) {
+    T2EyeDrawer::t2Canvas = new TFT_eSprite(&tft);
+    T2EyeDrawer::t2Canvas->setColorDepth(16);
+    T2EyeDrawer::t2Canvas->createSprite(SCREEN_W, SCREEN_H - 48);
+  }
+  T2EyeDrawer::t2Canvas->fillSprite(COLOR_BG);
+
   t2_leftEye.CenterX  = T2_SCREEN_CX - T2_EYE_SIZE/2 - T2_EYE_GAP;
-  t2_leftEye.CenterY  = T2_SCREEN_CY;
+  t2_leftEye.CenterY  = (SCREEN_H - 48) / 2;
   t2_rightEye.CenterX = T2_SCREEN_CX + T2_EYE_SIZE/2 + T2_EYE_GAP;
-  t2_rightEye.CenterY = T2_SCREEN_CY;
+  t2_rightEye.CenterY = (SCREEN_H - 48) / 2;
 
   t2_leftEye.Draw();
   t2_rightEye.Draw();
+
+  T2EyeDrawer::t2Canvas->pushSprite(0, 48);
 }
 
 #endif

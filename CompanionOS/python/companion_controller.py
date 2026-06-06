@@ -289,9 +289,9 @@ def capture_windows_notifications():
 
 
 def start_notes_server():
-    """Start Flask web server for Quick Notes"""
+    """Start Flask web server for Web Remote + Quick Notes"""
     try:
-        from flask import Flask, request, redirect  # type: ignore
+        from flask import Flask, request, redirect, jsonify  # type: ignore
         app = Flask(__name__)
         notes_file = os.path.join(SCRIPT_DIR, "notes.txt")
         port = config['features'].get('notes_web_port', 5555)
@@ -302,34 +302,366 @@ def start_notes_server():
             if os.path.exists(notes_file):
                 with open(notes_file, 'r') as f:
                     notes = f.read()
+            esp_ip = active_esp_ip if active_esp_ip else ESP_IP
+            wifi_status = "Connected" if active_esp_ip else "Searching..."
             return f"""
-            <html>
-            <head><title>CompanionOS Notes</title>
-            <style>
-                body {{ font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; 
-                       display: flex; justify-content: center; padding: 40px; }}
-                .container {{ max-width: 500px; width: 100%; }}
-                h1 {{ color: #00d4ff; }}
-                textarea {{ width: 100%; height: 150px; background: #16213e; color: #eee; 
-                           border: 1px solid #0f3460; border-radius: 8px; padding: 12px; 
-                           font-size: 16px; resize: vertical; }}
-                button {{ background: #00d4ff; color: #000; border: none; padding: 12px 24px;
-                         border-radius: 8px; font-size: 16px; cursor: pointer; margin-top: 12px; }}
-                button:hover {{ background: #00b8d4; }}
-                .current {{ background: #16213e; padding: 16px; border-radius: 8px; margin-top: 20px; }}
-                .current pre {{ color: #a8d8ea; white-space: pre-wrap; }}
-            </style></head>
-            <body><div class="container">
-                <h1>📝 CompanionOS Quick Notes</h1>
-                <form action="/add" method="POST">
-                    <textarea name="note" placeholder="Type a note... (first 4 lines show on device)"></textarea>
-                    <button type="submit">Send to Companion</button>
-                </form>
-                <div class="current">
-                    <h3>Current Notes:</h3>
-                    <pre>{notes}</pre>
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+                <title>CompanionOS Remote</title>
+                <link rel="preconnect" href="https://fonts.googleapis.com">
+                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+                <style>
+                    * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+                    body {{
+                        font-family: 'Inter', 'Segoe UI', sans-serif;
+                        background: #0a0a1a;
+                        color: #e0e0e0;
+                        min-height: 100vh;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        padding: 20px 16px;
+                    }}
+                    .header {{
+                        text-align: center;
+                        margin-bottom: 24px;
+                    }}
+                    .header h1 {{
+                        font-size: 1.5rem;
+                        font-weight: 700;
+                        background: linear-gradient(135deg, #00d4ff, #7b2ff7);
+                        -webkit-background-clip: text;
+                        -webkit-text-fill-color: transparent;
+                        background-clip: text;
+                    }}
+                    .header .status {{
+                        font-size: 0.75rem;
+                        color: #666;
+                        margin-top: 4px;
+                    }}
+                    .header .status .dot {{
+                        display: inline-block;
+                        width: 8px; height: 8px;
+                        border-radius: 50%;
+                        background: {'#00e676' if active_esp_ip else '#ff5252'};
+                        margin-right: 4px;
+                        vertical-align: middle;
+                    }}
+
+                    /* ── REMOTE SECTION ── */
+                    .remote {{
+                        background: linear-gradient(145deg, #111128, #0d0d20);
+                        border: 1px solid #1a1a3e;
+                        border-radius: 20px;
+                        padding: 28px 20px;
+                        width: 100%;
+                        max-width: 400px;
+                        margin-bottom: 24px;
+                        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+                    }}
+                    .remote-title {{
+                        text-align: center;
+                        font-size: 0.7rem;
+                        text-transform: uppercase;
+                        letter-spacing: 3px;
+                        color: #555;
+                        margin-bottom: 20px;
+                    }}
+                    .btn-row {{
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        gap: 12px;
+                        margin-bottom: 16px;
+                    }}
+                    .btn {{
+                        border: none;
+                        border-radius: 16px;
+                        cursor: pointer;
+                        font-family: 'Inter', sans-serif;
+                        font-weight: 600;
+                        transition: all 0.15s ease;
+                        user-select: none;
+                        -webkit-tap-highlight-color: transparent;
+                        position: relative;
+                        overflow: hidden;
+                    }}
+                    .btn:active {{
+                        transform: scale(0.92);
+                    }}
+                    .btn::after {{
+                        content: '';
+                        position: absolute;
+                        inset: 0;
+                        background: rgba(255,255,255,0.1);
+                        opacity: 0;
+                        transition: opacity 0.2s;
+                        border-radius: inherit;
+                    }}
+                    .btn:hover::after {{ opacity: 1; }}
+
+                    .btn-nav {{
+                        width: 72px; height: 72px;
+                        font-size: 1.6rem;
+                        background: linear-gradient(145deg, #1a1a3e, #12122a);
+                        color: #8888cc;
+                        border: 1px solid #2a2a5e;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+                    }}
+                    .btn-nav:active {{
+                        background: linear-gradient(145deg, #2a2a5e, #1a1a3e);
+                        color: #aaaaee;
+                        box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+                    }}
+
+                    .btn-select {{
+                        width: 88px; height: 88px;
+                        font-size: 1.1rem;
+                        background: linear-gradient(145deg, #7b2ff7, #5a1fd4);
+                        color: #fff;
+                        border: 1px solid #9b4fff;
+                        box-shadow: 0 4px 20px rgba(123, 47, 247, 0.3);
+                        border-radius: 50%;
+                    }}
+                    .btn-select:active {{
+                        background: linear-gradient(145deg, #9b4fff, #7b2ff7);
+                        box-shadow: 0 2px 10px rgba(123, 47, 247, 0.5);
+                    }}
+
+                    .btn-home {{
+                        width: 100%;
+                        max-width: 240px;
+                        height: 44px;
+                        font-size: 0.85rem;
+                        background: linear-gradient(145deg, #1a1a3e, #12122a);
+                        color: #00d4ff;
+                        border: 1px solid #0f3460;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                        letter-spacing: 1px;
+                    }}
+                    .btn-home:active {{
+                        background: linear-gradient(145deg, #0f3460, #1a1a3e);
+                        color: #4de8ff;
+                    }}
+
+                    .btn-row-home {{
+                        display: flex;
+                        justify-content: center;
+                        margin-top: 4px;
+                    }}
+
+                    .feedback {{
+                        text-align: center;
+                        font-size: 0.7rem;
+                        color: #333;
+                        margin-top: 12px;
+                        min-height: 18px;
+                        transition: color 0.3s;
+                    }}
+                    .feedback.active {{ color: #7b2ff7; }}
+
+                    /* ── PAGE NAV SECTION ── */
+                    .page-nav {{
+                        display: flex;
+                        flex-wrap: wrap;
+                        justify-content: center;
+                        gap: 8px;
+                        width: 100%;
+                        max-width: 400px;
+                        margin-bottom: 24px;
+                    }}
+                    .page-btn {{
+                        padding: 6px 12px;
+                        font-size: 0.7rem;
+                        background: #111128;
+                        color: #666;
+                        border: 1px solid #1a1a3e;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-family: 'Inter', sans-serif;
+                        transition: all 0.15s;
+                        user-select: none;
+                        -webkit-tap-highlight-color: transparent;
+                    }}
+                    .page-btn:hover {{ background: #1a1a3e; color: #aaa; }}
+                    .page-btn:active {{ background: #2a2a5e; color: #fff; transform: scale(0.95); }}
+
+                    /* ── NOTES SECTION ── */
+                    .notes {{
+                        background: linear-gradient(145deg, #111128, #0d0d20);
+                        border: 1px solid #1a1a3e;
+                        border-radius: 16px;
+                        padding: 20px;
+                        width: 100%;
+                        max-width: 400px;
+                        box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+                    }}
+                    .notes h2 {{
+                        font-size: 0.9rem;
+                        color: #00d4ff;
+                        margin-bottom: 12px;
+                    }}
+                    textarea {{
+                        width: 100%;
+                        height: 100px;
+                        background: #0a0a18;
+                        color: #e0e0e0;
+                        border: 1px solid #1a1a3e;
+                        border-radius: 10px;
+                        padding: 12px;
+                        font-size: 14px;
+                        font-family: 'Inter', sans-serif;
+                        resize: vertical;
+                        outline: none;
+                    }}
+                    textarea:focus {{ border-color: #7b2ff7; }}
+                    .notes-submit {{
+                        width: 100%;
+                        margin-top: 10px;
+                        padding: 10px;
+                        background: linear-gradient(135deg, #00d4ff, #007bff);
+                        color: #000;
+                        font-weight: 600;
+                        border: none;
+                        border-radius: 10px;
+                        font-size: 14px;
+                        cursor: pointer;
+                        font-family: 'Inter', sans-serif;
+                    }}
+                    .notes-submit:hover {{ opacity: 0.9; }}
+                    .current-notes {{
+                        background: #0a0a18;
+                        padding: 12px;
+                        border-radius: 8px;
+                        margin-top: 12px;
+                    }}
+                    .current-notes pre {{
+                        color: #8888cc;
+                        white-space: pre-wrap;
+                        font-size: 13px;
+                        font-family: 'Inter', monospace;
+                    }}
+                    .current-notes h3 {{
+                        font-size: 0.75rem;
+                        color: #555;
+                        margin-bottom: 8px;
+                        text-transform: uppercase;
+                        letter-spacing: 1px;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>CompanionOS</h1>
+                    <div class="status"><span class="dot"></span> ESP: {esp_ip} &middot; {wifi_status}</div>
                 </div>
-            </div></body></html>
+
+                <!-- WEB REMOTE -->
+                <div class="remote">
+                    <div class="remote-title">Virtual Remote</div>
+                    <div class="btn-row">
+                        <button class="btn btn-nav" onclick="press('UP')" id="btn-up" title="Up">&#9650;</button>
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn btn-nav" onclick="press('LEFT')" id="btn-left" title="Previous Page">&#9664;</button>
+                        <button class="btn btn-select" onclick="press('SELECT')" id="btn-select" title="Select / Action">SEL</button>
+                        <button class="btn btn-nav" onclick="press('RIGHT')" id="btn-right" title="Next Page">&#9654;</button>
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn btn-nav" onclick="press('DOWN')" id="btn-down" title="Down">&#9660;</button>
+                    </div>
+                    <div class="btn-row-home">
+                        <button class="btn btn-home" onclick="press('HOME')" id="btn-home" title="Home / Eyes">&#8962; HOME</button>
+                    </div>
+                    <div class="feedback" id="feedback"></div>
+                </div>
+
+                <!-- QUICK PAGE JUMP -->
+                <div class="page-nav">
+                    <button class="page-btn" onclick="page(0)">Eyes</button>
+                    <button class="page-btn" onclick="page(1)">Spotify</button>
+                    <button class="page-btn" onclick="page(2)">Pomo</button>
+                    <button class="page-btn" onclick="page(3)">Weather</button>
+                    <button class="page-btn" onclick="page(4)">Notifs</button>
+                    <button class="page-btn" onclick="page(5)">Notes</button>
+                    <button class="page-btn" onclick="page(6)">Stocks</button>
+                    <button class="page-btn" onclick="page(7)">Gaming</button>
+                    <button class="page-btn" onclick="page(8)">Social</button>
+                    <button class="page-btn" onclick="page(9)">Tasks</button>
+                    <button class="page-btn" onclick="page(10)">Network</button>
+                    <button class="page-btn" onclick="page(11)">Settings</button>
+                    <button class="page-btn" onclick="page(12)">Dr.Hack</button>
+                </div>
+
+                <!-- NOTES -->
+                <div class="notes">
+                    <h2>&#128221; Quick Notes</h2>
+                    <form action="/add" method="POST">
+                        <textarea name="note" placeholder="Type a note... (first 4 lines show on device)"></textarea>
+                        <button type="submit" class="notes-submit">Send to Companion</button>
+                    </form>
+                    <div class="current-notes">
+                        <h3>Current Notes</h3>
+                        <pre>{notes}</pre>
+                    </div>
+                </div>
+
+                <!-- POMODORO SETTINGS -->
+                <div class="notes" style="margin-top: 24px;">
+                    <h2>&#9201; Pomodoro Settings</h2>
+                    <form action="/api/pomodoro" method="POST" style="display: flex; gap: 10px; margin-top: 10px;">
+                        <input type="number" name="work" placeholder="Work (min)" style="flex: 1; padding: 10px; border-radius: 8px; border: none; background: #1a1a3e; color: #fff;" required>
+                        <input type="number" name="break" placeholder="Break (min)" style="flex: 1; padding: 10px; border-radius: 8px; border: none; background: #1a1a3e; color: #fff;" required>
+                        <button type="submit" class="notes-submit" style="flex: 1; margin-top: 0;">Update Timer</button>
+                    </form>
+                </div>
+
+                <script>
+                    function press(btn) {{
+                        const fb = document.getElementById('feedback');
+                        fb.textContent = btn + ' pressed';
+                        fb.className = 'feedback active';
+                        setTimeout(() => {{ fb.className = 'feedback'; fb.textContent = ''; }}, 600);
+
+                        fetch('/api/button', {{
+                            method: 'POST',
+                            headers: {{ 'Content-Type': 'application/json' }},
+                            body: JSON.stringify({{ btn: btn }})
+                        }}).catch(e => {{
+                            fb.textContent = 'Error: ' + e;
+                            fb.className = 'feedback active';
+                        }});
+                    }}
+
+                    function page(n) {{
+                        fetch('/api/page', {{
+                            method: 'POST',
+                            headers: {{ 'Content-Type': 'application/json' }},
+                            body: JSON.stringify({{ page: n }})
+                        }});
+                        const fb = document.getElementById('feedback');
+                        fb.textContent = 'Jumped to page ' + n;
+                        fb.className = 'feedback active';
+                        setTimeout(() => {{ fb.className = 'feedback'; fb.textContent = ''; }}, 800);
+                    }}
+
+                    // Keyboard shortcuts
+                    document.addEventListener('keydown', (e) => {{
+                        if (e.target.tagName === 'TEXTAREA') return;
+                        switch(e.key) {{
+                            case 'ArrowLeft':  e.preventDefault(); press('LEFT'); break;
+                            case 'ArrowRight': e.preventDefault(); press('RIGHT'); break;
+                            case 'Enter':      e.preventDefault(); press('SELECT'); break;
+                            case 'Escape':     e.preventDefault(); press('HOME'); break;
+                            case 'h':          e.preventDefault(); press('HOME'); break;
+                        }}
+                    }});
+                </script>
+            </body>
+            </html>
             """
         
         @app.route('/add', methods=['POST'])
@@ -340,7 +672,48 @@ def start_notes_server():
                     f.write(note)
                 print(f"📝 Note updated via web: {note[:50]}...")
             return redirect('/')
+
+        @app.route('/api/pomodoro', methods=['POST'])
+        def api_pomodoro():
+            global pomodoro_duration, pomodoro_break_duration, pomodoro_remaining, pomodoro_is_break, pomodoro_active
+            try:
+                work = int(request.form.get('work', 25))
+                brk = int(request.form.get('break', 5))
+                pomodoro_duration = work * 60
+                pomodoro_break_duration = brk * 60
+                if not pomodoro_active:
+                    pomodoro_remaining = pomodoro_break_duration if pomodoro_is_break else pomodoro_duration
+                print(f"🍅 Pomodoro settings updated: Work {work}m, Break {brk}m")
+            except Exception as e:
+                print(f"Pomodoro update error: {e}")
+            return redirect('/')
         
+        # ── V8: Virtual Button Remote ──────────────────────
+        @app.route('/api/button', methods=['POST'])
+        def api_button():
+            """Receives virtual button press and relays to ESP via UDP."""
+            data = request.get_json()
+            if data and 'btn' in data:
+                btn = str(data['btn']).upper().strip()
+                valid = {'LEFT', 'RIGHT', 'SELECT', 'HOME', 'UP', 'DOWN'}
+                if btn in valid:
+                    send_udp(f"BTN:{btn}")
+                    print(f"🎮 Virtual button: {btn}")
+                    return jsonify({'status': 'ok', 'btn': btn})
+                return jsonify({'status': 'error', 'msg': f'Invalid button: {btn}'}), 400
+            return jsonify({'status': 'error', 'msg': 'Missing btn field'}), 400
+
+        @app.route('/api/page', methods=['POST'])
+        def api_page():
+            """Direct page navigation — jumps to specific page index."""
+            data = request.get_json()
+            if data and 'page' in data:
+                page_num = int(data['page'])
+                send_udp(f"PAGE:{page_num}")
+                print(f"📄 Page jump: {page_num}")
+                return jsonify({'status': 'ok', 'page': page_num})
+            return jsonify({'status': 'error', 'msg': 'Missing page field'}), 400
+
         @app.route('/api/notify', methods=['POST'])
         def api_notify():
             """API endpoint for pushing notifications"""
@@ -354,7 +727,6 @@ def start_notes_server():
                         if isinstance(loaded, list):
                             existing = loaded
                 
-                # Append and safe dump
                 existing.append({
                     'app': data.get('app', 'Custom'),
                     'title': data.get('title', 'Notification'),
@@ -374,8 +746,8 @@ def start_notes_server():
             """Receives AI agent status and forwards to ESP"""
             data = request.get_json()
             if data:
-                status = data.get('status', 'thinking')  # thinking, done, error
-                text = data.get('text', '')[:60]  # Truncate for ESP display
+                status = data.get('status', 'thinking')
+                text = data.get('text', '')[:60]
                 agent_payload = json.dumps({'status': status, 'text': text})
                 send_udp(f"AGENT:{agent_payload}")
                 print(f"🤖 Agent: [{status}] {text[:40]}")
@@ -405,7 +777,6 @@ def start_notes_server():
                         rgb565 = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
                         pixels.append(rgb565)
                 
-                # Stream using same binary protocol as album art  
                 send_udp("ART_START:")
                 time.sleep(0.05)
                 
@@ -416,7 +787,6 @@ def start_notes_server():
                     flat_bytes.append(c & 0xFF)
                 byte_array = bytes(flat_bytes)
                 
-                # Use bytearray and type ignore for slicing in static analysis
                 raw_bytes = bytearray(byte_array)
                 for i in range(0, len(raw_bytes), pixels_per_chunk * 2):
                     chunk_data = raw_bytes[i:i+(pixels_per_chunk*2)]  # type: ignore
@@ -433,9 +803,11 @@ def start_notes_server():
             except Exception as e:
                 return {'status': 'error', 'msg': str(e)}, 500
         
-        print(f"📝 Notes web server starting on http://0.0.0.0:{port}")
+        print(f"🌐 CompanionOS Web Remote starting on http://0.0.0.0:{port}")
+        print(f"  🎮 Virtual Remote: http://localhost:{port}")
         print(f"  🤖 Agent webhook: POST /api/agent")
         print(f"  🖼️ Gallery push:  POST /api/gallery")
+        print(f"  🔘 Button API:    POST /api/button")
         app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
     except ImportError:
         print("⚠️ Flask not installed. Run: pip install flask")
@@ -559,7 +931,7 @@ def command_listener():
 
 def stock_feed_loop():
     """Periodically fetch stock data and send to ESP."""
-    interval = config.get('stocks', {}).get('update_interval_seconds', 60)
+    interval = config.get('stocks', {}).get('update_interval_seconds', 300)
     # Initial delay to let network settle
     time.sleep(8)
     while True:

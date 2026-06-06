@@ -230,6 +230,7 @@ static void dhRunWebDashboard() {
   unsigned long holdStart = 0; bool holding = false;
 
   while (true) {
+    extern void handleNetwork(); handleNetwork();
     dhDashServer->handleClient();
 
     if (millis() - lastDraw > 500) {
@@ -237,7 +238,7 @@ static void dhRunWebDashboard() {
       lastDraw = millis();
     }
 
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }

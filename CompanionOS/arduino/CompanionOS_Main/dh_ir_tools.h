@@ -122,7 +122,7 @@ static void dhRunIrCapture() {
       delay(200);
       if (dhIrEdgeCount > 10) { captured = true; break; }
     }
-    if (digitalRead(BTN_SELECT) == LOW) { delay(200); break; }
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { delay(200); break; }
     delay(10);
   }
   dhIrStopCapture();
@@ -205,7 +205,8 @@ static void dhRunIrReplay() {
   unsigned long holdStart = 0; bool holding = false;
 
   while (true) {
-    if (digitalRead(BTN_SELECT) == LOW) {
+    extern void handleNetwork(); handleNetwork();
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else {
@@ -284,6 +285,7 @@ static void dhRunIrAnalyzer() {
   bool lastState = HIGH;
 
   while (true) {
+    extern void handleNetwork(); handleNetwork();
     bool state = digitalRead(IR_RX_PIN);
     if (state != lastState) {
       lastEdge = micros();
@@ -323,7 +325,7 @@ static void dhRunIrAnalyzer() {
       lastDraw = millis();
     }
 
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }
@@ -352,11 +354,12 @@ static void dhRunIrSniffer() {
   unsigned long lastDraw = 0;
 
   while (true) {
+    extern void handleNetwork(); handleNetwork();
     dhIrStartCapture();
     unsigned long waitStart = millis();
     while (millis() - waitStart < 500) {
       if (dhIrEdgeCount > 10) { delay(200); break; }
-      if (digitalRead(BTN_SELECT) == LOW) break;
+      if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) break;
       delay(5);
     }
     dhIrStopCapture();
@@ -393,7 +396,7 @@ static void dhRunIrSniffer() {
     tft.setTextColor(CLR_TEXT_LO);
     tft.drawString("HOLD SEL: exit", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
 
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }
@@ -417,7 +420,7 @@ static void dhRunIrProtocol() {
   unsigned long timeout = millis();
   while (millis() - timeout < 15000) {
     if (dhIrEdgeCount > 10) { delay(200); break; }
-    if (digitalRead(BTN_SELECT) == LOW) { dhIrStopCapture(); delay(200); return; }
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { dhIrStopCapture(); delay(200); return; }
     delay(10);
   }
   dhIrStopCapture();
@@ -472,6 +475,7 @@ static void dhRunIrNight() {
   unsigned long lastPulse = 0;
 
   while (true) {
+    extern void handleNetwork(); handleNetwork();
     tft.fillScreen(CLR_BG);
     drawGradientCard(0, 0, SCR_W, SCALE_Y(14), 0x780F, darkenColor(0x780F, 40), 0);
     tft.setTextColor(CLR_TEXT_HI);
@@ -505,7 +509,7 @@ static void dhRunIrNight() {
     tft.setTextColor(CLR_TEXT_LO);
     tft.drawString("HOLD SEL: exit", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
 
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }
@@ -524,6 +528,7 @@ static void dhRunIrProximity() {
   unsigned long holdStart = 0; bool holding = false;
 
   while (true) {
+    extern void handleNetwork(); handleNetwork();
     // Send a quick pulse and measure bounce
     uint32_t pulse[] = {500, 500, 500};
     dhIrTransmit(pulse, 3);
@@ -557,7 +562,7 @@ static void dhRunIrProximity() {
     tft.setTextColor(CLR_TEXT_LO);
     tft.drawString("HOLD SEL: exit", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
 
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }
@@ -630,9 +635,10 @@ static void dhRunIrRemotes() {
   unsigned long holdStart = 0; bool holding = false;
 
   while (true) {
-    if (digitalRead(BTN_LEFT) == LOW) { cursor = (cursor + btnCount - 1) % btnCount; drawRemote(); delay(180); }
+    extern void handleNetwork(); handleNetwork();
+    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { cursor = (cursor + btnCount - 1) % btnCount; drawRemote(); delay(180); }
     if (digitalRead(BTN_RIGHT) == LOW) { cursor = (cursor + 1) % btnCount; drawRemote(); delay(180); }
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else {
@@ -717,9 +723,10 @@ static void dhRunIrSaved() {
   unsigned long holdStart = 0; bool holding = false;
 
   while (true) {
-    if (digitalRead(BTN_LEFT) == LOW) { cursor = (cursor + totalItems - 1) % totalItems; drawSaved(); delay(180); }
+    extern void handleNetwork(); handleNetwork();
+    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { cursor = (cursor + totalItems - 1) % totalItems; drawSaved(); delay(180); }
     if (digitalRead(BTN_RIGHT) == LOW) { cursor = (cursor + 1) % totalItems; drawSaved(); delay(180); }
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else {
@@ -839,6 +846,7 @@ static void dhRunInputMonitor() {
   bool lastIR = HIGH, lastCC = HIGH;
 
   while (true) {
+    extern void handleNetwork(); handleNetwork();
     bool ir = digitalRead(IR_RX_PIN);
     bool cc = digitalRead(CC1101_GDO0_PIN);
     if (ir != lastIR) { irEvents++; lastIR = ir; }
@@ -881,7 +889,7 @@ static void dhRunInputMonitor() {
       lastDraw = millis();
     }
 
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }

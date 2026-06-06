@@ -142,7 +142,8 @@ static void dhRunChannelScan() {
 
   unsigned long holdStart = 0; bool holding = false;
   while (true) {
-    if (digitalRead(BTN_LEFT) == LOW) {
+    extern void handleNetwork(); handleNetwork();
+    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
       dhChCursor = (dhChCursor <= DH_CH_MIN) ? DH_CH_MAX : dhChCursor - 1;
       if (dhChCursor < DH_CH_MIN + dhChScroll) dhChScroll = dhChCursor - DH_CH_MIN;
       if (dhChCursor >= DH_CH_MIN + dhChScroll + DH_CH_VISIBLE)
@@ -156,7 +157,7 @@ static void dhRunChannelScan() {
         dhChScroll = dhChCursor - DH_CH_MIN - DH_CH_VISIBLE + 1;
       dhChDrawList(); delay(180);
     }
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }
@@ -291,12 +292,13 @@ static void dhRadarTrack() {
   unsigned long holdStart = 0; bool holding = false;
 
   while (true) {
+    extern void handleNetwork(); handleNetwork();
     if (millis() - lastScan > 950) {
       dhRadarScanTarget();
       dhRadarDrawScreen();
       lastScan = millis();
     }
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else {
@@ -369,7 +371,8 @@ static void dhRunWifiRadar() {
   drawList();
   unsigned long holdStart = 0; bool holding = false;
   while (true) {
-    if (digitalRead(BTN_LEFT) == LOW) {
+    extern void handleNetwork(); handleNetwork();
+    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
       dhRadarSel = (dhRadarSel <= 0) ? dhRadarCount-1 : dhRadarSel-1;
       if (dhRadarSel < dhRadarScroll) dhRadarScroll = dhRadarSel;
       if (dhRadarSel >= dhRadarScroll + DH_RADAR_VIS) dhRadarScroll = dhRadarSel - DH_RADAR_VIS + 1;
@@ -381,7 +384,7 @@ static void dhRunWifiRadar() {
       if (dhRadarSel >= dhRadarScroll + DH_RADAR_VIS) dhRadarScroll = dhRadarSel - DH_RADAR_VIS + 1;
       drawList(); delay(180);
     }
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else {
@@ -656,6 +659,7 @@ static void dhRunProbeSniffer() {
   unsigned long holdStart = 0; bool holding = false;
 
   while (true) {
+    extern void handleNetwork(); handleNetwork();
     if (millis() - lastHop > 2000) {
       hopIdx = (hopIdx + 1) % 3;
       dhProbeCh = hopChs[hopIdx];
@@ -668,7 +672,7 @@ static void dhRunProbeSniffer() {
       lastUI = millis();
     }
 
-    if (digitalRead(BTN_LEFT) == LOW) {
+    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
       if (dhProbeCount > 0) {
         dhProbeCursor = (dhProbeCursor + dhProbeCount - 1) % dhProbeCount;
         if (dhProbeCursor < dhProbeScroll) dhProbeScroll = dhProbeCursor;
@@ -687,7 +691,7 @@ static void dhRunProbeSniffer() {
       delay(180);
     }
 
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }
@@ -769,8 +773,9 @@ static void dhRunKarma() {
   tft.drawCentreString("SEL:Start <:Cancel", SCR_CX, SCR_H - SCALE_Y(12), 1);
 
   while (true) {
-    if (digitalRead(BTN_SELECT) == LOW) { delay(200); break; }
-    if (digitalRead(BTN_LEFT) == LOW) { delay(200); return; }
+    extern void handleNetwork(); handleNetwork();
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { delay(200); break; }
+    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { delay(200); return; }
     delay(20);
   }
 
@@ -798,6 +803,7 @@ static void dhRunKarma() {
   tft.drawCentreString("KARMA ACTIVE", SCR_CX, SCALE_Y(4), 1);
 
   while (true) {
+    extern void handleNetwork(); handleNetwork();
     if (millis() - lastHop > 1500) {
       hopIdx = (hopIdx + 1) % 3;
       esp_wifi_set_channel(hopChs[hopIdx], WIFI_SECOND_CHAN_NONE);
@@ -823,7 +829,7 @@ static void dhRunKarma() {
       lastDraw = millis();
     }
 
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }

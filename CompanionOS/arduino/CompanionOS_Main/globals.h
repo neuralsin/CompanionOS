@@ -135,9 +135,9 @@ extern int dhMenuPage;
 // THOUGHT BUBBLE ENGINE
 // ═══════════════════════════════════════════════════════════
 
-#define THOUGHT_MIN_INTERVAL_MS  (45UL * 60UL * 1000UL)  // min 45 min between thoughts
-#define THOUGHT_MAX_INTERVAL_MS  (90UL * 60UL * 1000UL)  // max 90 min (random in range)
-#define THOUGHT_DISPLAY_MS       (2UL * 60UL * 1000UL)   // visible for 2 minutes
+#define THOUGHT_MIN_INTERVAL_MS  (15UL * 60UL * 1000UL)  // min 15 min between thoughts
+#define THOUGHT_MAX_INTERVAL_MS  (60UL * 60UL * 1000UL)  // max 60 min (random in range)
+#define THOUGHT_DISPLAY_MS       (5UL * 60UL * 1000UL)   // visible for 5 minutes
 #define THOUGHT_FADE_STEPS       20                       // fade in/out over 20 frames
 
 struct ThoughtBubble {
@@ -264,6 +264,17 @@ String agentStatusText = "";
 String agentStatus = "";          // "thinking", "done", "error", ""
 unsigned long agentStatusStart = 0;
 bool agentOverlayActive = false;
+
+// ═══════════════════════════════════════════════════════════
+// VIRTUAL BUTTON FLAGS (for remote controller)
+// ═══════════════════════════════════════════════════════════
+// Virtual Buttons from Web Remote
+bool virtualSelectPressed = false;
+bool virtualLeftPressed = false;
+bool virtualRightPressed = false;
+bool virtualHomePressed = false;
+bool virtualUpPressed = false;
+bool virtualDownPressed = false;
 
 // ═══════════════════════════════════════════════════════════
 // GALLERY / SLIDESHOW

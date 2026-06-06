@@ -214,14 +214,15 @@ void setup() {
   Serial.print(F("Display... "));
   #ifdef ESP32
     #ifdef TFT_BL
-      // Use PWM to reduce backlight current draw (prevents GPIO15 overload and brownouts)
+      // BROWNOUT FIX: Start backlight DIM during boot to reduce current draw.
+      // Will ramp up to full brightness after WiFi/BT are stable.
       #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
         ledcAttach(TFT_BL, 5000, 8);
-        ledcWrite(TFT_BL, 128); // 50% brightness
+        ledcWrite(TFT_BL, 64); // 25% brightness during boot (low power)
       #else
         ledcSetup(0, 5000, 8);
         ledcAttachPin(TFT_BL, 0);
-        ledcWrite(0, 128); // 50% brightness
+        ledcWrite(0, 64); // 25% brightness during boot (low power)
       #endif
     #endif
   #endif
@@ -263,11 +264,19 @@ void setup() {
   EEPROM.end();
 
   Serial.println(F("BOOTING... STEP 5 (Network Init)"));
-  // Network (WiFi + BT on ESP32)
+  
+  // Network — match legacy: just call setupWiFi(), no BT during boot
   setupWiFi();
+
+  // Backlight to full after WiFi
   #ifdef ESP32
-    delay(2000); // Stagger BT RF init to prevent power spikes
-    setupBluetooth();
+    #ifdef TFT_BL
+      #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+        ledcWrite(TFT_BL, 220);
+      #else
+        ledcWrite(0, 220);
+      #endif
+    #endif
   #endif
 
   Serial.println(F("BOOTING... STEP 6 (Boot Sequence)"));
@@ -289,6 +298,21 @@ void setup() {
 // ═══════════════════════════════════════════════════════════
 
 void loop() {
+  // Lazy BT init — Commented out to prevent brownout during WiFi.
+  // Bluetooth is now initialized dynamically when needed (e.g. Dr. Hack).
+  /*
+  #ifdef ESP32
+  {
+    static bool btLazyDone = false;
+    if (!btLazyDone && millis() > 10000) {
+      btLazyDone = true;
+      setupBluetooth();
+      Serial.println(F("BT lazy-init complete (10s post-boot)"));
+    }
+  }
+  #endif
+  */
+
   handleNetwork();
 
   // Input handling — platform specific
@@ -384,5 +408,27 @@ void loop() {
     #else
       ldrValue = analogRead(A0);
     #endif
+  }
+
+  // WiFi auto-reconnect (check every 30s)
+  static unsigned long lastWifiCheck = 0;
+  if (!wifiConnected && millis() - lastWifiCheck > 30000) {
+    lastWifiCheck = millis();
+    Serial.println(F("WiFi disconnected, attempting reconnect..."));
+    WiFi.disconnect();
+    delay(100);
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+    int timeout = 0;
+    while (WiFi.status() != WL_CONNECTED && timeout < 20) {
+      delay(500);
+      timeout++;
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+      wifiConnected = true;
+      Serial.print(F("WiFi reconnected! IP: "));
+      Serial.println(WiFi.localIP());
+    } else {
+      Serial.println(F("WiFi reconnect failed, will retry in 30s"));
+    }
   }
 }

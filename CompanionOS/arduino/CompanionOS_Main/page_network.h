@@ -218,37 +218,43 @@ void drawNetworkPage() {
 
   } else {
     // ── SMALL SCREEN (160×128): Single-column compact layout ──
-    int y = 18;
+    int y = 20;
     int pad = 4;
     int cardW = SCREEN_W - pad * 2;
     char buf[32];
     
     // Signal hero row
-    tft.fillRoundRect(pad, y, cardW, 28, 3, NET_CARD);
-    drawSignalArc(pad + 6, y + 4, rssi);
+    tft.fillRoundRect(pad, y, cardW, 25, 3, NET_CARD);
+    // Draw smaller signal arc
+    int bars = 0;
+    if (rssi >= -50) bars = 5;
+    else if (rssi >= -60) bars = 4;
+    else if (rssi >= -70) bars = 3;
+    else if (rssi >= -75) bars = 2;
+    else if (rssi >= -85) bars = 1;
+    uint16_t activeColor = getSignalColor(rssi);
+    for (int i = 0; i < 5; i++) {
+      int bx = pad + 6 + i * 6;
+      int bh = 4 + i * 4;     // heights: 4, 8, 12, 16, 20
+      int by = y + 22 - bh;
+      uint16_t c = (i < bars) ? activeColor : 0x2104;
+      tft.fillRoundRect(bx, by, 4, bh, 1, c);
+    }
     
-    char dbmStr[12]; sprintf(dbmStr, "%d", rssi);
-    tft.setTextColor(getSignalColor(rssi));
-    tft.drawString(dbmStr, pad + 50, y + 4, 2);
-    tft.setTextColor(NET_DIM);
-    tft.drawString("dBm", pad + 50 + tft.textWidth(dbmStr, 2) + 2, y + 8, 1);
+    char dbmStr[12]; sprintf(dbmStr, "%d dBm", rssi);
+    tft.setTextColor(activeColor);
+    tft.drawString(dbmStr, pad + 45, y + 5, 2);
     
-    int pct = min(100, max(0, 2 * (rssi + 100)));
-    tft.setTextColor(getSignalColor(rssi));
-    tft.drawRightString(getSignalLabel(rssi), SCREEN_W - pad - 4, y + 4, 1);
+    tft.setTextColor(activeColor);
+    tft.drawRightString(getSignalLabel(rssi), SCREEN_W - pad - 6, y + 5, 2);
     
-    // Signal bar
-    int barW2 = cardW - 12;
-    int filledW2 = barW2 * pct / 100;
-    tft.fillRoundRect(pad + 6, y + 20, barW2, 4, 2, 0x2104);
-    tft.fillRoundRect(pad + 6, y + 20, filledW2, 4, 2, getSignalColor(rssi));
-    y += 32;
+    y += 35; // 25px card + 10px spacing (min 15px from text baseline)
     
     // Info rows
-    tft.fillRoundRect(pad, y, cardW, 72, 3, NET_CARD);
+    tft.fillRoundRect(pad, y, cardW, 70, 3, NET_CARD);
     int ix = pad + 6;
-    int iy = y + 4;
-    int rowH = 12;
+    int iy = y + 5;
+    int rowH = 15; // 8px font + 7px spacing = 15px (matches requirement)
     
     // SSID
     tft.setTextColor(NET_DIM);
@@ -266,25 +272,12 @@ void drawNetworkPage() {
     tft.drawRightString(WiFi.localIP().toString().c_str(), SCREEN_W - pad - 6, iy, 1);
     iy += rowH;
     
-    // Gateway
-    tft.setTextColor(NET_DIM);
-    tft.drawString("GW", ix, iy, 1);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawRightString(WiFi.gatewayIP().toString().c_str(), SCREEN_W - pad - 6, iy, 1);
-    iy += rowH;
-    
-    // Channel
+    // Channel & Heap (combined row)
     sprintf(buf, "CH %d", WiFi.channel());
     tft.setTextColor(NET_DIM);
-    tft.drawString("Chan", ix, iy, 1);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawRightString(buf, SCREEN_W - pad - 6, iy, 1);
-    iy += rowH;
+    tft.drawString(buf, ix, iy, 1);
     
-    // Heap
     sprintf(buf, "%dB", ESP.getFreeHeap());
-    tft.setTextColor(NET_DIM);
-    tft.drawString("Heap", ix, iy, 1);
     tft.setTextColor(NET_GREEN);
     tft.drawRightString(buf, SCREEN_W - pad - 6, iy, 1);
     iy += rowH;

@@ -107,31 +107,34 @@ static void dhExitScanline() {
 // ═══════════════════════════════════════════════════════════
 
 void drawDrHackTile() {
-  // Bottom-right corner of eyes page, small glowing tile
-  int tx = SCR_W - SCALE_X(25);
-  int ty = SCR_H - SCALE_Y(20);
-  int tw = SCALE_X(22);
-  int th = SCALE_Y(16);
+  // Only draw once per eyes page entry — no constant pulsing animation
+  static bool dhTileDrawn = false;
+  static AppState lastState = STATE_COUNT;
+  
+  // Reset when entering eyes page fresh
+  if (currentState != lastState) {
+    dhTileDrawn = false;
+    lastState = currentState;
+  }
+  if (dhTileDrawn) return;
+  
+  // Bottom-right corner — ultra-subtle indicator (no red, no distraction)
+  int tx = SCR_W - SCALE_X(18);
+  int ty = SCR_H - SCALE_Y(14);
+  int tw = SCALE_X(15);
+  int th = SCALE_Y(10);
 
-  // Pulsing red glow (cycle every 2s)
-  float pulse = (sin(millis() * 0.003f) + 1.0f) * 0.5f;
-  uint16_t glowColor = blendColor(CLR_BG, CLR_SECONDARY, 0.3f + pulse * 0.4f);
-
-  tft.fillRoundRect(tx - 1, ty - 1, tw + 2, th + 2, 2, glowColor);
+  // Nearly invisible dark tile (blends with background)
   tft.fillRoundRect(tx, ty, tw, th, 2, CLR_SURFACE);
+  tft.drawRoundRect(tx, ty, tw, th, 2, CLR_BORDER);
 
-  // Skull pixel art (simplified for tiny size)
-  int sx = tx + tw / 2;
-  int sy = ty + 3;
-  tft.fillCircle(sx, sy, 3, CLR_SECONDARY);        // skull head
-  tft.drawPixel(sx - 1, sy, CLR_BG);               // left eye
-  tft.drawPixel(sx + 1, sy, CLR_BG);               // right eye
-  tft.drawFastHLine(sx - 1, sy + 2, 3, CLR_SECONDARY); // jaw
-
-  // Label
-  tft.setTextColor(CLR_SECONDARY);
-  tft.drawString("HACK", tx + 1, ty + th - 7, 1);
+  // Dim "H" label only (no red skull dot)
+  tft.setTextColor(CLR_TEXT_LO);
+  tft.drawCentreString("H", tx + tw / 2, ty + 1, 1);
+  
+  dhTileDrawn = true;
 }
+
 
 // ═══════════════════════════════════════════════════════════
 // MAIN MENU — 2×4 Grid of Tool Tiles (128×160)
@@ -529,6 +532,7 @@ static void dhRunBeaconSpam() {
   bool holding = false;
 
   while (true) {
+    extern void handleNetwork(); handleNetwork();
     // Send beacon
     dhSendBeacon(DH_SPAM_SSIDS[ssidIdx], channels[channelIdx]);
     ssidIdx = (ssidIdx + 1) % DH_SPAM_COUNT;
@@ -565,7 +569,7 @@ static void dhRunBeaconSpam() {
     }
 
     // Detect SELECT long hold to stop
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else {
@@ -623,8 +627,9 @@ static void dhRunDeauth() {
 
   // Wait for accept or cancel
   while (true) {
-    if (digitalRead(BTN_SELECT) == LOW) { delay(200); break; }
-    if (digitalRead(BTN_LEFT) == LOW) { delay(200); return; }
+    extern void handleNetwork(); handleNetwork();
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { delay(200); break; }
+    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { delay(200); return; }
     delay(20);
   }
 
@@ -660,6 +665,7 @@ static void dhRunDeauth() {
   bool holding = false;
 
   while (true) {
+    extern void handleNetwork(); handleNetwork();
     // Send deauth frames in burst
     for (int i = 0; i < 10; i++) {
       dhSendDeauth(broadcast, bssid);
@@ -683,7 +689,7 @@ static void dhRunDeauth() {
       lastDraw = millis();
     }
 
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }
@@ -737,6 +743,7 @@ static void dhRunPacketMonitor() {
   bool holding = false;
 
   while (true) {
+    extern void handleNetwork(); handleNetwork();
     // Every second: capture PPS
     if (millis() - lastSec >= 1000) {
       currentPps = dhPktCount;
@@ -795,7 +802,7 @@ static void dhRunPacketMonitor() {
     }
 
     // Button: change channel
-    if (digitalRead(BTN_LEFT) == LOW) {
+    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
       if (ch > 1) { ch--; esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE); }
       delay(200);
     }
@@ -805,7 +812,7 @@ static void dhRunPacketMonitor() {
     }
 
     // Exit on SELECT hold
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }

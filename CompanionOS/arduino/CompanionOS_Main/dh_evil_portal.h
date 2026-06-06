@@ -185,8 +185,9 @@ static void dhRunEvilPortal() {
   tft.drawString("SEL:Accept <:Cancel", SCALE_X(2), SCR_H - SCALE_Y(12), 1);
 
   while (true) {
-    if (digitalRead(BTN_SELECT) == LOW) { delay(200); break; }
-    if (digitalRead(BTN_LEFT) == LOW) { delay(200); return; }
+    extern void handleNetwork(); handleNetwork();
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { delay(200); break; }
+    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { delay(200); return; }
     delay(20);
   }
 
@@ -215,6 +216,7 @@ static void dhRunEvilPortal() {
   unsigned long holdStart = 0; bool holding = false;
 
   while (true) {
+    extern void handleNetwork(); handleNetwork();
     dhEpDns->processNextRequest();
     dhEpServer->handleClient();
 
@@ -223,7 +225,7 @@ static void dhRunEvilPortal() {
       lastDraw = millis();
     }
 
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }

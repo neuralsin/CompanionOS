@@ -120,7 +120,8 @@ static void dhRunJammer24() {
   unsigned long lastDraw = millis();
 
   while (true) {
-    if (digitalRead(BTN_LEFT) == LOW) {
+    extern void handleNetwork(); handleNetwork();
+    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
       jamCh = (jamCh == 1) ? 14 : jamCh - 1;
       if (isAttacking && j1Ok) jam1.startConstCarrier(RF24_PA_MAX, dhJamChToNrf(jamCh));
       drawGauge(); delay(180);
@@ -131,7 +132,7 @@ static void dhRunJammer24() {
       drawGauge(); delay(180);
     }
 
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) {
         if (isAttacking) { if (j1Ok) jam1.stopConstCarrier(); if (j2Ok) jam2.stopConstCarrier(); }
@@ -227,6 +228,7 @@ static void dhRunRadioScanner() {
   memset(waterfall, 0, sizeof(waterfall));
 
   while (true) {
+    extern void handleNetwork(); handleNetwork();
     // Sweep all channels
     for (int ch = 0; ch < DH_SCAN_CHANNELS; ch++) {
       radio.setChannel(ch);
@@ -311,11 +313,11 @@ static void dhRunRadioScanner() {
     tft.drawString("</>:Mode HOLD:Back", SCALE_X(2), SCR_H - SCALE_Y(10), 1);
 
     // Input
-    if (digitalRead(BTN_LEFT) == LOW || digitalRead(BTN_RIGHT) == LOW) {
+    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false)) || digitalRead(BTN_RIGHT) == LOW) {
       showWaterfall = !showWaterfall;
       delay(200);
     }
-    if (digitalRead(BTN_SELECT) == LOW) {
+    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) {
         radio.powerDown();

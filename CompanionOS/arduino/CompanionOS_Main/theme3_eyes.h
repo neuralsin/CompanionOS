@@ -58,7 +58,7 @@ static const T3EyeVariantConfig T3_VARIANTS[] = {
 // ═══════════════════════════════════════════════════════════
 
 // Eye zone boundaries (below status bar, above page dots)
-#define T3_EYE_ZONE_Y  16
+#define T3_EYE_ZONE_Y  48
 #define T3_EYE_ZONE_H  (SCREEN_H - 32)  // leave 16px top (status) + 16px bottom (dots)
 
 // Drawing colors — uses CompanionOS color system
@@ -173,7 +173,7 @@ void t3_applyVariant(int idx) {
 
   const T3EyeVariantConfig& v = T3_VARIANTS[idx];
 
-  // Left eye defaults
+  // Left eye defaults (Scale dimensions to fit screen size proportionally)
   t3_eyeLwDef = v.eyeW; t3_eyeLhDef = v.eyeH;
   t3_eyeLwCur = v.eyeW; t3_eyeLhCur = 1;  // start closed
   t3_eyeLwNext = v.eyeW; t3_eyeLhNext = v.eyeH;
@@ -529,10 +529,10 @@ static void t3_drawEyesInternal() {
 
   // ── VARIANT LABEL ──
   // Show tiny variant name in bottom-left of eye zone
-  tft.setTextColor(CLR_TEXT_LO, T3_BG_COLOR);
-  tft.setTextSize(1);
-  tft.setCursor(4, t3_offsetY + t3_screenH - 12);
-  tft.print(T3_VARIANTS[t3EyeVariant].name);
+  // tft.setTextColor(CLR_TEXT_LO, T3_BG_COLOR);
+  // tft.setTextSize(1);
+  // tft.setCursor(4, t3_offsetY + t3_screenH - 12);
+  // tft.print(T3_VARIANTS[t3EyeVariant].name);
 }
 
 // ═══════════════════════════════════════════════════════════

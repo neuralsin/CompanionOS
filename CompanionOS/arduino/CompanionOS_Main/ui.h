@@ -20,74 +20,124 @@ void drawStatusBar() {
   int barH = SCALE_Y(15);
   tft.fillRect(0, 0, SCR_W, barH, CLR_BG);
 
-  // ── Persistent Clock on left ──
-  if (timeReceived) {
-    char timeStr[6];
-    sprintf(timeStr, "%02d:%02d", displayHour, displayMinute);
-    tft.setTextColor(CLR_TEXT_HI, CLR_BG);
-    tft.drawString(timeStr, SCALE_X(4), SCALE_Y(2), 1);
-  }
+  // ── Compute layout zones to prevent overlap ──
+  // Right zone: time string (always rightmost), then indicator icons to its left.
+  // Left zone: song name (eyes page) or clock (other pages).
 
-  // ── Song name marquee (center of status bar) ──
-  if (currentState == STATE_EYES && musicPlaying) {
-    extern String currentTrack;
-    String songSnippet = currentTrack.substring(0, (SCR_W < 200) ? 12 : 18);
-    tft.setTextColor(CLR_TEXT_LO, CLR_BG);
-    int songX = SCALE_X(38);
-    int maxSongW = SCR_W - SCALE_X(80);
-    drawTruncatedText(songX, SCALE_Y(2), songSnippet.c_str(), maxSongW, CLR_TEXT_LO, 1);
-  }
+  // Time string width: "HH:MM" in font 1 ≈ 30px on 160px screen
+  int timeW = 30; // approximate width of "HH:MM" in font 1
 
-  // ── Right-side indicators ──
-  int x = SCR_W - SCALE_X(5);
-  int y = SCALE_Y(5);
+  if (currentState == STATE_EYES) {
+    // ── EYES PAGE LAYOUT ──
+    // Far right: Clock
+    // Right of center: indicator icons
+    // Left: Song info (truncated to avoid overlap)
 
-  // Notification dot (leftmost indicator)
-  if (notifCount > 0) {
-    int dotX = x - SCALE_X(42);
-    tft.fillCircle(dotX, y, SCALE_X(3), TFT_MAGENTA);
-    tft.setTextColor(CLR_TEXT_HI, CLR_BG);
-    char nb[4];
-    sprintf(nb, "%d", min(notifCount, 9));
-    tft.drawString(nb, dotX + SCALE_X(4), y - SCALE_Y(4), 1);
-  }
+    // 1. Clock on far RIGHT
+    if (timeReceived) {
+      char timeStr[6];
+      sprintf(timeStr, "%02d:%02d", displayHour, displayMinute);
+      tft.setTextColor(CLR_TEXT_HI, CLR_BG);
+      tft.drawRightString(timeStr, SCR_W - SCALE_X(2), SCALE_Y(2), 1);
+    } else {
+      tft.setTextColor(CLR_TEXT_LO, CLR_BG);
+      tft.drawRightString("--:--", SCR_W - SCALE_X(2), SCALE_Y(2), 1);
+    }
 
-  // Music icon (middle indicator)
-  if (musicPlaying) {
-    int mX = x - SCALE_X(28);
-    tft.drawFastVLine(mX, y - SCALE_Y(3), SCALE_Y(6), CLR_SUCCESS);
-    tft.drawFastVLine(mX + SCALE_X(2), y - SCALE_Y(4), SCALE_Y(7), CLR_SUCCESS);
-    tft.fillCircle(mX, y + SCALE_Y(3), 1, CLR_SUCCESS);
-    tft.fillCircle(mX + SCALE_X(2), y + SCALE_Y(3), 1, CLR_SUCCESS);
-  }
+    // 2. Indicator icons in a zone just left of the clock
+    int iconZoneRight = SCR_W - timeW - SCALE_X(4); // leave gap before clock
+    int iconX = iconZoneRight;
+    int iconY = SCALE_Y(5);
 
-  // BT icon (ESP32 only)
-  #ifdef ESP32
-  if (btConnected) {
-    int bx = x - SCALE_X(18);
-    tft.drawFastVLine(bx, y - SCALE_Y(4), SCALE_Y(8), 0x001F); // blue
-    tft.drawLine(bx - 2, y - 2, bx + 2, y + 2, 0x001F);
-    tft.drawLine(bx - 2, y + 2, bx + 2, y - 2, 0x001F);
-  }
-  #endif
+    // WiFi icon
+    if (wifiConnected) {
+      tft.fillCircle(iconX, iconY + SCALE_Y(4), 1, CLR_PRIMARY);
+      tft.drawFastHLine(iconX - SCALE_X(2), iconY + SCALE_Y(2), SCALE_X(5), CLR_PRIMARY);
+      tft.drawFastHLine(iconX - SCALE_X(3), iconY, SCALE_X(7), CLR_PRIMARY);
+    } else {
+      tft.fillCircle(iconX, iconY + SCALE_Y(4), 1, CLR_SECONDARY);
+      tft.drawLine(iconX - 2, iconY, iconX + 2, iconY + 4, CLR_SECONDARY);
+    }
+    iconX -= SCALE_X(12);
 
-  // WiFi icon (rightmost)
-  if (wifiConnected) {
-    int wX = x - SCALE_X(5);
-    int wY = y;
-    // Compact 3-arc WiFi icon
-    tft.fillCircle(wX, wY + SCALE_Y(4), 1, CLR_PRIMARY);
-    tft.drawFastHLine(wX - SCALE_X(2), wY + SCALE_Y(2), SCALE_X(5), CLR_PRIMARY);
-    tft.drawFastHLine(wX - SCALE_X(3), wY, SCALE_X(7), CLR_PRIMARY);
-    tft.drawFastHLine(wX - SCALE_X(4), wY - SCALE_Y(2), SCALE_X(9), CLR_PRIMARY);
+    // BT icon (ESP32 only)
+    #ifdef ESP32
+    if (btConnected) {
+      tft.drawFastVLine(iconX, iconY - SCALE_Y(4), SCALE_Y(8), 0x001F);
+      tft.drawLine(iconX - 2, iconY - 2, iconX + 2, iconY + 2, 0x001F);
+      tft.drawLine(iconX - 2, iconY + 2, iconX + 2, iconY - 2, 0x001F);
+      iconX -= SCALE_X(10);
+    }
+    #endif
+
+    // Music note icon
+    if (musicPlaying) {
+      tft.drawFastVLine(iconX, iconY - SCALE_Y(3), SCALE_Y(6), CLR_SUCCESS);
+      tft.drawFastVLine(iconX + SCALE_X(2), iconY - SCALE_Y(4), SCALE_Y(7), CLR_SUCCESS);
+      tft.fillCircle(iconX, iconY + SCALE_Y(3), 1, CLR_SUCCESS);
+      tft.fillCircle(iconX + SCALE_X(2), iconY + SCALE_Y(3), 1, CLR_SUCCESS);
+      iconX -= SCALE_X(10);
+    }
+
+    // Notification dot
+    if (notifCount > 0) {
+      tft.fillCircle(iconX, iconY, SCALE_X(3), TFT_MAGENTA);
+      iconX -= SCALE_X(8);
+    }
+
+    // 3. Song name on LEFT — truncate before icons
+    if (musicPlaying) {
+      extern String currentTrack;
+      extern String currentArtist;
+      int maxSongW = iconX - SCALE_X(4); // all space left of icons
+      String songInfo = currentArtist.substring(0, 6) + "-" + currentTrack.substring(0, 10);
+      tft.setTextColor(CLR_TEXT_LO, CLR_BG);
+      drawTruncatedText(SCALE_X(2), SCALE_Y(2), songInfo.c_str(), maxSongW, CLR_TEXT_LO, 1);
+    }
+
   } else {
-    int wX = x - SCALE_X(5);
-    int wY = y;
-    tft.fillCircle(wX, wY + SCALE_Y(4), 1, CLR_SECONDARY);
-    tft.drawLine(wX - 2, wY, wX + 2, wY + 4, CLR_SECONDARY);
-    tft.drawLine(wX + 2, wY, wX - 2, wY + 4, CLR_SECONDARY);
+    // ── NON-EYES PAGE LAYOUT ──
+    // Left: clock, Center: song snippet, Right: indicator icons
+
+    // Clock on left
+    if (timeReceived) {
+      char timeStr[6];
+      sprintf(timeStr, "%02d:%02d", displayHour, displayMinute);
+      tft.setTextColor(CLR_TEXT_HI, CLR_BG);
+      tft.drawString(timeStr, SCALE_X(4), SCALE_Y(2), 1);
+    } else {
+      tft.setTextColor(CLR_TEXT_LO, CLR_BG);
+      tft.drawString("--:--", SCALE_X(4), SCALE_Y(2), 1);
+    }
+
+    // Right-side indicator icons
+    int iconX = SCR_W - SCALE_X(5);
+    int iconY = SCALE_Y(5);
+
+    // WiFi icon (rightmost)
+    if (wifiConnected) {
+      tft.fillCircle(iconX, iconY + SCALE_Y(4), 1, CLR_PRIMARY);
+      tft.drawFastHLine(iconX - SCALE_X(2), iconY + SCALE_Y(2), SCALE_X(5), CLR_PRIMARY);
+      tft.drawFastHLine(iconX - SCALE_X(3), iconY, SCALE_X(7), CLR_PRIMARY);
+      tft.drawFastHLine(iconX - SCALE_X(4), iconY - SCALE_Y(2), SCALE_X(9), CLR_PRIMARY);
+    } else {
+      tft.fillCircle(iconX, iconY + SCALE_Y(4), 1, CLR_SECONDARY);
+      tft.drawLine(iconX - 2, iconY, iconX + 2, iconY + 4, CLR_SECONDARY);
+      tft.drawLine(iconX + 2, iconY, iconX - 2, iconY + 4, CLR_SECONDARY);
+    }
+
+    // Song name in center on non-eyes pages
+    if (musicPlaying) {
+      extern String currentTrack;
+      String songSnippet = currentTrack.substring(0, (SCR_W < 200) ? 12 : 18);
+      tft.setTextColor(CLR_TEXT_LO, CLR_BG);
+      int songX = 36; // Clock is ~30px, so start song at 36px
+      int maxSongW = iconX - SCALE_X(12) - songX;
+      drawTruncatedText(songX, SCALE_Y(2), songSnippet.c_str(), maxSongW, CLR_TEXT_LO, 1);
+    }
   }
 }
+
 
 // ═══════════════════════════════════════════════════════════
 // V4/V7: Loading Screen for Mode Switching

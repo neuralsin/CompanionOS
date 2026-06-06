@@ -200,9 +200,17 @@ void renderThoughtBubble() {
       activeBubble.fadeAlpha = 0;
       activeBubble.active = false;
       activeBubble.fadingOut = false;
+      // FIX: Erase the entire bubble area (body + tail + trailing dots)
+      // so no ghost pixels remain on screen after fade-out.
+      int bubbleX = SCR_CX - 10;
+      int bubbleY = 16;
+      int maxW = SCR_W - bubbleX - 2;
+      int clearH = 60; // include tail + dots
+      tft.fillRect(bubbleX - 2, bubbleY - 2, maxW + 4, clearH + 4, CLR_BG);
       return;  // done, don't draw
     }
   }
+
 
   // Alpha blend factor (simulated — controls color mixing, not real alpha)
   float alpha = activeBubble.fadeAlpha / 255.0f;
@@ -216,23 +224,21 @@ void renderThoughtBubble() {
   // ESP8266 320×240: x=180, y=20 (just below 16px status bar)
   // ESP32  160×128:  x=90,  y=18 (scaled)
 
-  int bubbleX = SCALE_X(180);
-  int bubbleY = max(SCALE_Y(20), 18);  // Ensure below status bar (16px)
-  int maxW = SCALE_X(120);
-  if (maxW < 50) maxW = 50;  // minimum usable width
-  int lineH = max(SCALE_Y(12), 10);
-  int maxChars = maxW / 6;
-  if (maxChars < 8) maxChars = 8;
+  int bubbleX = SCR_CX - 10;
+  int bubbleY = 16;  // Ensure below status bar
+  int maxW = SCR_W - bubbleX - 2;
+  
+  int lineH = 9; // fixed line height for font 1
+  int maxChars = (maxW - 6) / 6; // font 1 is 6px wide per char, minus padding
 
   int numLines = countThoughtLines(activeBubble.text, maxChars);
-  if (numLines > 3) numLines = 3;
-  int padding = max(SCALE_Y(4), 3);
+  if (numLines > 4) numLines = 4;
+  int padding = 3;
   int bubbleH = numLines * lineH + padding * 2;
   int bubbleW = maxW;
 
   // Clamp to screen bounds
-  if (bubbleX + bubbleW > SCR_W - 2) bubbleX = SCR_W - bubbleW - 2;
-  if (bubbleY + bubbleH > SCALE_Y(75)) bubbleH = SCALE_Y(75) - bubbleY;
+  if (bubbleY + bubbleH > 58) bubbleH = 58 - bubbleY;
 
   // 🟡 GAP-06 FIX: Solid colors, no SPI read-back needed.
   // Simulate fade by blending solid bg/border with CLR_BG.
@@ -249,23 +255,24 @@ void renderThoughtBubble() {
   tft.drawRoundRect(bubbleX + 1, bubbleY + 1, bubbleW - 2, bubbleH - 2, 2, glowColor);
 
   // 3. Tail — triangle pointing down-left toward right eye
-  int tailX = bubbleX + max(SCALE_X(8), 6);
+  int tailX = bubbleX + 12;
   int tailY = bubbleY + bubbleH;
-  int tailW = max(SCALE_X(6), 4);
-  int tailH = max(SCALE_Y(5), 4);
+  int tailW = 5;
+  int tailH = 6;
   tft.fillTriangle(tailX, tailY, tailX + tailW, tailY,
                    tailX - tailW/2, tailY + tailH, bgColor);
   tft.drawLine(tailX, tailY, tailX - tailW/2, tailY + tailH, borderColor);
   tft.drawLine(tailX + tailW, tailY, tailX - tailW/2, tailY + tailH, borderColor);
 
   // 4. Thought dots (2 circles leading toward eye)
-  int dotX = tailX - max(SCALE_X(4), 3);
-  int dotY = tailY + tailH + max(SCALE_Y(3), 2);
-  tft.fillCircle(dotX, dotY, SCALE_MIN(2), borderColor);
-  tft.fillCircle(dotX - max(SCALE_X(3), 2), dotY + max(SCALE_Y(3), 2), SCALE_MIN(1), borderColor);
+  int dotX = tailX - 4;
+  int dotY = tailY + tailH + 3;
+  tft.fillCircle(dotX, dotY, 2, borderColor);
+  tft.fillCircle(dotX - 4, dotY + 4, 1, borderColor);
 
   // 5. Text — word-wrapped, max 3 lines
   tft.setTextColor(textColor);
+  tft.setTextSize(1); // Force text size 1 to prevent overflow
   int textLen = strlen(activeBubble.text);
   int textX = bubbleX + padding;
   int textY = bubbleY + padding;

@@ -23,13 +23,13 @@ extern Emotion currentEmotion;
 Emotion autoEmotion = EMO_NEUTRAL;  // Time/LDR suggested emotion
 
 // ── Layout Constants (v7: SCALE-aware) ──────────────────
-#define EYE_Y        SCALE_Y(110)
-#define LEFT_EYE_X   SCALE_X(95)
-#define RIGHT_EYE_X  SCALE_X(225)
-#define EYE_W        SCALE_X(90)   // Full width of almond
-#define EYE_H        SCALE_Y(38)   // Baseline height
-#define PUPIL_W      SCALE_X(10)
-#define PUPIL_H      SCALE_Y(28)
+#define EYE_Y        (SCREEN_W > 200 ? SCALE_Y(110) : 70)
+#define LEFT_EYE_X   (SCREEN_W > 200 ? SCALE_X(95) : 45)
+#define RIGHT_EYE_X  (SCREEN_W > 200 ? SCALE_X(225) : 115)
+#define EYE_W        (SCREEN_W > 200 ? 90 : 45)   // Full width of almond
+#define EYE_H        (SCREEN_W > 200 ? 38 : 26)   // Baseline height
+#define PUPIL_W      (SCREEN_W > 200 ? 10 : 6)
+#define PUPIL_H      (SCREEN_W > 200 ? 28 : 20)
 
 // ── Animation State ──────────────────────────────────────
 extern unsigned long lastBlink;

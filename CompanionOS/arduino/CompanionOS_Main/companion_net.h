@@ -122,6 +122,7 @@ void handleVirtualButton(String btn) {
   btn.toUpperCase();
 
   if (btn == "HOME") {
+    virtualHomePressed = true;
     if (currentState != STATE_EYES) {
       changePage(-(int)currentState);
     }
@@ -130,6 +131,7 @@ void handleVirtualButton(String btn) {
   }
 
   if (btn == "LEFT") {
+    virtualLeftPressed = true;
 #ifdef ESP32
     if (currentState == STATE_DR_HACK) {
       extern void dhNavigate(int delta);
@@ -146,6 +148,7 @@ void handleVirtualButton(String btn) {
   }
 
   if (btn == "RIGHT") {
+    virtualRightPressed = true;
 #ifdef ESP32
     if (currentState == STATE_DR_HACK) {
       extern void dhNavigate(int delta);
@@ -162,6 +165,7 @@ void handleVirtualButton(String btn) {
   }
 
   if (btn == "SELECT") {
+    virtualSelectPressed = true;
 #ifdef ESP32
     if (currentState == STATE_DR_HACK) {
       extern void dhSelect();
@@ -191,12 +195,32 @@ void handleVirtualButton(String btn) {
       renderCurrentPage();
     }
     lastInteractionTime = millis();
+    return;
+  }
+
+  if (btn == "UP") {
+    virtualUpPressed = true;
+    if (currentState == STATE_SETTINGS) {
+      extern int settingsScrollY;
+      settingsScrollY -= 20;
+      if (settingsScrollY < 0) settingsScrollY = 0;
+      renderCurrentPage();
+    }
+    lastInteractionTime = millis();
+    return;
+  }
+
+  if (btn == "DOWN") {
+    virtualDownPressed = true;
+    if (currentState == STATE_SETTINGS) {
+      extern int settingsScrollY;
+      settingsScrollY += 20;
+      renderCurrentPage();
+    }
+    lastInteractionTime = millis();
+    return;
   }
 }
-
-// ═══════════════════════════════════════════════════════════
-// WiFi SETUP — Platform-aware
-// ═══════════════════════════════════════════════════════════
 
 void setupWiFi() {
   Serial.print(F("WiFi setup..."));
@@ -204,9 +228,11 @@ void setupWiFi() {
   tft.setTextColor(TFT_WHITE);
   tft.drawCentreString("Connecting WiFi...", SCR_CX, SCR_CY, 2);
 
+  // Match legacy: simple WiFi.begin — no disconnect, no setSleep, no setTxPower
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 
   int timeout = 0;
+  // Legacy used 60 (30 seconds). Keep the same generous timeout.
   while (WiFi.status() != WL_CONNECTED && timeout < 60) {
     delay(500);
     Serial.print(".");
@@ -224,8 +250,7 @@ void setupWiFi() {
     tft.drawCentreString("WiFi Connected!", SCR_CX, SCR_CY - SCALE_Y(20), 2);
     tft.drawCentreString(WiFi.localIP().toString(), SCR_CX, SCR_CY + SCALE_Y(10), 2);
 
-    // NTP Time Sync (wait a bit for network to settle and prevent brownout)
-    delay(2000);
+    // NTP Time Sync — match legacy: non-blocking update(), NOT forceUpdate()
     timeClient.begin();
     if (timeClient.update()) {
       displayHour = timeClient.getHours();
@@ -242,30 +267,18 @@ void setupWiFi() {
     Serial.println(F(" FAILED"));
     tft.setTextColor(TFT_RED);
     tft.drawCentreString("WiFi Failed!", SCR_CX, SCR_CY - SCALE_Y(20), 2);
-
-#ifdef ESP32
-    // ESP32: activate BT fallback
-    if (!btInitialized) {
-      btSerial.begin("CompanionOS");
-      btInitialized = true;
-      btConnected = false;
-      Serial.println(F("BT Serial started as 'CompanionOS'"));
-      tft.setTextColor(TFT_CYAN);
-      tft.drawCentreString("BT: CompanionOS", SCR_CX, SCR_CY + SCALE_Y(10), 2);
-    }
-#endif
   }
 
-  delay(500);
   udp.begin(UDP_PORT_RX);
   delay(1500);
 
-  // Auto-discovery handshake
-  udp.beginPacket("255.255.255.255", UDP_PORT_TX);
-  const char* hello = "HELLO_COMPANION";
-  udp.write((const uint8_t*)hello, strlen(hello));
-  udp.endPacket();
-  delay(500);
+  // Auto-discovery handshake — match legacy: use string "255.255.255.255"
+  if (wifiConnected) {
+    udp.beginPacket("255.255.255.255", UDP_PORT_TX);
+    const char* hello = "HELLO_COMPANION";
+    udp.write((const uint8_t*)hello, strlen(hello));
+    udp.endPacket();
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -303,11 +316,10 @@ void handleBluetoothData() {
 // ═══════════════════════════════════════════════════════════
 
 void sendCommand(String cmd) {
-  if (wifiConnected) {
-    udp.beginPacket(pcIPStr.c_str(), UDP_PORT_TX);
-    udp.write((const uint8_t*)cmd.c_str(), cmd.length());
-    udp.endPacket();
-  }
+  // Match legacy: use pcIPStr.c_str() directly
+  udp.beginPacket(pcIPStr.c_str(), UDP_PORT_TX);
+  udp.write((const uint8_t*)cmd.c_str(), cmd.length());
+  udp.endPacket();
 #ifdef ESP32
   if (btConnected && btInitialized) {
     btSerial.println(cmd);
@@ -338,7 +350,7 @@ void handleNetwork() {
     lastNTPSync = millis();
   }
 
-  // Auto-discovery
+  // Auto-discovery — match legacy: use string broadcast address
   if (!pcFound && millis() - lastDiscoveryShout > 3000) {
     udp.beginPacket("255.255.255.255", UDP_PORT_TX);
     const char* hello = "HELLO_COMPANION";
