@@ -244,9 +244,31 @@ def capture_windows_notifications():
                     if isinstance(notifs, dict):  # Single notification comes as dict
                         notifs = [notifs]
                     if notifs and isinstance(notifs, list):
+                        new_os_notifs = cast(List[Dict[str, Any]], notifs[-10:])
+                        
+                        # Read existing to not overwrite API pushes
+                        existing = []
+                        if os.path.exists(notif_file):
+                            try:
+                                with open(notif_file, 'r') as f:
+                                    loaded = json.load(f)
+                                    if isinstance(loaded, list):
+                                        existing = loaded
+                            except Exception:
+                                pass
+                        
+                        # Add new OS notifs if they don't already exist (simple check by title/time)
+                        for n in new_os_notifs:
+                            is_dup = False
+                            for e in existing:
+                                if e.get('title') == n.get('title') and e.get('time') == n.get('time'):
+                                    is_dup = True
+                                    break
+                            if not is_dup:
+                                existing.append(n)
+                        
                         notifications.clear()
-                        # Use cast and type ignore to satisfy picky linter for slicing dynamic JSON
-                        notifications.extend(cast(List[Dict[str, Any]], notifs[-10:]))  # type: ignore
+                        notifications.extend(existing[-20:])
                         
                         # Write to file for persistence
                         with open(notif_file, 'w') as f:
@@ -254,11 +276,10 @@ def capture_windows_notifications():
                         
                         # Send to ESP
                         summary = []
-                        # Cast and type ignore for slicing with static analysis
-                        for n in list(notifications)[:3]:  # type: ignore
+                        for n in list(notifications)[-3:]:  # Send latest 3
                             summary.append({
-                                'app': str(n.get('app', '?'))[:10],  # type: ignore
-                                'title': str(n.get('title', ''))[:20],  # type: ignore
+                                'app': str(n.get('app', '?'))[:10],
+                                'title': str(n.get('title', ''))[:20],
                                 'time': str(n.get('time', ''))
                             })
                         send_udp(f"NOTIF:{json.dumps(summary)}")
@@ -609,6 +630,19 @@ def start_notes_server():
                     </div>
                 </div>
 
+                <!-- CUSTOM EYE -->
+                <div class="notes" style="margin-top: 24px;">
+                    <h2>&#128065; Custom Eye Image</h2>
+                    <form id="eyeForm" style="display: flex; gap: 10px; margin-top: 10px;">
+                        <input type="file" id="eyeImage" accept="image/*" style="flex: 1; padding: 5px; color: #fff;">
+                        <button type="button" class="notes-submit" style="flex: 1; margin-top: 0;" onclick="uploadEye()">Upload & Show</button>
+                    </form>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button class="notes-submit" style="flex: 1; background: #00d4ff; color: #111;" onclick="toggleEye(1)">Show Image</button>
+                        <button class="notes-submit" style="flex: 1; background: #ff416c; color: #fff;" onclick="toggleEye(0)">Revert to Eyes</button>
+                    </div>
+                </div>
+
                 <!-- POMODORO SETTINGS -->
                 <div class="notes" style="margin-top: 24px;">
                     <h2>&#9201; Pomodoro Settings</h2>
@@ -617,6 +651,44 @@ def start_notes_server():
                         <input type="number" name="break" placeholder="Break (min)" style="flex: 1; padding: 10px; border-radius: 8px; border: none; background: #1a1a3e; color: #fff;" required>
                         <button type="submit" class="notes-submit" style="flex: 1; margin-top: 0;">Update Timer</button>
                     </form>
+                </div>
+
+                <!-- DR HACK REMOTE -->
+                <div class="notes" style="margin-top: 24px;">
+                    <h2>&#128128; Dr. Hack Remote Execution</h2>
+                    <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+                        <button class="notes-submit" style="flex: 1; margin-top: 0; background: linear-gradient(135deg, #ff416c, #ff4b2b); color: white;" onclick="drhack('DEAUTH')">WiFi Deauth</button>
+                        <button class="notes-submit" style="flex: 1; margin-top: 0; background: linear-gradient(135deg, #f7b733, #fc4a1a); color: white;" onclick="drhack('SPAM')">Beacon Spam</button>
+                        <button class="notes-submit" style="flex: 1; margin-top: 0; background: linear-gradient(135deg, #00b4db, #0083b0); color: white;" onclick="drhack('MONITOR')">Pkt Monitor</button>
+                    </div>
+                </div>
+
+                <!-- ESP32 PINOUT -->
+                <div class="notes" style="margin-top: 24px; margin-bottom: 40px;">
+                    <h2>&#128204; ESP32 Hardware Pinout</h2>
+                    <div style="display: flex; justify-content: center; margin-top: 16px;">
+                        <div style="background: #2a2a2a; border-radius: 8px; border: 2px solid #555; padding: 20px; position: relative; width: 220px; text-align: center;">
+                            <div style="background: #111; color: #aaa; padding: 4px; border-radius: 4px; margin-bottom: 20px; font-family: monospace;">ESP32 DEVKIT V1</div>
+                            
+                            <div style="display: flex; justify-content: space-between; font-family: monospace; font-size: 11px;">
+                                <div style="text-align: right; color: #00d4ff; line-height: 1.8;">
+                                    <div>3V3 &mdash; VCC</div>
+                                    <div>GND &mdash; GND</div>
+                                    <div>D13 &mdash; BTN LEFT</div>
+                                    <div>D14 &mdash; BTN RIGHT</div>
+                                    <div>D27 &mdash; BTN SELECT</div>
+                                </div>
+                                <div style="text-align: left; color: #7b2ff7; line-height: 1.8;">
+                                    <div>TFT SCK &mdash; D18</div>
+                                    <div>TFT MOSI &mdash; D23</div>
+                                    <div>TFT RES &mdash; D4</div>
+                                    <div>TFT DC &mdash; D2</div>
+                                    <div>TFT CS &mdash; D5</div>
+                                </div>
+                            </div>
+                            <div style="margin-top: 20px; font-size: 11px; color: #888;">Note: All buttons pull to GND</div>
+                        </div>
+                    </div>
                 </div>
 
                 <script>
@@ -634,6 +706,53 @@ def start_notes_server():
                             fb.textContent = 'Error: ' + e;
                             fb.className = 'feedback active';
                         }});
+                    }}
+
+                    function drhack(action) {{
+                        fetch('/api/drhack', {{
+                            method: 'POST',
+                            headers: {{ 'Content-Type': 'application/json' }},
+                            body: JSON.stringify({{ action: action }})
+                        }}).then(() => {{
+                            const fb = document.getElementById('feedback');
+                            fb.textContent = 'Dr.Hack: ' + action;
+                            fb.className = 'feedback active';
+                            setTimeout(() => {{ fb.className = 'feedback'; fb.textContent = ''; }}, 1000);
+                        }});
+                    }
+
+                    function uploadEye() {
+                        const input = document.getElementById('eyeImage');
+                        if (!input.files[0]) return;
+                        const formData = new FormData();
+                        formData.append('image', input.files[0]);
+                        
+                        const fb = document.getElementById('feedback');
+                        fb.textContent = 'Uploading... Please wait (~6s)';
+                        fb.className = 'feedback active';
+                        
+                        fetch('/api/eye_upload', {
+                            method: 'POST',
+                            body: formData
+                        }).then(r => r.json()).then(res => {
+                            fb.textContent = res.status;
+                            setTimeout(() => { fb.className = 'feedback'; fb.textContent = ''; }, 3000);
+                        }).catch(e => {
+                            fb.textContent = 'Upload Error';
+                            setTimeout(() => { fb.className = 'feedback'; fb.textContent = ''; }, 3000);
+                        });
+                    }
+
+                    function toggleEye(state) {
+                        fetch('/api/eye_toggle', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ state: state })
+                        });
+                        const fb = document.getElementById('feedback');
+                        fb.textContent = state ? 'Showing Custom Image' : 'Reverting to Eyes';
+                        fb.className = 'feedback active';
+                        setTimeout(() => { fb.className = 'feedback'; fb.textContent = ''; }, 1500);
                     }}
 
                     function page(n) {{
@@ -714,6 +833,15 @@ def start_notes_server():
                 return jsonify({'status': 'ok', 'page': page_num})
             return jsonify({'status': 'error', 'msg': 'Missing page field'}), 400
 
+        @app.route('/api/drhack', methods=['POST'])
+        def api_drhack():
+            data = request.get_json()
+            if data and 'action' in data:
+                action = data['action']
+                send_udp(f"DRHACK:{action}")
+                return {'status': 'ok'}
+            return {'status': 'error'}, 400
+
         @app.route('/api/notify', methods=['POST'])
         def api_notify():
             """API endpoint for pushing notifications"""
@@ -736,6 +864,16 @@ def start_notes_server():
                 
                 with open(notif_file, 'w') as f:
                     json.dump(existing[-20:], f)  # type: ignore
+                    
+                # Instantly update ESP
+                summary = []
+                for n in existing[-3:]:
+                    summary.append({
+                        'app': str(n.get('app', '?'))[:10],
+                        'title': str(n.get('title', ''))[:20],
+                        'time': str(n.get('time', ''))
+                    })
+                send_udp(f"NOTIF:{json.dumps(summary)}")
                     
                 return {'status': 'ok'}
             return {'status': 'error'}, 400
@@ -802,6 +940,52 @@ def start_notes_server():
                 return {'status': 'error', 'msg': 'PIL not installed'}, 500
             except Exception as e:
                 return {'status': 'error', 'msg': str(e)}, 500
+        
+        @app.route('/api/eye_upload', methods=['POST'])
+        def api_eye_upload():
+            if 'image' not in request.files:
+                return jsonify({"status": "No file uploaded"}), 400
+            
+            file = request.files['image']
+            try:
+                from PIL import Image
+                import time
+                img = Image.open(file.stream)
+                img = img.resize((160, 128), getattr(Image, 'Resampling', Image).LANCZOS).convert('RGB')
+                
+                send_udp("CUSTEYE:START")
+                time.sleep(0.5)
+                
+                for row in range(128):
+                    chunk_data = bytearray()
+                    chunk_data.append(0xFD)
+                    chunk_data.append((row >> 8) & 0xFF)
+                    chunk_data.append(row & 0xFF)
+                    
+                    for col in range(160):
+                        r, g, b = img.getpixel((col, row))
+                        rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+                        chunk_data.append((rgb565 >> 8) & 0xFF)
+                        chunk_data.append(rgb565 & 0xFF)
+                    
+                    send_udp_bytes(bytes(chunk_data))
+                    time.sleep(0.05)
+                
+                time.sleep(0.5)
+                send_udp("CUSTEYE:DONE")
+                send_udp("CUSTEYE:TOGGLE:1")
+                return jsonify({"status": "Success!"})
+            except Exception as e:
+                print(f"Eye upload error: {e}")
+                return jsonify({"status": f"Error: {e}"}), 500
+
+        @app.route('/api/eye_toggle', methods=['POST'])
+        def api_eye_toggle():
+            data = request.get_json()
+            if data and 'state' in data:
+                state = 1 if data['state'] else 0
+                send_udp(f"CUSTEYE:TOGGLE:{state}")
+            return jsonify({"status": "ok"})
         
         print(f"🌐 CompanionOS Web Remote starting on http://0.0.0.0:{port}")
         print(f"  🎮 Virtual Remote: http://localhost:{port}")
@@ -1104,7 +1288,6 @@ _THOUGHT_CONTEXT_TEMPLATES = {
         "still going strong at {hour}",
         "time check: {hour}:00",
         "another hour, another vibe",
-        "been awake for {uptime}h now",
     ]
 }
 

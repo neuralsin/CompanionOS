@@ -147,29 +147,32 @@ public:
       t2Canvas->createSprite(SCREEN_W, SCREEN_H - 16);
     }
 
-    int16_t scx = centerX + cfg->OffsetX;
-    int16_t scy = centerY - 16 + cfg->OffsetY;
+    int32_t height = cfg->Height * 0.4;
+    int32_t width = cfg->Width * 0.4;
+    int16_t rT = cfg->Radius_Top * 0.4;
+    int16_t rB = cfg->Radius_Bottom * 0.4;
 
-    int32_t dyt = cfg->Height * cfg->Slope_Top / 2.0;
-    int32_t dyb = cfg->Height * cfg->Slope_Bottom / 2.0;
-    auto totalH = cfg->Height + dyt - dyb;
+    int16_t scx = centerX + (cfg->OffsetX * 0.4);
+    int16_t scy = centerY - 16 + (cfg->OffsetY * 0.4);
 
-    int16_t rT = cfg->Radius_Top;
-    int16_t rB = cfg->Radius_Bottom;
+    int32_t dyt = height * cfg->Slope_Top / 2.0;
+    int32_t dyb = height * cfg->Slope_Bottom / 2.0;
+    auto totalH = height + dyt - dyb;
+
     if (rB > 0 && rT > 0 && totalH - 1 < rB + rT) {
       int16_t crt = (float)rT * (totalH-1) / (rB+rT);
       int16_t crb = (float)rB * (totalH-1) / (rB+rT);
       rT = crt; rB = crb;
     }
 
-    int32_t TLy = scy - cfg->Height/2 + rT - dyt;
-    int32_t TLx = scx - cfg->Width/2  + rT;
-    int32_t TRy = scy - cfg->Height/2 + rT + dyt;
-    int32_t TRx = scx + cfg->Width/2  - rT;
-    int32_t BLy = scy + cfg->Height/2 - rB - dyb;
-    int32_t BLx = scx - cfg->Width/2  + rB;
-    int32_t BRy = scy + cfg->Height/2 - rB + dyb;
-    int32_t BRx = scx + cfg->Width/2  - rB;
+    int32_t TLy = scy - height/2 + rT - dyt;
+    int32_t TLx = scx - width/2  + rT;
+    int32_t TRy = scy - height/2 + rT + dyt;
+    int32_t TRx = scx + width/2  - rT;
+    int32_t BLy = scy + height/2 - rB - dyb;
+    int32_t BLx = scx - width/2  + rB;
+    int32_t BRy = scy + height/2 - rB + dyb;
+    int32_t BRx = scx + width/2  - rB;
 
     int32_t minCx = min(TLx, BLx);
     int32_t maxCx = max(TRx, BRx);
@@ -481,8 +484,8 @@ public:
 // Layout: Resolution-aware (scales from 320×240 reference)
 #define T2_SCREEN_CX   (SCREEN_W / 2)
 #define T2_SCREEN_CY   (SCREEN_H / 2 + SCALE_Y(10))
-#define T2_EYE_SIZE    SCALE_X(100)
-#define T2_EYE_GAP     SCALE_X(10)
+#define T2_EYE_SIZE    40
+#define T2_EYE_GAP     10
 
 T2Eye t2_leftEye;
 T2Eye t2_rightEye;
@@ -728,14 +731,16 @@ void t2_drawEyesPage() {
   T2EyeDrawer::t2Canvas->fillSprite(COLOR_BG);
 
   t2_leftEye.CenterX  = T2_SCREEN_CX - T2_EYE_SIZE/2 - T2_EYE_GAP;
-  t2_leftEye.CenterY  = (SCREEN_H - 48) / 2;
+  t2_leftEye.CenterY  = (SCREEN_H - 16) / 2 + 22;
   t2_rightEye.CenterX = T2_SCREEN_CX + T2_EYE_SIZE/2 + T2_EYE_GAP;
-  t2_rightEye.CenterY = (SCREEN_H - 48) / 2;
+  t2_rightEye.CenterY = (SCREEN_H - 16) / 2 + 22;
 
   t2_leftEye.Draw();
   t2_rightEye.Draw();
 
-  T2EyeDrawer::t2Canvas->pushSprite(0, 48);
+  tickThoughtScheduler(T2EyeDrawer::t2Canvas, true);
+
+  T2EyeDrawer::t2Canvas->pushSprite(0, 16);
 }
 
 void t2_updateEyes() {
@@ -763,19 +768,21 @@ void t2_updateEyes() {
   if (!T2EyeDrawer::t2Canvas) {
     T2EyeDrawer::t2Canvas = new TFT_eSprite(&tft);
     T2EyeDrawer::t2Canvas->setColorDepth(16);
-    T2EyeDrawer::t2Canvas->createSprite(SCREEN_W, SCREEN_H - 48);
+    T2EyeDrawer::t2Canvas->createSprite(SCREEN_W, SCREEN_H - 16);
   }
   T2EyeDrawer::t2Canvas->fillSprite(COLOR_BG);
 
   t2_leftEye.CenterX  = T2_SCREEN_CX - T2_EYE_SIZE/2 - T2_EYE_GAP;
-  t2_leftEye.CenterY  = (SCREEN_H - 48) / 2;
+  t2_leftEye.CenterY  = (SCREEN_H - 16) / 2 + 22;
   t2_rightEye.CenterX = T2_SCREEN_CX + T2_EYE_SIZE/2 + T2_EYE_GAP;
-  t2_rightEye.CenterY = (SCREEN_H - 48) / 2;
+  t2_rightEye.CenterY = (SCREEN_H - 16) / 2 + 22;
 
   t2_leftEye.Draw();
   t2_rightEye.Draw();
 
-  T2EyeDrawer::t2Canvas->pushSprite(0, 48);
+  tickThoughtScheduler(T2EyeDrawer::t2Canvas, true);
+
+  T2EyeDrawer::t2Canvas->pushSprite(0, 16);
 }
 
 #endif

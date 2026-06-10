@@ -126,7 +126,7 @@ String lastPrevLyric = "";
 bool artDrawn = false;
 static bool controlsDrawn = false;
 static bool cardDrawn = false;
-static bool lastPlaying = false;
+bool forceSpotifyRedraw = false;
 
 void redrawSpotifyPartial() {
   if (currentState != STATE_SPOTIFY) return;
@@ -152,13 +152,19 @@ void redrawSpotifyPartial() {
     artDrawn = true;
   }
   
-  if (title != lastTrackTitle) {
+  if (forceSpotifyRedraw || title != lastTrackTitle) {
     tft.fillRect(alb_x, infoY, 150, 10, COLOR_BG); 
     tft.setTextColor(TFT_WHITE, COLOR_BG);
     tft.drawString(title, alb_x, infoY, 1);
+    
+    if (title != lastTrackTitle) {
+      tft.fillRect(alb_x, alb_y, alb_s, alb_s, COLOR_BG); // Clear old art
+      artDrawn = false; // Force complete album art redraw for new song
+      albumArtReady = false; // Prevent ghosting of old art
+    }
     lastTrackTitle = title;
   }
-  if (artist != lastArtist) {
+  if (forceSpotifyRedraw || artist != lastArtist) {
     tft.fillRect(alb_x, infoY + 10, 150, 10, COLOR_BG); 
     tft.setTextColor(0x8410, COLOR_BG);
     tft.drawString(artist, alb_x, infoY + 10, 1);
@@ -254,19 +260,16 @@ void redrawSpotifyPartial() {
     tft.fillRect(barX, barY, w, 2, TFT_WHITE);
     tft.fillCircle(barX + w, barY + 1, 2, TFT_WHITE);
   }
+  forceSpotifyRedraw = false;
 }
 
 // Reset static trackers when entering the Spotify page fresh
 void resetSpotifyDrawState() {
-  lastTrackTitle = "";
-  lastArtist = "";
-  lastLyric1 = "";
-  lastLyric2 = "";
-  lastPrevLyric = "";
   artDrawn = false;
   controlsDrawn = false;
   cardDrawn = false;
   lastPlaying = !isPlaying; // Force a mismatch to ensure redraw
+  forceSpotifyRedraw = true;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -623,9 +626,9 @@ void redrawSettingsPartial() {
   // Network
   if (y > -20 && y < SCREEN_H) {
     tft.setTextColor(TFT_CYAN);
-    tft.drawString("NETWORK", SCALE_X(10), y, 2);
+    tft.drawString("NETWORK", SCALE_X(10), y, 1);
   }
-  y += 20; // 16px font + 4px spacing
+  y += 12; // 8px font + 4px spacing
   if (y > -20 && y < SCREEN_H) {
     int valX = (SCREEN_W > 200) ? 100 : 50;
     tft.setTextColor(0x8410);
@@ -633,7 +636,7 @@ void redrawSettingsPartial() {
     tft.setTextColor(TFT_GREEN);
     tft.drawString(WiFi.localIP().toString(), valX, y, 1);
   }
-  y += 15; // 8px font + 7px spacing
+  y += 10; // 8px font + 2px spacing
   if (y > -20 && y < SCREEN_H) {
     int valX = (SCREEN_W > 200) ? 100 : 50;
     tft.setTextColor(0x8410);
@@ -643,13 +646,13 @@ void redrawSettingsPartial() {
     tft.drawString(rssi, valX, y, 1);
   }
   
-  y += 25; // 15px section gap
+  y += 16; // 15px section gap
   // System
   if (y > -20 && y < SCREEN_H) {
     tft.setTextColor(TFT_CYAN);
-    tft.drawString("SYSTEM", SCALE_X(10), y, 2);
+    tft.drawString("SYSTEM", SCALE_X(10), y, 1);
   }
-  y += 20;
+  y += 12;
   if (y > -20 && y < SCREEN_H) {
     int valX = (SCREEN_W > 200) ? 100 : 50;
     tft.setTextColor(0x8410);
@@ -658,7 +661,7 @@ void redrawSettingsPartial() {
     char cpu[16]; sprintf(cpu, "%d MHz", ESP.getCpuFreqMHz());
     tft.drawString(cpu, valX, y, 1);
   }
-  y += 15;
+  y += 10;
   if (y > -20 && y < SCREEN_H) {
     int valX = (SCREEN_W > 200) ? 100 : 50;
     tft.setTextColor(0x8410);
@@ -667,7 +670,7 @@ void redrawSettingsPartial() {
     char ram[16]; sprintf(ram, "%d bytes", ESP.getFreeHeap());
     tft.drawString(ram, valX, y, 1);
   }
-  y += 15;
+  y += 10;
   if (y > -20 && y < SCREEN_H) {
     int valX = (SCREEN_W > 200) ? 100 : 50;
     tft.setTextColor(0x8410);
@@ -678,13 +681,13 @@ void redrawSettingsPartial() {
     tft.drawString(up, valX, y, 1);
   }
   
-  y += 25;
+  y += 16;
   // Sensors
   if (y > -20 && y < SCREEN_H) {
     tft.setTextColor(TFT_CYAN);
-    tft.drawString("SENSORS", SCALE_X(10), y, 2);
+    tft.drawString("SENSORS", SCALE_X(10), y, 1);
   }
-  y += 20;
+  y += 12;
   if (y > -20 && y < SCREEN_H) {
     int valX = (SCREEN_W > 200) ? 100 : 50;
     tft.setTextColor(0x8410);
@@ -697,7 +700,7 @@ void redrawSettingsPartial() {
     tft.fillRect(SCALE_X(65), y + 1, barLen, 6, TFT_YELLOW);
     tft.fillRect(SCALE_X(65) + barLen, y + 1, SCALE_X(100) - barLen, 6, 0x2104);
   }
-  y += 15;
+  y += 10;
   if (y > -20 && y < SCREEN_H) {
     #if HAS_TOUCH
     tft.setTextColor(0x8410);
@@ -712,13 +715,13 @@ void redrawSettingsPartial() {
     #endif
   }
   
-  y += 25;
+  y += 16;
   // Time
   if (y > -20 && y < SCREEN_H) {
     tft.setTextColor(TFT_CYAN);
-    tft.drawString("TIME", SCALE_X(10), y, 2);
+    tft.drawString("TIME", SCALE_X(10), y, 1);
   }
-  y += 20;
+  y += 12;
   if (y > -SCALE_Y(20) && y < SCREEN_H) {
     if (timeReceived) {
       char tb[8]; sprintf(tb, "%02d:%02d", displayHour, displayMinute);
@@ -731,12 +734,14 @@ void redrawSettingsPartial() {
   }
 
   // ── Theme Switcher (3-way) ──
-  y += SCALE_Y(40);
+  y += SCALE_Y(16);
   if (y > -SCALE_Y(20) && y < SCREEN_H) {
     tft.setTextColor(TFT_CYAN);
-    tft.drawString("THEME", SCALE_X(10), y, 2);
+    tft.drawString("THEME", SCALE_X(10), y, 1);
+    tft.setTextColor(0x8410); // Dim gray
+    tft.drawString("[Click/SEL]", SCALE_X(46), y, 1);
   }
-  y += SCALE_Y(22);
+  y += SCALE_Y(12);
   if (y > -SCALE_Y(20) && y < SCREEN_H) {
     // 3-segment selector track
     int sliderX = SCALE_X(10), sliderW = SCALE_X(120), sliderH = SCALE_Y(24);
@@ -769,6 +774,13 @@ void redrawSettingsPartial() {
 // ═══════════════════════════════════════════════════════════
 
 void drawEyesPage() {
+  if (customEyeActive && customEyeReady && customEyeImg != nullptr) {
+    tft.setSwapBytes(true); // Ensure correct endianness for image
+    tft.pushImage(0, 0, 160, 128, customEyeImg);
+    tft.setSwapBytes(false);
+    return;
+  }
+  
   if (activeTheme == 2) { t3_drawEyesPage(); drawStatusBar(); return; }
   if (activeTheme == 1) { t2_drawEyesPage(); drawStatusBar(); return; }
   tft.fillRect(0, 16, SCREEN_W, SCREEN_H - 16, COLOR_BG);

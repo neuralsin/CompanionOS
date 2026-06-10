@@ -58,7 +58,7 @@ static const T3EyeVariantConfig T3_VARIANTS[] = {
 // ═══════════════════════════════════════════════════════════
 
 // Eye zone boundaries (below status bar, above page dots)
-#define T3_EYE_ZONE_Y  48
+#define T3_EYE_ZONE_Y  16
 #define T3_EYE_ZONE_H  (SCREEN_H - 32)  // leave 16px top (status) + 16px bottom (dots)
 
 // Drawing colors — uses CompanionOS color system
@@ -125,8 +125,8 @@ static unsigned long t3_blinkTimer = 0;
 
 // Idle mode
 static bool t3_idle = true;
-static int  t3_idleInterval = 2;        // seconds
-static int  t3_idleVariation = 3;       // seconds range
+static int t3_idleInterval = 1;
+static int t3_idleVariation = 2;       // seconds range
 static unsigned long t3_idleTimer = 0;
 
 // Flicker effects
@@ -199,7 +199,7 @@ void t3_applyVariant(int idx) {
 
   // Compute default positions (centered in eye zone)
   t3_eyeLxDef = (t3_screenW - (t3_eyeLwDef + t3_spaceDef + (t3_cyclops ? 0 : t3_eyeRwDef))) / 2;
-  t3_eyeLyDef = (t3_screenH - t3_eyeLhDef) / 2;
+  t3_eyeLyDef = ((t3_screenH - t3_eyeLhDef) / 2) + 9;
 
   t3_eyeLx = t3_eyeLxDef; t3_eyeLy = t3_eyeLyDef;
   t3_eyeLxNext = t3_eyeLxDef; t3_eyeLyNext = t3_eyeLyDef;
@@ -450,8 +450,15 @@ static void t3_drawEyesInternal() {
 
   // ── DRAWING ──
 
-  // Clear the eye zone only (partial redraw, no full screen flash)
-  tft.fillRect(0, t3_offsetY, t3_screenW, t3_screenH, T3_BG_COLOR);
+  static TFT_eSprite* t3_canvas = nullptr;
+  if (!t3_canvas) {
+    t3_canvas = new TFT_eSprite(&tft);
+    t3_canvas->setColorDepth(16);
+    t3_canvas->createSprite(t3_screenW, t3_screenH);
+  }
+
+  // Clear the eye zone in the sprite
+  t3_canvas->fillSprite(T3_BG_COLOR);
 
   // Clamp positions to eye zone
   int lx = t3_eyeLx;
@@ -461,12 +468,12 @@ static void t3_drawEyesInternal() {
 
   // Draw left eye
   if (t3_eyeLhCur > 0 && t3_eyeLwCur > 0) {
-    tft.fillRoundRect(lx, ly, t3_eyeLwCur, t3_eyeLhCur, t3_eyeLbrCur, T3_EYE_COLOR);
+    t3_canvas->fillRoundRect(lx, ly - t3_offsetY, t3_eyeLwCur, t3_eyeLhCur, t3_eyeLbrCur, T3_EYE_COLOR);
   }
 
   // Draw right eye (unless cyclops)
   if (!t3_cyclops && t3_eyeRhCur > 0 && t3_eyeRwCur > 0) {
-    tft.fillRoundRect(rx, ry, t3_eyeRwCur, t3_eyeRhCur, t3_eyeRbrCur, T3_EYE_COLOR);
+    t3_canvas->fillRoundRect(rx, ry - t3_offsetY, t3_eyeRwCur, t3_eyeRhCur, t3_eyeRbrCur, T3_EYE_COLOR);
   }
 
   // ── MOOD EYELID OVERLAYS ──
@@ -487,45 +494,51 @@ static void t3_drawEyesInternal() {
   t3_eyelidHappyOff = (t3_eyelidHappyOff + t3_eyelidHappyOffNext) / 2;
 
   // Draw tired top eyelids (droopy — triangle from top-left of each eye)
+  int c_ly = ly - t3_offsetY;
+  int c_ry = ry - t3_offsetY;
+
   if (t3_eyelidTiredH > 1) {
     if (!t3_cyclops) {
-      tft.fillTriangle(lx, ly - 1, lx + t3_eyeLwCur, ly - 1,
-                        lx, ly + t3_eyelidTiredH - 1, T3_BG_COLOR);
-      tft.fillTriangle(rx, ry - 1, rx + t3_eyeRwCur, ry - 1,
-                        rx + t3_eyeRwCur, ry + t3_eyelidTiredH - 1, T3_BG_COLOR);
+      t3_canvas->fillTriangle(lx, c_ly - 1, lx + t3_eyeLwCur, c_ly - 1,
+                        lx, c_ly + t3_eyelidTiredH - 1, T3_BG_COLOR);
+      t3_canvas->fillTriangle(rx, c_ry - 1, rx + t3_eyeRwCur, c_ry - 1,
+                        rx + t3_eyeRwCur, c_ry + t3_eyelidTiredH - 1, T3_BG_COLOR);
     } else {
       // Cyclops tired: split eyelid
-      tft.fillTriangle(lx, ly - 1, lx + (t3_eyeLwCur / 2), ly - 1,
-                        lx, ly + t3_eyelidTiredH - 1, T3_BG_COLOR);
-      tft.fillTriangle(lx + (t3_eyeLwCur / 2), ly - 1, lx + t3_eyeLwCur, ly - 1,
-                        lx + t3_eyeLwCur, ly + t3_eyelidTiredH - 1, T3_BG_COLOR);
+      t3_canvas->fillTriangle(lx, c_ly - 1, lx + (t3_eyeLwCur / 2), c_ly - 1,
+                        lx, c_ly + t3_eyelidTiredH - 1, T3_BG_COLOR);
+      t3_canvas->fillTriangle(lx + (t3_eyeLwCur / 2), c_ly - 1, lx + t3_eyeLwCur, c_ly - 1,
+                        lx + t3_eyeLwCur, c_ly + t3_eyelidTiredH - 1, T3_BG_COLOR);
     }
   }
 
   // Draw angry top eyelids (V-shaped — triangle from top-right of each eye)
   if (t3_eyelidAngryH > 1) {
     if (!t3_cyclops) {
-      tft.fillTriangle(lx, ly - 1, lx + t3_eyeLwCur, ly - 1,
-                        lx + t3_eyeLwCur, ly + t3_eyelidAngryH - 1, T3_BG_COLOR);
-      tft.fillTriangle(rx, ry - 1, rx + t3_eyeRwCur, ry - 1,
-                        rx, ry + t3_eyelidAngryH - 1, T3_BG_COLOR);
+      t3_canvas->fillTriangle(lx, c_ly - 1, lx + t3_eyeLwCur, c_ly - 1,
+                        lx + t3_eyeLwCur, c_ly + t3_eyelidAngryH - 1, T3_BG_COLOR);
+      t3_canvas->fillTriangle(rx, c_ry - 1, rx + t3_eyeRwCur, c_ry - 1,
+                        rx, c_ry + t3_eyelidAngryH - 1, T3_BG_COLOR);
     } else {
-      tft.fillTriangle(lx, ly - 1, lx + (t3_eyeLwCur / 2), ly - 1,
-                        lx + (t3_eyeLwCur / 2), ly + t3_eyelidAngryH - 1, T3_BG_COLOR);
-      tft.fillTriangle(lx + (t3_eyeLwCur / 2), ly - 1, lx + t3_eyeLwCur, ly - 1,
-                        lx + (t3_eyeLwCur / 2), ly + t3_eyelidAngryH - 1, T3_BG_COLOR);
+      t3_canvas->fillTriangle(lx, c_ly - 1, lx + (t3_eyeLwCur / 2), c_ly - 1,
+                        lx + (t3_eyeLwCur / 2), c_ly + t3_eyelidAngryH - 1, T3_BG_COLOR);
+      t3_canvas->fillTriangle(lx + (t3_eyeLwCur / 2), c_ly - 1, lx + t3_eyeLwCur, c_ly - 1,
+                        lx + (t3_eyeLwCur / 2), c_ly + t3_eyelidAngryH - 1, T3_BG_COLOR);
     }
   }
 
   // Draw happy bottom eyelids (clip bottom of eye)
   if (t3_eyelidHappyOff > 1) {
-    tft.fillRoundRect(lx - 1, (ly + t3_eyeLhCur) - t3_eyelidHappyOff + 1,
+    t3_canvas->fillRoundRect(lx - 1, (ly - t3_offsetY + t3_eyeLhCur) - t3_eyelidHappyOff + 1,
                        t3_eyeLwCur + 2, t3_eyeLhDef, t3_eyeLbrCur, T3_BG_COLOR);
     if (!t3_cyclops) {
-      tft.fillRoundRect(rx - 1, (ry + t3_eyeRhCur) - t3_eyelidHappyOff + 1,
+      t3_canvas->fillRoundRect(rx - 1, (ry - t3_offsetY + t3_eyeRhCur) - t3_eyelidHappyOff + 1,
                          t3_eyeRwCur + 2, t3_eyeRhDef, t3_eyeRbrCur, T3_BG_COLOR);
     }
   }
+  
+  turetickThoughtScheduler(t3_canvas, true);
+  t3_canvas->pushSprite(0, t3_offsetY);
 
   // ── VARIANT LABEL ──
   // Show tiny variant name in bottom-left of eye zone
@@ -549,7 +562,6 @@ void t3_updateEyes() {
 
 // Full page redraw — called from renderCurrentPage() / drawEyesPage()
 void t3_drawEyesPage() {
-  tft.fillRect(0, T3_EYE_ZONE_Y, SCREEN_W, SCREEN_H - T3_EYE_ZONE_Y, T3_BG_COLOR);
   t3_initEyes();
   t3_drawEyesInternal();
 }

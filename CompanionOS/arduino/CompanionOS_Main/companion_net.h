@@ -389,6 +389,30 @@ void handleNetwork() {
     int len = udp.read(udpBuffer, readLen);
 
     // V4 OPTIMIZATION: BARE-METAL BINARY PACKET SNIFFING
+    if (len > 3 && (unsigned char)udpBuffer[0] == 0xFD) {
+      // CUSTOM EYE IMAGE CHUNKS
+      if (customEyeImg == nullptr) {
+        customEyeImg = (uint16_t*)malloc(160 * 128 * 2);
+      }
+      if (customEyeImg == nullptr) return; // Out of memory
+      
+      int chunkIdx = ((unsigned char)udpBuffer[1] << 8) | ((unsigned char)udpBuffer[2]);
+      int pixelsInChunk = (len - 3) / 2;
+      int imgWidth = 160;
+      int imagePixels = 160 * 128;
+      int startPixel = chunkIdx * imgWidth;
+      
+      if (startPixel >= 0 && startPixel < imagePixels) {
+        uint16_t* dest = customEyeImg + startPixel;
+        int safePixels = min(pixelsInChunk, imagePixels - startPixel);
+        for (int i = 0; i < safePixels; i++) {
+          int offset = 3 + (i * 2);
+          dest[i] = ((uint16_t)(unsigned char)udpBuffer[offset] << 8) | (unsigned char)udpBuffer[offset + 1];
+        }
+      }
+      return;
+    }
+
     if (len > 3 && (unsigned char)udpBuffer[0] == 0xFE) {
       int chunkIdx = ((unsigned char)udpBuffer[1] << 8) | ((unsigned char)udpBuffer[2]);
       int pixelsInChunk = (len - 3) / 2;
@@ -468,6 +492,47 @@ void handleCommand(String msg) {
     if (activeTheme == 2) t3_setEmotion(e);
     else if (activeTheme == 1) t2_setEmotion(e);
     else setEmotion(e);
+  } else if (msg.startsWith("CUSTEYE:START")) {
+    customEyeReady = false;
+    if (customEyeImg == nullptr) {
+      customEyeImg = (uint16_t*)malloc(160 * 128 * 2);
+    }
+  } else if (msg.startsWith("CUSTEYE:DONE")) {
+    customEyeReady = true;
+    if (customEyeActive && currentState == STATE_EYES) {
+      renderCurrentPage();
+    }
+  } else if (msg.startsWith("CUSTEYE:TOGGLE:")) {
+    customEyeActive = (msg.substring(15).toInt() == 1);
+    if (currentState == STATE_EYES) {
+      renderCurrentPage();
+    }
+  } else if (msg.startsWith("DRHACK:")) {
+    String action = msg.substring(7);
+    currentState = STATE_DR_HACK;
+    
+    extern DrHackSubState dhCurrentState;
+    if (action == "DEAUTH") {
+      extern void dhRunDeauth();
+      dhCurrentState = DH_DEAUTH;
+      dhRunDeauth();
+      dhCurrentState = DH_MENU;
+      renderCurrentPage();
+    } 
+    else if (action == "SPAM") {
+      extern void dhRunBeaconSpam();
+      dhCurrentState = DH_BEACON_SPAM;
+      dhRunBeaconSpam();
+      dhCurrentState = DH_MENU;
+      renderCurrentPage();
+    }
+    else if (action == "MONITOR") {
+      extern void dhRunPacketMonitor();
+      dhCurrentState = DH_PACKET_MONITOR;
+      dhRunPacketMonitor();
+      dhCurrentState = DH_MENU;
+      renderCurrentPage();
+    }
   }
   // V4: Antigravity Agent Status
   else if (msg.startsWith("AGENT:")) {

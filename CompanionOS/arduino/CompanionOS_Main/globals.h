@@ -96,13 +96,13 @@ extern Emotion currentEmotion;
 
 // ═══════════════════════════════════════════════════════════
 // DR. HACK SUB-STATE MACHINE (ESP32 only)
-// 48 tools across 6 pages of 8 tools each
+// 16 tools across 2 pages of 8 tools each
 // ═══════════════════════════════════════════════════════════
 #ifdef ESP32
 
 #define DH_TOOLS_PER_PAGE 8
-#define DH_MENU_PAGES     6
-#define DH_TOTAL_TOOLS    48
+#define DH_MENU_PAGES     2
+#define DH_TOTAL_TOOLS    16
 
 enum DrHackSubState {
   DH_MENU,
@@ -135,10 +135,17 @@ extern int dhMenuPage;
 // THOUGHT BUBBLE ENGINE
 // ═══════════════════════════════════════════════════════════
 
-#define THOUGHT_MIN_INTERVAL_MS  (15UL * 60UL * 1000UL)  // min 15 min between thoughts
-#define THOUGHT_MAX_INTERVAL_MS  (60UL * 60UL * 1000UL)  // max 60 min (random in range)
+#define THOUGHT_MIN_INTERVAL_MS  (5UL * 60UL * 1000UL)   // min 5 min between thoughts
+#define THOUGHT_MAX_INTERVAL_MS  (20UL * 60UL * 1000UL)  // max 20 min (random in range)
 #define THOUGHT_DISPLAY_MS       (5UL * 60UL * 1000UL)   // visible for 5 minutes
 #define THOUGHT_FADE_STEPS       20                       // fade in/out over 20 frames
+
+extern bool thoughtSchedulerActive;
+extern unsigned long nextThoughtTime;
+
+extern uint16_t* customEyeImg;
+extern bool customEyeActive;
+extern bool customEyeReady;
 
 struct ThoughtBubble {
   char text[80];           // thought text (max 80 chars)
@@ -235,8 +242,8 @@ int notifCount = 0;
 // 🟠 CRIT-05 FIX: Macro-defined size for both platforms
 // ═══════════════════════════════════════════════════════════
 
-#define ALBUM_ART_W  96
-#define ALBUM_ART_H  96
+#define ALBUM_ART_W  64
+#define ALBUM_ART_H  64
 uint16_t albumArt[ALBUM_ART_W * ALBUM_ART_H];   // 18432 bytes (ESP8266 near limit, ESP32 fine)
 bool albumArtReady = false;
 bool receivingArt = false;

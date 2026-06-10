@@ -229,6 +229,34 @@ void handleButtons() {
       if (pomoActive) sendCommand("POMO:PAUSE");
       else sendCommand("POMO:START");
     }
+    else if (currentState == STATE_SETTINGS) {
+      // Cycle activeTheme
+      activeTheme = (activeTheme + 1) % THEME_COUNT;
+      EEPROM.begin(EEPROM_SIZE);
+      EEPROM.write(EEPROM_ACTIVE_THEME_ADDR, activeTheme);
+      EEPROM.commit();
+      EEPROM.end();
+      
+      // Reset drawing states
+      extern void resetSpotifyDrawState();
+      extern void t2_resetSpotifyDrawState();
+      extern bool t2_initialized;
+      resetSpotifyDrawState();
+      t2_resetSpotifyDrawState();
+      t2_initialized = false;
+      
+      // Visual cue: Circular screen wipe
+      int rMax = max(SCREEN_W, SCREEN_H) * 1.5;
+      uint16_t wipeColor = (activeTheme == 0) ? 0x2104 : (activeTheme == 1) ? 0x4810 : 0x1848;
+      for (int r = 0; r < rMax; r += 12) {
+        tft.drawCircle(SCREEN_W / 2, SCREEN_H / 2, r, wipeColor);
+        tft.drawCircle(SCREEN_W / 2, SCREEN_H / 2, r+1, wipeColor);
+        tft.drawCircle(SCREEN_W / 2, SCREEN_H / 2, r+2, wipeColor);
+        delay(2);
+      }
+      
+      redrawSettingsPartial();
+    }
     lastInteractionTime = millis();
     return;
   }

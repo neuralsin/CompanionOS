@@ -304,58 +304,113 @@ void redrawNetworkPartial() {
   if (abs(rssi - lastRSSI) < 2) return;
   lastRSSI = rssi;
   
-  int lx = NET_PAD, ly = 20;
-  
-  // Redraw signal bars
-  tft.fillRect(lx + 10, ly + 8, 40, 32, NET_CARD);
-  drawSignalArc(lx + 10, ly + 8, rssi);
-  
-  // Redraw dBm
-  tft.fillRect(lx + 55, ly + 10, 90, 28, NET_CARD);
-  char dbmStr[12];
-  sprintf(dbmStr, "%d", rssi);
-  tft.setTextColor(getSignalColor(rssi));
-  tft.drawString(dbmStr, lx + 55, ly + 10, 4);
-  tft.setTextColor(NET_DIM);
-  tft.drawString("dBm", lx + 55 + tft.textWidth(dbmStr, 4) + 4, ly + 18, 1);
-  
-  // Redraw quality label
-  tft.fillRect(lx + 10, ly + 50, 130, 18, NET_CARD);
-  tft.setTextColor(getSignalColor(rssi));
-  tft.drawString(getSignalLabel(rssi), lx + 10, ly + 50, 2);
-  
-  int pct = min(100, max(0, 2 * (rssi + 100)));
-  char pctStr[8];
-  sprintf(pctStr, "%d%%", pct);
-  tft.setTextColor(TFT_WHITE);
-  tft.drawRightString(pctStr, lx + 140, ly + 50, 2);
-  
-  // Redraw signal bar
-  int barW = 130;
-  int filledW = barW * pct / 100;
-  tft.fillRoundRect(lx + 10, ly + 75, barW, 8, 3, 0x2104);
-  tft.fillRoundRect(lx + 10, ly + 75, filledW, 8, 3, getSignalColor(rssi));
-  
-  // Redraw uptime
-  int col2x = NET_PAD + 160;
-  int by2 = 122;
-  unsigned long uptimeSec = millis() / 1000;
-  int uh = uptimeSec / 3600;
-  int um = (uptimeSec % 3600) / 60;
-  int us = uptimeSec % 60;
-  char uptStr[16];
-  sprintf(uptStr, "%02d:%02d:%02d", uh, um, us);
-  tft.fillRect(col2x + 50, by2 + 72, 80, 12, NET_CARD);
-  tft.setTextColor(NET_GREEN);
-  tft.drawRightString(uptStr, col2x + 130, by2 + 72, 1);
-  
-  // Redraw free heap
-  int rx = 164, ry = 20;
-  char buf[16];
-  sprintf(buf, "%dB", ESP.getFreeHeap());
-  tft.fillRect(rx + 80, ry + 82, 60, 12, NET_CARD);
-  tft.setTextColor(NET_GREEN);
-  tft.drawRightString(buf, rx + 140, ry + 82, 1);
+  if (SCREEN_W > 200) {
+    int lx = NET_PAD, ly = 20;
+    
+    // Redraw signal bars
+    tft.fillRect(lx + 10, ly + 8, 40, 32, NET_CARD);
+    drawSignalArc(lx + 10, ly + 8, rssi);
+    
+    // Redraw dBm
+    tft.fillRect(lx + 55, ly + 10, 90, 28, NET_CARD);
+    char dbmStr[12];
+    sprintf(dbmStr, "%d", rssi);
+    tft.setTextColor(getSignalColor(rssi));
+    tft.drawString(dbmStr, lx + 55, ly + 10, 4);
+    tft.setTextColor(NET_DIM);
+    tft.drawString("dBm", lx + 55 + tft.textWidth(dbmStr, 4) + 4, ly + 18, 1);
+    
+    // Redraw quality label
+    tft.fillRect(lx + 10, ly + 50, 130, 18, NET_CARD);
+    tft.setTextColor(getSignalColor(rssi));
+    tft.drawString(getSignalLabel(rssi), lx + 10, ly + 50, 2);
+    
+    int pct = min(100, max(0, 2 * (rssi + 100)));
+    char pctStr[8];
+    sprintf(pctStr, "%d%%", pct);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawRightString(pctStr, lx + 140, ly + 50, 2);
+    
+    // Redraw signal bar
+    int barW = 130;
+    int filledW = barW * pct / 100;
+    tft.fillRoundRect(lx + 10, ly + 75, barW, 8, 3, 0x2104);
+    tft.fillRoundRect(lx + 10, ly + 75, filledW, 8, 3, getSignalColor(rssi));
+    
+    // Redraw uptime
+    int col2x = NET_PAD + 160;
+    int by2 = 122;
+    unsigned long uptimeSec = millis() / 1000;
+    int uh = uptimeSec / 3600;
+    int um = (uptimeSec % 3600) / 60;
+    int us = uptimeSec % 60;
+    char uptStr[16];
+    sprintf(uptStr, "%02d:%02d:%02d", uh, um, us);
+    tft.fillRect(col2x + 50, by2 + 72, 80, 12, NET_CARD);
+    tft.setTextColor(NET_GREEN);
+    tft.drawRightString(uptStr, col2x + 130, by2 + 72, 1);
+    
+    // Redraw free heap
+    int rx = 164, ry = 20;
+    char buf[16];
+    sprintf(buf, "%dB", ESP.getFreeHeap());
+    tft.fillRect(rx + 80, ry + 82, 60, 12, NET_CARD);
+    tft.setTextColor(NET_GREEN);
+    tft.drawRightString(buf, rx + 140, ry + 82, 1);
+  } else {
+    // ── SMALL SCREEN (160×128) UPDATES ──
+    int y = 20;
+    int pad = 4;
+    int cardW = SCREEN_W - pad * 2;
+    
+    // Clear and redraw the signal hero row
+    tft.fillRoundRect(pad, y, cardW, 25, 3, NET_CARD);
+    
+    int bars = 0;
+    if (rssi >= -50) bars = 5;
+    else if (rssi >= -60) bars = 4;
+    else if (rssi >= -70) bars = 3;
+    else if (rssi >= -75) bars = 2;
+    else if (rssi >= -85) bars = 1;
+    uint16_t activeColor = getSignalColor(rssi);
+    for (int i = 0; i < 5; i++) {
+      int bx = pad + 6 + i * 6;
+      int bh = 4 + i * 4;     // heights: 4, 8, 12, 16, 20
+      int by = y + 22 - bh;
+      uint16_t c = (i < bars) ? activeColor : 0x2104;
+      tft.fillRoundRect(bx, by, 4, bh, 1, c);
+    }
+    
+    char dbmStr[12]; sprintf(dbmStr, "%d dBm", rssi);
+    tft.setTextColor(activeColor);
+    tft.drawString(dbmStr, pad + 45, y + 5, 2);
+    
+    tft.setTextColor(activeColor);
+    tft.drawRightString(getSignalLabel(rssi), SCREEN_W - pad - 6, y + 5, 2);
+    
+    y += 35;
+    int ix = pad + 6;
+    int iy = y + 5;
+    int rowH = 15; 
+    
+    // Skip SSID and IP...
+    iy += rowH * 2;
+    
+    // Clear and Redraw Heap (Channel & Heap row)
+    char buf[16];
+    sprintf(buf, "%dB", ESP.getFreeHeap());
+    tft.fillRect(ix + 60, iy, cardW - 60 - 6, rowH - 2, NET_CARD);
+    tft.setTextColor(NET_GREEN);
+    tft.drawRightString(buf, SCREEN_W - pad - 6, iy, 1);
+    iy += rowH;
+    
+    // Clear and Redraw Uptime
+    unsigned long uptimeSec = millis() / 1000;
+    sprintf(buf, "%02d:%02d:%02d", (int)(uptimeSec/3600), (int)((uptimeSec%3600)/60), (int)(uptimeSec%60));
+    tft.fillRect(ix + 30, iy, cardW - 30 - 6, rowH - 2, NET_CARD);
+    tft.setTextColor(NET_GREEN);
+    tft.drawRightString(buf, SCREEN_W - pad - 6, iy, 1);
+  }
 }
 
 #endif

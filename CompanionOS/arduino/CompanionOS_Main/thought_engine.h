@@ -92,6 +92,22 @@ static const char* THOUGHTS_AMBIENT[] = {
 };
 static const int THOUGHT_AMBIENT_COUNT = sizeof(THOUGHTS_AMBIENT) / sizeof(char*);
 
+// ── Teasing / Horny thoughts ──
+static const char* THOUGHTS_TEASING[] = {
+  "staring respectfully...",
+  "you're looking good today",
+  "caught you looking",
+  "eyes up here",
+  "thinking about you...",
+  "distracted by you tbh",
+  "you've got my full attention",
+  "don't work too hard now",
+  "looking like a snack",
+  "wanna take a break?",
+  "i see you..."
+};
+static const int THOUGHT_TEASING_COUNT = sizeof(THOUGHTS_TEASING) / sizeof(char*);
+
 // ═══════════════════════════════════════════════════════════
 // THOUGHT GENERATION — Context-aware selector
 // ═══════════════════════════════════════════════════════════
@@ -111,10 +127,10 @@ void generateThought() {
   }
 
   // Weighted random category selection
-  // Time: 20%, Weather: 25%, Music: 35%, Ambient: 20%
+  // Time: 15%, Weather: 20%, Music: 30%, Teasing: 20%, Ambient: 15%
   int roll = random(0, 100);
 
-  if (roll < 20) {
+  if (roll < 15) {
     // Time-based: pick based on hour
     int idx;
     if (displayHour >= 0 && displayHour < 5) idx = random(0, 3);
@@ -125,7 +141,7 @@ void generateThought() {
     idx = constrain(idx, 0, THOUGHT_TIME_COUNT - 1);
     strncpy(activeBubble.text, THOUGHTS_TIME[idx], 79);
   }
-  else if (roll < 45) {
+  else if (roll < 35) {
     // Weather-based
     int idx;
     if (weatherTemp > 35) idx = 1;
@@ -138,7 +154,7 @@ void generateThought() {
     idx = constrain(idx, 0, THOUGHT_WEATHER_COUNT - 1);
     strncpy(activeBubble.text, THOUGHTS_WEATHER[idx], 79);
   }
-  else if (roll < 80) {
+  else if (roll < 65) {
     // Music-based
     int idx;
     if (!musicPlaying) idx = 1;
@@ -147,8 +163,13 @@ void generateThought() {
     idx = constrain(idx, 0, THOUGHT_MUSIC_COUNT - 1);
     strncpy(activeBubble.text, THOUGHTS_MUSIC[idx], 79);
   }
+  else if (roll < 85) {
+    // Teasing thoughts
+    int idx = random(0, THOUGHT_TEASING_COUNT);
+    strncpy(activeBubble.text, THOUGHTS_TEASING[idx], 79);
+  }
   else {
-    // Ambient random
+    // Ambient thoughts fallback
     int idx = random(0, THOUGHT_AMBIENT_COUNT);
     strncpy(activeBubble.text, THOUGHTS_AMBIENT[idx], 79);
   }
@@ -174,11 +195,19 @@ static int countThoughtLines(const char* text, int maxCharsPerLine) {
   return 3;
 }
 
-void renderThoughtBubble() {
+template <typename T>
+void renderThoughtBubble(T* display, bool isSprite) {
   if (!activeBubble.active) return;
+
+  static uint8_t lastAlpha = 0;
+  static char lastText[80] = "";
+  bool bubbleChanged = (activeBubble.fadeAlpha != lastAlpha) || (strcmp(activeBubble.text, lastText) != 0);
+  lastAlpha = activeBubble.fadeAlpha;
+  strcpy(lastText, activeBubble.text);
 
   unsigned long now = millis();
   unsigned long elapsed = now - activeBubble.shownAt;
+  bool needsRedraw = bubbleChanged || activeBubble.fadingIn || activeBubble.fadingOut || isSprite;
 
   // Fade in phase (~1 second = 20 frames at 50ms)
   if (activeBubble.fadingIn) {
@@ -191,6 +220,11 @@ void renderThoughtBubble() {
   // Fade out phase (after THOUGHT_DISPLAY_MS)
   else if (elapsed >= THOUGHT_DISPLAY_MS && !activeBubble.fadingOut) {
     activeBubble.fadingOut = true;
+    needsRedraw = true;
+  }
+
+  if (!isSprite && !needsRedraw) {
+    return; // Prevent severe screen flickering by not redrawing static bubbles directly on TFT
   }
 
   if (activeBubble.fadingOut) {
@@ -200,13 +234,13 @@ void renderThoughtBubble() {
       activeBubble.fadeAlpha = 0;
       activeBubble.active = false;
       activeBubble.fadingOut = false;
-      // FIX: Erase the entire bubble area (body + tail + trailing dots)
-      // so no ghost pixels remain on screen after fade-out.
-      int bubbleX = SCR_CX - 10;
-      int bubbleY = 16;
-      int maxW = SCR_W - bubbleX - 2;
-      int clearH = 60; // include tail + dots
-      tft.fillRect(bubbleX - 2, bubbleY - 2, maxW + 4, clearH + 4, CLR_BG);
+      
+      int clearH = 60; 
+      int clearX = SCR_W - 64; 
+      // Erase directly on TFT if we are using the main TFT, otherwise it's handled by the parent sprite wipe
+      if (!isSprite) {
+        tft.fillRect(clearX, 14, 64, clearH, CLR_BG);
+      }
       return;  // done, don't draw
     }
   }
@@ -224,58 +258,56 @@ void renderThoughtBubble() {
   // ESP8266 320×240: x=180, y=20 (just below 16px status bar)
   // ESP32  160×128:  x=90,  y=18 (scaled)
 
-  int bubbleW = 78; // Roughly 50% of 160
-  int bubbleX = SCR_W - bubbleW - 2; // Shift to top right corner (x = 80)
-  int bubbleY = 16;  // Ensure below status bar
+  int bubbleW = 60; // Reduced from 78 to 60 (approx 60% area)
+  int bubbleX = SCR_W - bubbleW - 2; 
+  int bubbleY = 16;  
   int maxW = bubbleW;
   
-  int lineH = 9; // fixed line height for font 1
-  int maxChars = (maxW - 6) / 6; // font 1 is 6px wide per char, minus padding
+  int lineH = 9; 
+  int maxChars = (maxW - 6) / 6; 
 
   int numLines = countThoughtLines(activeBubble.text, maxChars);
   if (numLines > 4) numLines = 4;
   int padding = 3;
   int bubbleH = numLines * lineH + padding * 2;
 
-  // Clamp to screen bounds
   if (bubbleY + bubbleH > 58) bubbleH = 58 - bubbleY;
 
-  // 🟡 GAP-06 FIX: Solid colors, no SPI read-back needed.
-  // Simulate fade by blending solid bg/border with CLR_BG.
   uint16_t borderColor = blendColor(CLR_BG, CLR_PRIMARY, alpha);
   uint16_t bgColor = blendColor(CLR_BG, CLR_SURFACE_2, alpha);
   uint16_t textColor = blendColor(CLR_BG, CLR_TEXT_HI, alpha);
 
-  // 1. Draw bubble body (solid, not transparent)
-  tft.fillRoundRect(bubbleX, bubbleY, bubbleW, bubbleH, 3, bgColor);
-  tft.drawRoundRect(bubbleX, bubbleY, bubbleW, bubbleH, 3, borderColor);
+  int drawY = bubbleY;
+  if (isSprite) {
+    // If drawing into a sprite (Theme 2/3), the sprite is pushed at Y=16, so local Y is offset
+    drawY = bubbleY - 16;
+  }
 
-  // 2. Accent border (1px inner glow)
+  display->fillRoundRect(bubbleX, drawY, bubbleW, bubbleH, 3, bgColor);
+  display->drawRoundRect(bubbleX, drawY, bubbleW, bubbleH, 3, borderColor);
+
   uint16_t glowColor = blendColor(CLR_BG, CLR_PRIMARY, alpha * 0.3f);
-  tft.drawRoundRect(bubbleX + 1, bubbleY + 1, bubbleW - 2, bubbleH - 2, 2, glowColor);
+  display->drawRoundRect(bubbleX + 1, drawY + 1, bubbleW - 2, bubbleH - 2, 2, glowColor);
 
-  // 3. Tail — triangle pointing down-left toward right eye
   int tailX = bubbleX + 12;
-  int tailY = bubbleY + bubbleH;
+  int tailY = drawY + bubbleH;
   int tailW = 5;
   int tailH = 6;
-  tft.fillTriangle(tailX, tailY, tailX + tailW, tailY,
-                   tailX - tailW/2, tailY + tailH, bgColor);
-  tft.drawLine(tailX, tailY, tailX - tailW/2, tailY + tailH, borderColor);
-  tft.drawLine(tailX + tailW, tailY, tailX - tailW/2, tailY + tailH, borderColor);
+  display->fillTriangle(tailX, tailY, tailX + tailW, tailY,
+                           tailX - tailW/2, tailY + tailH, bgColor);
+  display->drawLine(tailX, tailY, tailX - tailW/2, tailY + tailH, borderColor);
+  display->drawLine(tailX + tailW, tailY, tailX - tailW/2, tailY + tailH, borderColor);
 
-  // 4. Thought dots (2 circles leading toward eye)
   int dotX = tailX - 4;
   int dotY = tailY + tailH + 3;
-  tft.fillCircle(dotX, dotY, 2, borderColor);
-  tft.fillCircle(dotX - 4, dotY + 4, 1, borderColor);
+  display->fillCircle(dotX, dotY, 2, borderColor);
+  display->fillCircle(dotX - 4, dotY + 4, 1, borderColor);
 
-  // 5. Text — word-wrapped, max 3 lines
-  tft.setTextColor(textColor);
-  tft.setTextSize(1); // Force text size 1 to prevent overflow
+  display->setTextColor(textColor);
+  display->setTextSize(1); 
   int textLen = strlen(activeBubble.text);
   int textX = bubbleX + padding;
-  int textY = bubbleY + padding;
+  int textY = drawY + padding;
 
   for (int line = 0; line < numLines; line++) {
     int start = line * maxChars;
@@ -285,7 +317,43 @@ void renderThoughtBubble() {
     if (copyLen > 39) copyLen = 39;
     strncpy(lineStr, activeBubble.text + start, copyLen);
     lineStr[copyLen] = '\0';
-    tft.drawString(lineStr, textX, textY + line * lineH, 1);
+    display->drawString(lineStr, textX, textY + line * lineH, 1);
+  }
+}
+
+template <typename T>
+void tickThoughtScheduler(T* display, bool isSprite) {
+  if (!thoughtSchedulerActive) return;
+  if (currentState != STATE_EYES) return;
+
+  // Check if bubble is currently active — handle fade/display
+  if (activeBubble.active) {
+    renderThoughtBubble(display, isSprite);  // draw/fade current bubble
+    return;
+  }
+
+  // Check for PC-pushed override thought (immediate display)
+  if (strlen(overrideThought) > 0) {
+    generateThought();  // will consume overrideThought
+    activeBubble.active = true;
+    activeBubble.shownAt = millis();
+    activeBubble.fadeAlpha = 0;
+    activeBubble.fadingIn = true;
+    activeBubble.fadingOut = false;
+    return;
+  }
+
+  // Scheduled thought generation
+  if (millis() >= nextThoughtTime) {
+    generateThought();
+    activeBubble.active = true;
+    activeBubble.shownAt = millis();
+    activeBubble.fadeAlpha = 0;
+    activeBubble.fadingIn = true;
+    activeBubble.fadingOut = false;
+
+    // Schedule next thought (45-90 min)
+    nextThoughtTime = millis() + random(THOUGHT_MIN_INTERVAL_MS, THOUGHT_MAX_INTERVAL_MS);
   }
 }
 

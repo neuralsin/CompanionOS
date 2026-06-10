@@ -36,29 +36,17 @@ int dhMenuPage = 0;
 
 // Page titles
 static const char* DH_PAGE_TITLES[DH_MENU_PAGES] = {
-  "WiFi", "WiFi+BLE", "Radio+IR", "IR+CC1101", "CC1101+RF", "System"
+  "WiFi", "WiFi+BLE"
 };
 
-// Tool names per page (8 per page × 6 pages)
+// Tool names per page (8 per page × 2 pages)
 static const char* DH_TOOL_NAMES[DH_TOTAL_TOOLS] = {
   // Page 1: WiFi
   "WiFi Scan", "CH Scan", "WiFi Radar", "Direction",
   "Beacon", "Deauth", "Evil Portal", "Probe Sniff",
   // Page 2: WiFi+ & BLE
   "KARMA", "WiFi Config", "BLE Scan", "BLE Inspect",
-  "BLE Spam", "BT Disrupt", "iPhone Rem", "BT Jammer",
-  // Page 3: Radio & IR
-  "2.4G Jammer", "Radio Scan", "IR Capture", "IR Replay",
-  "IR TX Test", "IR Analyze", "IR Sniffer", "IR Protocol",
-  // Page 4: IR+ & CC1101
-  "Night IR", "IR Proximity", "IR Remotes", "Saved IR",
-  "CC1101 Diag", "CC Spectrum", "CC Waterfall", "Freq Mon",
-  // Page 5: CC1101+ & RF
-  "Freq Finder", "Brute Search", "Code Check", "RF Analyze",
-  "RF Raw View", "RF Live", "Lab Replay", "Test Beacon",
-  // Page 6: System
-  "Port Scan", "Pkt Monitor", "Sys Info", "Web Dash",
-  "HW Diag", "Input Mon", "About", "--"
+  "BLE Spam", "BT Disrupt", "NRF Test", "Web Dash"
 };
 
 static const uint16_t DH_TOOL_COLORS[DH_TOTAL_TOOLS] = {
@@ -67,19 +55,7 @@ static const uint16_t DH_TOOL_COLORS[DH_TOTAL_TOOLS] = {
   CLR_SECONDARY, CLR_SECONDARY, CLR_SECONDARY, CLR_SUCCESS,
   // Page 2
   CLR_SECONDARY, CLR_PRIMARY, 0x051F, 0x051F,
-  CLR_SECONDARY, CLR_SECONDARY, 0x051F, CLR_WARNING,
-  // Page 3
-  CLR_WARNING, CLR_SUCCESS, CLR_SECONDARY, CLR_SECONDARY,
-  CLR_SUCCESS, CLR_PRIMARY, CLR_PRIMARY, CLR_PRIMARY,
-  // Page 4
-  0x780F, CLR_PRIMARY, CLR_SECONDARY, CLR_PRIMARY,
-  CLR_WARNING, CLR_WARNING, CLR_WARNING, CLR_WARNING,
-  // Page 5
-  CLR_SUCCESS, CLR_WARNING, CLR_PRIMARY, CLR_PRIMARY,
-  CLR_PRIMARY, CLR_SUCCESS, CLR_WARNING, CLR_WARNING,
-  // Page 6
-  CLR_WARNING, CLR_SUCCESS, CLR_TEXT_MED, CLR_PRIMARY,
-  CLR_PRIMARY, CLR_PRIMARY, CLR_PRIMARY, CLR_BORDER
+  CLR_SECONDARY, CLR_SECONDARY, CLR_TEXT_MED, CLR_PRIMARY
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -309,12 +285,12 @@ static void dhDrawNetList() {
     // SSID (truncated)
     String ssid = net.ssid.length() > 0 ? net.ssid : "<HIDDEN>";
     tft.setTextColor(net.ssid.length() == 0 ? CLR_SECONDARY : (sel ? CLR_TEXT_HI : CLR_TEXT_MED));
-    drawTruncatedText(SCALE_X(20), y + SCALE_Y(2), ssid.c_str(), SCALE_X(80), 
+    drawTruncatedText(SCALE_X(20), y + SCALE_Y(2), ssid.c_str(), SCALE_X(100), 
                       net.ssid.length() == 0 ? CLR_SECONDARY : (sel ? CLR_TEXT_HI : CLR_TEXT_MED), 1);
 
     // Encryption tag
     tft.setTextColor(dhAuthColor(net.authType));
-    tft.drawString(dhAuthStr(net.authType).c_str(), SCR_W - SCALE_X(18), y + SCALE_Y(2), 1);
+    tft.drawString(dhAuthStr(net.authType).c_str(), SCR_W - SCALE_X(24), y + SCALE_Y(2), 1);
 
     // Channel + RSSI on second line
     char meta[20];
@@ -501,7 +477,7 @@ static void dhSendBeacon(const char* ssid, int channel) {
   dhBeaconsSent++;
 }
 
-static void dhRunBeaconSpam() {
+void dhRunBeaconSpam() {
   tft.fillScreen(CLR_BG);
   drawGradientCard(0, 0, SCR_W, SCALE_Y(14), CLR_SECONDARY, darkenColor(CLR_SECONDARY, 40), 0);
   tft.setTextColor(CLR_TEXT_HI);
@@ -512,13 +488,10 @@ static void dhRunBeaconSpam() {
   tft.setTextColor(CLR_TEXT_LO);
   tft.drawCentreString("HOLD SELECT to stop", SCR_CX, SCR_H - SCALE_Y(12), 1);
 
-  WiFi.mode(WIFI_MODE_NULL);
-  esp_wifi_set_promiscuous(false);
-  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-  esp_wifi_init(&cfg);
-  esp_wifi_set_storage(WIFI_STORAGE_RAM);
-  esp_wifi_set_mode(WIFI_MODE_STA);
-  esp_wifi_start();
+  btStop(); // Disable Bluetooth to prevent RF coexistence panics
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  delay(50);
   esp_wifi_set_promiscuous(true);
   esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
 
@@ -569,20 +542,27 @@ static void dhRunBeaconSpam() {
     }
 
     // Detect SELECT long hold to stop
+    #ifdef ESP32
+    extern void handleButtons(); handleButtons();
+    extern ButtonState btnSelect;
+    extern bool consumeLong(ButtonState&);
+    if (consumeLong(btnSelect) || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
+      break;
+    }
+    #else
     if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else {
       holding = false;
     }
+    #endif
 
     yield();
     delay(5);
   }
 
   esp_wifi_set_promiscuous(false);
-  esp_wifi_stop();
-  esp_wifi_deinit();
   delay(100);
 }
 
@@ -609,7 +589,7 @@ static void dhSendDeauth(const uint8_t target[6], const uint8_t bssid[6]) {
   dhDeauthPkts++;
 }
 
-static void dhRunDeauth() {
+void dhRunDeauth() {
   // First scan for APs
   dhRunWifiScan();
   if (dhNetCount == 0) return;
@@ -628,8 +608,16 @@ static void dhRunDeauth() {
   // Wait for accept or cancel
   while (true) {
     extern void handleNetwork(); handleNetwork();
+    #ifdef ESP32
+    extern void handleButtons(); handleButtons();
+    extern ButtonState btnSelect, btnLeft;
+    extern bool consumePress(ButtonState&);
+    if (consumePress(btnSelect) || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) { delay(200); break; }
+    if (consumePress(btnLeft) || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false)) { delay(200); return; }
+    #else
     if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { delay(200); break; }
     if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { delay(200); return; }
+    #endif
     delay(20);
   }
 
@@ -640,13 +628,10 @@ static void dhRunDeauth() {
          &bssid[0], &bssid[1], &bssid[2], &bssid[3], &bssid[4], &bssid[5]);
 
   // Setup promiscuous mode
-  WiFi.mode(WIFI_MODE_NULL);
+  btStop(); // Disable Bluetooth
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
   delay(50);
-  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-  esp_wifi_init(&cfg);
-  esp_wifi_set_storage(WIFI_STORAGE_RAM);
-  esp_wifi_set_mode(WIFI_MODE_STA);
-  esp_wifi_start();
   esp_wifi_set_channel(ap.channel, WIFI_SECOND_CHAN_NONE);
   esp_wifi_set_promiscuous(true);
 
@@ -689,17 +674,24 @@ static void dhRunDeauth() {
       lastDraw = millis();
     }
 
+    #ifdef ESP32
+    extern void handleButtons(); handleButtons();
+    extern ButtonState btnSelect;
+    extern bool consumeLong(ButtonState&);
+    if (consumeLong(btnSelect) || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
+      break;
+    }
+    #else
     if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }
+    #endif
 
     yield();
   }
 
   esp_wifi_set_promiscuous(false);
-  esp_wifi_stop();
-  esp_wifi_deinit();
   delay(100);
 }
 
@@ -714,14 +706,16 @@ static void dhPktCallback(void* buf, wifi_promiscuous_pkt_type_t type) {
   dhPktCount++;
 }
 
-static void dhRunPacketMonitor() {
+void dhRunPacketMonitor() {
   tft.fillScreen(CLR_BG);
   drawGradientCard(0, 0, SCR_W, SCALE_Y(14), CLR_SUCCESS, darkenColor(CLR_SUCCESS, 40), 0);
   tft.setTextColor(CLR_BG);
   tft.drawString("PKT MONITOR", SCALE_X(4), SCALE_Y(2), 1);
 
-  WiFi.mode(WIFI_MODE_STA);
-  esp_wifi_start();
+  btStop();
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  delay(50);
   esp_wifi_set_promiscuous(true);
   esp_wifi_set_promiscuous_rx_cb(&dhPktCallback);
   int ch = 1;
@@ -812,10 +806,19 @@ static void dhRunPacketMonitor() {
     }
 
     // Exit on SELECT hold
+    #ifdef ESP32
+    extern void handleButtons(); handleButtons();
+    extern ButtonState btnSelect;
+    extern bool consumeLong(ButtonState&);
+    if (consumeLong(btnSelect) || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
+      break;
+    }
+    #else
     if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }
+    #endif
 
     delay(10);
   }
@@ -964,6 +967,66 @@ static void dhRunBleScan() {
 // TOOL: System Info
 // Chip ID, MAC, heap, CPU freq, uptime
 // ═══════════════════════════════════════════════════════════
+
+void dhRunHwDiag() {
+  tft.fillScreen(CLR_BG);
+  drawGradientCard(0, 0, SCR_W, SCALE_Y(14), CLR_SECONDARY, darkenColor(CLR_SECONDARY, 40), 0);
+  tft.setTextColor(CLR_TEXT_HI);
+  tft.drawString("NRF TESTER", SCALE_X(4), SCALE_Y(2), 1);
+  
+  #ifdef ESP32
+  pinMode(NRF1_CE_PIN, OUTPUT);
+  pinMode(NRF1_CSN_PIN, OUTPUT);
+  digitalWrite(NRF1_CE_PIN, LOW);
+  digitalWrite(NRF1_CSN_PIN, HIGH);
+  
+  // Short delay for stability
+  delay(10);
+  
+  // Read NRF24L01 CONFIG register (0x00)
+  digitalWrite(NRF1_CSN_PIN, LOW);
+  SPI.transfer(0x00); 
+  uint8_t configReg = SPI.transfer(0xFF);
+  digitalWrite(NRF1_CSN_PIN, HIGH);
+  
+  // Floating MISO usually returns 0x00 or 0xFF.
+  bool passed = (configReg != 0x00 && configReg != 0xFF);
+  
+  tft.setTextColor(CLR_PRIMARY);
+  tft.drawString("Primary NRF24", SCALE_X(4), SCALE_Y(20), 1);
+  
+  if (passed) {
+    tft.setTextColor(CLR_SUCCESS);
+    tft.drawString("STATUS: PASS", SCALE_X(4), SCALE_Y(35), 1);
+    char buf[32];
+    sprintf(buf, "Reg 0x00: 0x%02X", configReg);
+    tft.drawString(buf, SCALE_X(4), SCALE_Y(50), 1);
+    tft.drawString("Adapter Detected!", SCALE_X(4), SCALE_Y(65), 1);
+  } else {
+    tft.setTextColor(CLR_ERROR);
+    tft.drawString("STATUS: FAIL", SCALE_X(4), SCALE_Y(35), 1);
+    tft.drawString("Check SPI Wiring", SCALE_X(4), SCALE_Y(50), 1);
+    tft.drawString("CE=32, CSN=33", SCALE_X(4), SCALE_Y(65), 1);
+  }
+  #endif
+
+  tft.setTextColor(CLR_TEXT_LO);
+  tft.drawString("Hold SELECT to exit", SCALE_X(4), SCR_H - SCALE_Y(14), 1);
+
+  while (dhCurrentState == DH_HW_DIAG) {
+    #ifdef ESP32
+    extern void handleButtons(); handleButtons();
+    extern ButtonState btnSelect;
+    extern bool consumeLong(ButtonState&);
+    if (consumeLong(btnSelect) || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
+      break;
+    }
+    #else
+    if (btnSelect() || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) break;
+    #endif
+    delay(50);
+  }
+}
 
 static void dhDrawSysInfo() {
   tft.fillScreen(CLR_BG);
@@ -1161,48 +1224,8 @@ void dhSelect() {
       case 11: DH_RUN_TOOL(DH_BLE_INSPECTOR, dhRunBleInspector())
       case 12: DH_RUN_TOOL(DH_BLE_SPAM, dhRunBleSpam())
       case 13: DH_RUN_TOOL(DH_BT_DISRUPTOR, dhRunBtDisruptor())
-      case 14: DH_RUN_TOOL(DH_IPHONE_REMOTE, dhRunIphoneRemote())
-      case 15: DH_RUN_TOOL(DH_BT_JAMMER, dhRunBtJammer())
-
-      // Page 3: Radio & IR
-      case 16: DH_RUN_TOOL(DH_JAMMER_24, dhRunJammer24())
-      case 17: DH_RUN_TOOL(DH_RADIO_SCANNER, dhRunRadioScanner())
-      case 18: DH_RUN_TOOL(DH_IR_CAPTURE, dhRunIrCapture())
-      case 19: DH_RUN_TOOL(DH_IR_REPLAY, dhRunIrReplay())
-      case 20: DH_RUN_TOOL(DH_IR_TX_TEST, dhRunIrTxTest())
-      case 21: DH_RUN_TOOL(DH_IR_ANALYZER, dhRunIrAnalyzer())
-      case 22: DH_RUN_TOOL(DH_IR_SNIFFER, dhRunIrSniffer())
-      case 23: DH_RUN_TOOL(DH_IR_PROTOCOL, dhRunIrProtocol())
-
-      // Page 4: IR+ & CC1101
-      case 24: DH_RUN_TOOL(DH_IR_NIGHT, dhRunIrNight())
-      case 25: DH_RUN_TOOL(DH_IR_PROXIMITY, dhRunIrProximity())
-      case 26: DH_RUN_TOOL(DH_IR_REMOTES, dhRunIrRemotes())
-      case 27: DH_RUN_TOOL(DH_IR_SAVED, dhRunIrSaved())
-      case 28: DH_RUN_TOOL(DH_CC_DIAG, dhRunCcDiag())
-      case 29: DH_RUN_TOOL(DH_CC_SPECTRUM, dhRunCcSpectrum())
-      case 30: DH_RUN_TOOL(DH_CC_WATERFALL, dhRunCcWaterfall())
-      case 31: DH_RUN_TOOL(DH_CC_FREQ_MON, dhRunCcFreqMon())
-
-      // Page 5: CC1101+ & RF
-      case 32: DH_RUN_TOOL(DH_CC_FINDER, dhRunCcFinder())
-      case 33: DH_RUN_TOOL(DH_CC_BRUTE, dhRunCcBrute())
-      case 34: DH_RUN_TOOL(DH_CC_CODE_CHECK, dhRunCcCodeCheck())
-      case 35: DH_RUN_TOOL(DH_CC_RF_ANALYZE, dhRunCcRfAnalyze())
-      case 36: DH_RUN_TOOL(DH_CC_RAW_VIEW, dhRunCcRawView())
-      case 37: DH_RUN_TOOL(DH_CC_RF_LIVE, dhRunCcRfLive())
-      case 38: DH_RUN_TOOL(DH_CC_LAB_REPLAY, dhRunCcLabReplay())
-      case 39: DH_RUN_TOOL(DH_CC_TEST_BEACON, dhRunCcTestBeacon())
-
-      // Page 6: System
-      case 40: DH_ENTER_TOOL(DH_PORT_SCANNER, dhRunPortScan())
-      case 41: DH_RUN_TOOL(DH_PACKET_MONITOR, dhRunPacketMonitor())
-      case 42: DH_ENTER_TOOL(DH_INFO, dhDrawSysInfo())
-      case 43: DH_RUN_TOOL(DH_WEB_DASHBOARD, dhRunWebDashboard())
-      case 44: DH_RUN_TOOL(DH_HW_DIAG, dhRunHwDiag())
-      case 45: DH_RUN_TOOL(DH_INPUT_MONITOR, dhRunInputMonitor())
-      case 46: DH_ENTER_TOOL(DH_ABOUT, dhDrawAbout())
-      case 47: break; // Reserved slot
+      case 14: DH_ENTER_TOOL(DH_HW_DIAG, dhRunHwDiag())
+      case 15: DH_RUN_TOOL(DH_WEB_DASHBOARD, dhRunWebDashboard())
     }
   }
   else {

@@ -146,7 +146,7 @@ void drawStatusBar() {
 void showLoadingScreen(const char* message) {
   tft.fillScreen(CLR_BG);
   tft.setTextColor(CLR_PRIMARY);
-  tft.drawCentreString(message, SCR_CX, SCR_CY - SCALE_Y(20), 2);
+  tft.drawCentreString(message, SCR_CX, SCR_CY - SCALE_Y(20), 1);
 
   // Progress bar animation
   int barX = SCR_CX - SCALE_X(60);
@@ -200,7 +200,7 @@ void drawPageIndicator(int current, int total) {
 void drawPageHeader(const char* title) {
   tft.fillRect(0, 0, SCR_W - SCALE_X(40), SCALE_Y(16), CLR_BG);
   tft.setTextColor(CLR_TEXT_LO);
-  tft.drawString(title, SCALE_X(4), SCALE_Y(2), 2);
+  tft.drawString(title, SCALE_X(4), SCALE_Y(4), 1);
 }
 
 // ═══════════════════════════════════════════════════════════

@@ -38,14 +38,10 @@ uint8_t t2_repeat = 0; // 0=off, 1=context, 2=track
 char    t2_device[24] = "Unknown";
 
 // ── Layout: Scale-to-Fit Album Art ──
-// Album art centered horizontally, scaled to max square that fits
-// Max height: 240 - 16(status bar) - 60(bottom info) = 164px
-// Max width: 320 - 20(margins) = 300px
-// So max square side = min(164, 300) = 164, but our art is 96px native
-// We'll render the 96px art centered and use the extra space for info
-#define T2S_ART_SIZE    SCALE_X(96)
-#define T2S_ART_X       SCALE_X(140)
-#define T2S_ART_Y       SCALE_Y(20)
+// Album art on the left (64x64), info on the right
+#define T2S_ART_SIZE    64
+#define T2S_ART_X       4
+#define T2S_ART_Y       20
 
 // ── State trackers (independent from Theme 1) ──
 static String t2s_lastTrack = "";
@@ -99,34 +95,42 @@ void t2_redrawSpotifyPartial() {
     // Draw art frame border
     tft.drawRect(T2S_ART_X - 2, T2S_ART_Y - 2, T2S_ART_SIZE + 4, T2S_ART_SIZE + 4, T2S_FRAME);
     tft.drawRect(T2S_ART_X - 1, T2S_ART_Y - 1, T2S_ART_SIZE + 2, T2S_ART_SIZE + 2, T2S_DIM);
-    // Push the actual album art
+    // Push the actual album art with correct endianness
+    tft.setSwapBytes(true);
     tft.pushImage(T2S_ART_X, T2S_ART_Y, T2S_ART_SIZE, T2S_ART_SIZE, albumArt);
+    tft.setSwapBytes(false);
     t2s_artDrawn = true;
   }
 
-  // ── Track Info — Below the album art ──
-  int infoY = T2S_ART_Y + T2S_ART_SIZE + 8;
-  String title = currentTrack.substring(0, 22);
-  String artist = currentArtist.substring(0, 26);
+  // ── Track Info — To the right of album art ──
+  int infoX = T2S_ART_X + T2S_ART_SIZE + 6;
+  int infoY = T2S_ART_Y;
+  String title = currentTrack.substring(0, 14); // Shorter for side layout
+  String artist = currentArtist.substring(0, 16);
 
-  if (title != t2s_lastTrack) {
-    tft.fillRect(SCALE_X(10), infoY, SCREEN_W - SCALE_X(20), 20, T2S_BG);
+  if (forceSpotifyRedraw || title != t2s_lastTrack) {
+    tft.fillRect(infoX, infoY, SCREEN_W - infoX, 10, T2S_BG);
     tft.setTextColor(TFT_WHITE, T2S_BG);
-    tft.drawCentreString(title, SCREEN_W / 2, infoY, 2);
+    tft.drawString(title, infoX, infoY, 1);
+    
+    if (title != t2s_lastTrack) {
+      tft.fillRect(T2S_ART_X, T2S_ART_Y, T2S_ART_SIZE, T2S_ART_SIZE, T2S_BG); // Clear old art
+      t2s_artDrawn = false; // Force complete album art redraw for new song
+      albumArtReady = false; // Prevent ghosting of old art
+    }
     t2s_lastTrack = title;
-    t2s_artDrawn = false; // Force complete album art redraw for new song
   }
-  if (artist != t2s_lastArtist) {
-    tft.fillRect(SCALE_X(10), infoY + 18, SCREEN_W - SCALE_X(20), 14, T2S_BG);
+  if (forceSpotifyRedraw || artist != t2s_lastArtist) {
+    tft.fillRect(infoX, infoY + 12, SCREEN_W - infoX, 10, T2S_BG);
     tft.setTextColor(T2S_DIM, T2S_BG);
-    tft.drawCentreString(artist, SCREEN_W / 2, infoY + 18, 1);
+    tft.drawString(artist, infoX, infoY + 12, 1);
     t2s_lastArtist = artist;
   }
 
   // ── Progress Bar (horizontal, gold theme) ──
-  int progY = infoY + 38;
-  int progX = SCALE_X(30);
-  int progW = SCREEN_W - SCALE_X(60);
+  int progY = infoY + 30;
+  int progX = infoX;
+  int progW = SCREEN_W - infoX - 4;
 
   if (playDuration > 0) {
     int w = map(playProgress, 0, playDuration, 0, progW);
@@ -155,117 +159,70 @@ void t2_redrawSpotifyPartial() {
   sprintf(t1, "%d:%02d", (playProgress/1000)/60, (playProgress/1000)%60);
   sprintf(t2, "%d:%02d", (playDuration/1000)/60, (playDuration/1000)%60);
   tft.setTextColor(T2S_DIM, T2S_BG);
-  // Pad strings to 5 chars to overwrite previous frame's pixels
   char pt1[12], pt2[12];
   sprintf(pt1, "%-5s", t1);
   sprintf(pt2, "%5s", t2);
-  tft.drawString(pt1, progX, progY + 7, 1);
-  tft.drawRightString(pt2, progX + progW, progY + 7, 1);
+  tft.drawString(pt1, progX, progY + 6, 1);
+  tft.drawRightString(pt2, progX + progW, progY + 6, 1);
 
   // ── Playback Controls Row ──
   int ctrlY = progY + 22;
-  int ctrlCX = SCREEN_W / 2;
+  int ctrlCX = infoX + (progW / 2);
 
   // Clear control row
-  tft.fillRect(ctrlCX - SCALE_X(70), ctrlY - 10, SCALE_X(140), 24, T2S_BG);
+  tft.fillRect(ctrlCX - 35, ctrlY - 8, 70, 16, T2S_BG);
 
   // Prev
-  drawIconPrev(ctrlCX - SCALE_X(50), ctrlY, TFT_WHITE);
+  drawIconPrev(ctrlCX - 20, ctrlY, TFT_WHITE);
   // Play/Pause circle (gold)
-  tft.fillCircle(ctrlCX, ctrlY, 12, T2S_ACCENT);
+  tft.fillCircle(ctrlCX, ctrlY, 8, T2S_ACCENT);
   if (isPlaying) drawIconPause(ctrlCX, ctrlY, T2S_BG);
-  else drawIconPlay(ctrlCX + 2, ctrlY, T2S_BG);
+  else drawIconPlay(ctrlCX + 1, ctrlY, T2S_BG);
   // Next
-  drawIconNext(ctrlCX + SCALE_X(50), ctrlY, TFT_WHITE);
+  drawIconNext(ctrlCX + 20, ctrlY, TFT_WHITE);
 
-  // Shuffle/Repeat indicators
-  if (t2_shuffle) drawIconShuffle(ctrlCX - SCALE_X(30), ctrlY, T2S_GREEN);
-  else            drawIconShuffle(ctrlCX - SCALE_X(30), ctrlY, T2S_DIM);
-  if (t2_repeat > 0) drawIconRepeat(ctrlCX + SCALE_X(30), ctrlY, T2S_GREEN);
-  else                drawIconRepeat(ctrlCX + SCALE_X(30), ctrlY, T2S_DIM);
-
-  // ── Lyrics Panel — Left sidebar (compact) ──
-  int lyrX = SCALE_X(4);
-  int lyrY = SCALE_Y(25);
-  int lyrW = T2S_ART_X - SCALE_X(10);
-  int lyrH = T2S_ART_SIZE;
+  // ── Lyrics Panel — Bottom row ──
+  int lyrX = 4;
+  int lyrY = T2S_ART_Y + T2S_ART_SIZE + 6;
+  int lyrW = SCREEN_W - 8;
 
   bool lyricsChanged = (currentLyrics != t2s_lastLyric ||
-                        currentLyricsLine2 != t2s_lastLyric2 ||
-                        prevLyricsLine != t2s_lastPrevLyric);
+                        currentLyricsLine2 != t2s_lastLyric2);
 
   if (lyricsChanged) {
     if (currentLyrics.length() > 0) {
-      int yC = lyrY + 4;
+      int yC = lyrY;
 
-      // Helper lambda to pad strings to max width for seamless overwrite
       auto padString = [](String s, int len) -> String {
         while (s.length() < len) s += " ";
         return s;
       };
 
-      // Previous line (dim)
-      tft.setTextColor(T2S_DIM, T2S_BG);
-      String p = padString(prevLyricsLine.substring(0, 12), 12);
-      tft.drawString(p, lyrX, yC, 1);
-      yC += 16;
-
       // Current line (bright gold)
       tft.setTextColor(T2S_ACCENT, T2S_BG);
-      String c1 = padString(currentLyrics.substring(0, 12), 12);
-      String c2 = padString(currentLyrics.length() > 12 ? currentLyrics.substring(12, 24) : "", 12);
-      tft.drawString(c1, lyrX, yC, 2); yC += 16;
-      tft.drawString(c2, lyrX, yC, 2); yC += 20;
+      String c1 = padString(currentLyrics.substring(0, 26), 26);
+      tft.drawString(c1, lyrX, yC, 1); yC += 10;
 
       // Next line (dim)
       tft.setTextColor(T2S_DIM, T2S_BG);
-      String n = padString(currentLyricsLine2.substring(0, 12), 12);
+      String n = padString(currentLyricsLine2.substring(0, 26), 26);
       tft.drawString(n, lyrX, yC, 1);
     } else {
-      // Clear lyrics area when empty (e.g., new song without lyrics or instrumental break)
-      tft.fillRect(0, lyrY, lyrW, 80, T2S_BG);
+      // Clear lyrics area
+      tft.fillRect(0, lyrY, lyrW, 20, T2S_BG);
     }
 
     t2s_lastLyric = currentLyrics;
     t2s_lastLyric2 = currentLyricsLine2;
-    t2s_lastPrevLyric = prevLyricsLine;
-  }
-
-  // ── Volume/Device indicator — Right sidebar ──
-  int rsX = T2S_ART_X + T2S_ART_SIZE + 10;
-  int rsY = 30;
-  int rsW = SCREEN_W - rsX - 4;
-
-  if (!t2s_overlayDrawn) {
-    tft.fillRect(rsX, rsY, rsW, 80, T2S_BG);
-
-    // Volume bar (vertical)
-    tft.setTextColor(T2S_DIM, T2S_BG);
-    tft.drawString("VOL", rsX, rsY, 1);
-    int volBarY = rsY + 12;
-    int volBarH = 50;
-    tft.fillRect(rsX + 8, volBarY, 4, volBarH, T2S_FRAME);
-    int volFill = map(t2_volume, 0, 100, 0, volBarH);
-    tft.fillRect(rsX + 8, volBarY + volBarH - volFill, 4, volFill, T2S_ACCENT);
-    // Volume percentage
-    char volStr[6];
-    sprintf(volStr, "%d%%", t2_volume);
-    tft.drawString(volStr, rsX, volBarY + volBarH + 4, 1);
-
-    t2s_overlayDrawn = true;
   }
 }
 
-void t2_resetSpotifyDrawState() {
-  t2s_lastTrack = "";
-  t2s_lastArtist = "";
-  t2s_lastLyric = "";
-  t2s_lastLyric2 = "";
-  t2s_lastPrevLyric = "";
   t2s_artDrawn = false;
   t2s_overlayDrawn = false;
   t2s_lastProgress = -1;
   t2s_lastProgW = -1;
+  extern bool forceSpotifyRedraw;
+  forceSpotifyRedraw = true;
 }
 
 void t2_drawSpotifyPage() {

@@ -14,11 +14,16 @@
  */
 
 #include "globals.h"
+
+#ifdef ESP32
+  #include "buttons.h"
+#endif
+
 #include "ui_components.h"
 #include "companion_net.h"
 #include "eyes.h"
-#include "theme3_eyes.h"
 #include "thought_engine.h"
+#include "theme3_eyes.h"
 #include "pages.h"
 #include "ui.h"
 
@@ -26,7 +31,6 @@
   #include "touch.h"
 #endif
 #ifdef ESP32
-  #include "buttons.h"
   #include "soc/soc.h"
   #include "soc/rtc_cntl_reg.h"
 #endif
@@ -38,6 +42,10 @@ unsigned long lastBlink = 0;
 bool isBlinking = false;
 int blinkPhase = 0;
 char udpBuffer[2048];
+
+uint16_t* customEyeImg = nullptr;
+bool customEyeActive = false;
+bool customEyeReady = false;
 
 // Thought engine scheduler state
 unsigned long nextThoughtTime = 0;
@@ -142,42 +150,7 @@ void initThoughtScheduler() {
   thoughtSchedulerActive = true;
 }
 
-void tickThoughtScheduler() {
-  if (!thoughtSchedulerActive) return;
-  if (currentState != STATE_EYES) return;  // Only on eyes page
 
-  // Check if bubble is currently active — handle fade/display
-  if (activeBubble.active) {
-    renderThoughtBubble();  // draw/fade current bubble
-    return;
-  }
-
-  // Check for PC-pushed override thought (immediate display)
-  if (strlen(overrideThought) > 0) {
-    generateThought();  // will consume overrideThought
-    activeBubble.active = true;
-    activeBubble.shownAt = millis();
-    activeBubble.fadeAlpha = 0;
-    activeBubble.fadingIn = true;
-    activeBubble.fadingOut = false;
-    return;
-  }
-
-  // Scheduled thought generation
-  if (millis() >= nextThoughtTime) {
-    generateThought();
-    activeBubble.active = true;
-    activeBubble.shownAt = millis();
-    activeBubble.fadeAlpha = 0;
-    activeBubble.fadingIn = true;
-    activeBubble.fadingOut = false;
-
-    // Schedule next thought (45-90 min)
-    nextThoughtTime = millis() + random(THOUGHT_MIN_INTERVAL_MS, THOUGHT_MAX_INTERVAL_MS);
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
 // V6/V7: UDP TIME PARSER
 // ═══════════════════════════════════════════════════════════
 
@@ -335,9 +308,9 @@ void loop() {
         t2_updateEyes();
       } else {
         updateEyes();
+        tickThoughtScheduler(&tft, false);
       }
-      // V7: Thought bubble rendering
-      tickThoughtScheduler();
+      
       // V4: Agent overlay on eyes page
       drawAgentOverlay();
       // V7: Flash notification overlay
