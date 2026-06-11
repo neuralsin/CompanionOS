@@ -101,8 +101,8 @@ extern Emotion currentEmotion;
 #ifdef ESP32
 
 #define DH_TOOLS_PER_PAGE 8
-#define DH_MENU_PAGES     2
-#define DH_TOTAL_TOOLS    16
+#define DH_MENU_PAGES     6
+#define DH_TOTAL_TOOLS    48
 
 enum DrHackSubState {
   DH_MENU,
@@ -146,6 +146,7 @@ extern unsigned long nextThoughtTime;
 extern uint16_t* customEyeImg;
 extern bool customEyeActive;
 extern bool customEyeReady;
+extern uint16_t spotifyArtCache[4096]; // 64x64 cache for Spotify persistence
 
 struct ThoughtBubble {
   char text[80];           // thought text (max 80 chars)

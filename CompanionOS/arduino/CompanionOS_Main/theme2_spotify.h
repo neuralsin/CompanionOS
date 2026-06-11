@@ -87,6 +87,8 @@ void t2s_drawProgressArc(int cx, int cy, int r, int rInner,
 // MAIN RENDER FUNCTIONS
 // ═══════════════════════════════════════════════════════════
 
+extern bool forceSpotifyRedraw;
+
 void t2_redrawSpotifyPartial() {
   if (currentState != STATE_SPOTIFY || activeTheme != 1) return;
 
@@ -217,11 +219,16 @@ void t2_redrawSpotifyPartial() {
   }
 }
 
+void t2_resetSpotifyDrawState() {
+  t2s_lastTrack = "";
+  t2s_lastArtist = "";
+  t2s_lastLyric = "";
+  t2s_lastLyric2 = "";
+  t2s_lastPrevLyric = "";
   t2s_artDrawn = false;
   t2s_overlayDrawn = false;
   t2s_lastProgress = -1;
   t2s_lastProgW = -1;
-  extern bool forceSpotifyRedraw;
   forceSpotifyRedraw = true;
 }
 

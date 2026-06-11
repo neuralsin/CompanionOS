@@ -150,7 +150,7 @@ static void dhRunChannelScan() {
         dhChScroll = dhChCursor - DH_CH_MIN - DH_CH_VISIBLE + 1;
       dhChDrawList(); delay(180);
     }
-    if (digitalRead(BTN_RIGHT) == LOW) {
+    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
       dhChCursor = (dhChCursor >= DH_CH_MAX) ? DH_CH_MIN : dhChCursor + 1;
       if (dhChCursor < DH_CH_MIN + dhChScroll) dhChScroll = dhChCursor - DH_CH_MIN;
       if (dhChCursor >= DH_CH_MIN + dhChScroll + DH_CH_VISIBLE)
@@ -378,7 +378,7 @@ static void dhRunWifiRadar() {
       if (dhRadarSel >= dhRadarScroll + DH_RADAR_VIS) dhRadarScroll = dhRadarSel - DH_RADAR_VIS + 1;
       drawList(); delay(180);
     }
-    if (digitalRead(BTN_RIGHT) == LOW) {
+    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
       dhRadarSel = (dhRadarSel >= dhRadarCount-1) ? 0 : dhRadarSel+1;
       if (dhRadarSel < dhRadarScroll) dhRadarScroll = dhRadarSel;
       if (dhRadarSel >= dhRadarScroll + DH_RADAR_VIS) dhRadarScroll = dhRadarSel - DH_RADAR_VIS + 1;
@@ -681,7 +681,7 @@ static void dhRunProbeSniffer() {
       }
       delay(180);
     }
-    if (digitalRead(BTN_RIGHT) == LOW) {
+    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
       if (dhProbeCount > 0) {
         dhProbeCursor = (dhProbeCursor + 1) % dhProbeCount;
         if (dhProbeCursor < dhProbeScroll) dhProbeScroll = dhProbeCursor;

@@ -458,6 +458,7 @@ void setEmotion(Emotion newEmotion) {
 
 void updateEyes() {
   if (currentState != STATE_EYES) return;
+  if (customEyeActive && customEyeReady) return; // Pause animations for Memories image
   
   unsigned long now = millis();
   

@@ -248,6 +248,7 @@ void renderThoughtBubble(T* display, bool isSprite) {
 
   // Alpha blend factor (simulated — controls color mixing, not real alpha)
   float alpha = activeBubble.fadeAlpha / 255.0f;
+  if (strlen(activeBubble.text) == 0) return; // Prevent blank thought boxes
 
   // ── Position Calculation ──────────────────────────────
   // 🔴 BUG-05 FIX: Bubble sits BETWEEN status bar (y=0..15)
@@ -325,6 +326,7 @@ template <typename T>
 void tickThoughtScheduler(T* display, bool isSprite) {
   if (!thoughtSchedulerActive) return;
   if (currentState != STATE_EYES) return;
+  if (customEyeActive && customEyeReady) return;
 
   // Check if bubble is currently active — handle fade/display
   if (activeBubble.active) {

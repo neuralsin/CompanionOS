@@ -272,6 +272,10 @@ public:
 };
 TFT_eSprite* T2EyeDrawer::t2Canvas = nullptr;
 
+// Helper functions for memory management between themes
+TFT_eSprite* t2CanvasPtr() { return T2EyeDrawer::t2Canvas; }
+void t2CanvasSetNull() { T2EyeDrawer::t2Canvas = nullptr; }
+
 // ═══════════════════════════════════════════════════════════
 // T2 EYE TRANSITION ENGINE (interpolates between presets)
 // ═══════════════════════════════════════════════════════════
@@ -659,6 +663,18 @@ void t2_goTo_Squint() {
 // ═══════════════════════════════════════════════════════════
 
 void t2_initEyes() {
+  t2_initialized = true;
+  
+  // Free Theme 3 sprite if it exists to prevent RAM fragmentation/OOM crashes
+  extern TFT_eSprite* t3CanvasPtr();
+  TFT_eSprite* t3c = t3CanvasPtr();
+  if (t3c != nullptr) {
+    t3c->deleteSprite();
+    delete t3c;
+    extern void t3CanvasSetNull();
+    t3CanvasSetNull();
+  }
+
   t2_leftEye.IsMirrored = true;
   t2_leftEye.ChainOperators();
   t2_rightEye.ChainOperators();
@@ -725,6 +741,8 @@ void t2_drawEyesPage() {
     T2EyeDrawer::t2Canvas->createSprite(SCREEN_W, SCREEN_H - 16);
   }
   
+  if (!T2EyeDrawer::t2Canvas || !T2EyeDrawer::t2Canvas->created()) return; // Safety check
+  
   // Clear the area above the sprite (y=16 to 16, so none) to prevent ghosting from other pages
   // tft.fillRect(0, 16, SCREEN_W, 32, COLOR_BG);
   
@@ -745,6 +763,7 @@ void t2_drawEyesPage() {
 
 void t2_updateEyes() {
   if (currentState != STATE_EYES) return;
+  if (customEyeActive && customEyeReady) return; // Pause animations for Memories image
   if (!t2_initialized) t2_initEyes();
 
   // Random look
@@ -770,6 +789,7 @@ void t2_updateEyes() {
     T2EyeDrawer::t2Canvas->setColorDepth(16);
     T2EyeDrawer::t2Canvas->createSprite(SCREEN_W, SCREEN_H - 16);
   }
+  if (!T2EyeDrawer::t2Canvas || !T2EyeDrawer::t2Canvas->created()) return;
   T2EyeDrawer::t2Canvas->fillSprite(COLOR_BG);
 
   t2_leftEye.CenterX  = T2_SCREEN_CX - T2_EYE_SIZE/2 - T2_EYE_GAP;

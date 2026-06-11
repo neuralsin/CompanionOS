@@ -11,6 +11,8 @@
 
 #include "globals.h"
 
+extern void redrawSettingsPartial();
+
 // Timing
 #define BTN_DEBOUNCE_MS     50
 #define BTN_LONG_PRESS_MS   800

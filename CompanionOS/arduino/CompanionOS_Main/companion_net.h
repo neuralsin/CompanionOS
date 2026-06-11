@@ -16,11 +16,12 @@
 #include <WiFiManager.h>
 #endif
 
-#include <WiFiUdp.h>
-#include <ArduinoJson.h>
-#include <NTPClient.h>
-
 #include "globals.h"
+#include <WiFiUdp.h>
+#include <NTPClient.h>
+#include <WebServer.h>
+#include <ArduinoJson.h>
+
 #include "eyes.h"
 
 // ═══════════════════════════════════════════════════════════
@@ -29,6 +30,64 @@
 
 extern char udpBuffer[2048];
 String pcIPStr = DEFAULT_PC_IP;
+
+// ESP32 System Web Server for Direct Memory Uploads
+static WebServer sysWebServer(8080);
+static const char MEMORIES_HTML[] PROGMEM = R"rawliteral(
+<!DOCTYPE html><html><head><title>CompanionOS Memories</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{background:#111;color:#fff;font-family:sans-serif;text-align:center;padding:20px;margin:0;}
+.card{background:#222;padding:20px;border-radius:10px;display:inline-block;max-width:400px;width:100%;}
+button{background:#05f;color:#fff;border:none;padding:12px 20px;border-radius:6px;font-size:16px;cursor:pointer;margin-top:15px;width:100%;}
+input{margin-top:15px;color:#aaa;}
+#status{margin-top:15px;font-weight:bold;color:#0f0;}
+</style></head><body>
+<div class="card"><h2>Upload Memory</h2>
+<p style="color:#aaa;font-size:14px;line-height:1.4;">Select a photo to directly display it on CompanionOS. Your device will automatically resize and convert it before sending.</p>
+<input type="file" id="file" accept="image/*"><br>
+<button onclick="upload()">Send to Screen</button>
+<div id="status"></div>
+<canvas id="cvs" style="display:none;"></canvas>
+</div>
+<script>
+function upload() {
+  const file = document.getElementById('file').files[0];
+  if (!file) { document.getElementById('status').innerText = 'Please select a file.'; return; }
+  document.getElementById('status').innerText = 'Processing...';
+  const img = new Image();
+  img.onload = () => {
+    const cvs = document.getElementById('cvs');
+    cvs.width = 160; cvs.height = 128;
+    const ctx = cvs.getContext('2d');
+    const scale = Math.max(160/img.width, 128/img.height);
+    const nw = img.width * scale;
+    const nh = img.height * scale;
+    const nx = (160 - nw) / 2;
+    const ny = (128 - nh) / 2;
+    ctx.drawImage(img, nx, ny, nw, nh);
+    const imgData = ctx.getImageData(0,0,160,128).data;
+    const buf = new Uint8Array(160*128*2);
+    let j=0;
+    for(let i=0; i<imgData.length; i+=4) {
+      const rgb565 = ((imgData[i]>>3)<<11) | ((imgData[i+1]>>2)<<5) | (imgData[i+2]>>3);
+      buf[j++] = rgb565 & 0xFF;
+      buf[j++] = (rgb565 >> 8) & 0xFF;
+    }
+    const blob = new Blob([buf], { type: 'application/octet-stream' });
+    const fd = new FormData();
+    fd.append('file', blob, 'memory.bin');
+    document.getElementById('status').innerText = 'Uploading...';
+    fetch('/upload', { method: 'POST', body: fd }).then(res => {
+      document.getElementById('status').innerText = 'Success!';
+    }).catch(err => {
+      document.getElementById('status').innerText = 'Failed!';
+    });
+  };
+  img.src = URL.createObjectURL(file);
+}
+</script></body></html>
+)rawliteral";
 
 // NTP Time Sync — IST = UTC + 5:30 = 19800 seconds
 WiFiUDP ntpUDP;
@@ -264,6 +323,38 @@ void setupWiFi() {
     Serial.print(F("IP: "));
     Serial.println(WiFi.localIP());
 
+    // Start System Web Server
+    sysWebServer.on("/", HTTP_GET, [](){
+      sysWebServer.send(200, "text/html", MEMORIES_HTML);
+    });
+    sysWebServer.on("/memories", HTTP_GET, [](){
+      sysWebServer.send(200, "text/html", MEMORIES_HTML);
+    });
+    sysWebServer.on("/upload", HTTP_POST, [](){
+      sysWebServer.send(200, "text/plain", "OK");
+    }, [](){
+      HTTPUpload& upload = sysWebServer.upload();
+      if (upload.status == UPLOAD_FILE_START) {
+        if (!customEyeImg) {
+          customEyeImg = (uint16_t*)malloc(160 * 128 * 2);
+        }
+        customEyeActive = false;
+        customEyeReady = false;
+      } else if (upload.status == UPLOAD_FILE_WRITE) {
+        if (customEyeImg && (upload.totalSize + upload.currentSize <= 160 * 128 * 2)) {
+          memcpy((uint8_t*)customEyeImg + upload.totalSize, upload.buf, upload.currentSize);
+        }
+      } else if (upload.status == UPLOAD_FILE_END) {
+        customEyeActive = true;
+        customEyeReady = true;
+        extern void renderCurrentPage();
+        renderCurrentPage();
+      }
+    });
+    sysWebServer.begin();
+    Serial.println(F("SysWebServer started on port 8080"));
+
+
     tft.fillScreen(COLOR_BG);
     tft.setTextColor(TFT_GREEN);
     tft.drawCentreString("WiFi Connected!", SCR_CX, SCR_CY - SCALE_Y(20), 2);
@@ -349,13 +440,20 @@ void sendCommand(String cmd) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// HANDLE NETWORK — Main loop network processor
+// HANDLE NETWORK — Main loop
+// ═══════════════════════════════════════════════════════════
+
+// Network state trackers
 // ═══════════════════════════════════════════════════════════
 
 bool pcFound = false;
 unsigned long lastDiscoveryShout = 0;
 
 void handleNetwork() {
+  if (wifiConnected) {
+    sysWebServer.handleClient();
+  }
+
   // Periodic NTP re-sync (every 5 minutes)
   if (wifiConnected && millis() - lastNTPSync >= 300000) {
     if (timeClient.update()) {

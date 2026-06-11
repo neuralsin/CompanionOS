@@ -637,7 +637,7 @@ static void dhRunIrRemotes() {
   while (true) {
     extern void handleNetwork(); handleNetwork();
     if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { cursor = (cursor + btnCount - 1) % btnCount; drawRemote(); delay(180); }
-    if (digitalRead(BTN_RIGHT) == LOW) { cursor = (cursor + 1) % btnCount; drawRemote(); delay(180); }
+    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { cursor = (cursor + 1) % btnCount; drawRemote(); delay(180); }
     if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
@@ -725,7 +725,7 @@ static void dhRunIrSaved() {
   while (true) {
     extern void handleNetwork(); handleNetwork();
     if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { cursor = (cursor + totalItems - 1) % totalItems; drawSaved(); delay(180); }
-    if (digitalRead(BTN_RIGHT) == LOW) { cursor = (cursor + 1) % totalItems; drawSaved(); delay(180); }
+    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { cursor = (cursor + 1) % totalItems; drawSaved(); delay(180); }
     if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;

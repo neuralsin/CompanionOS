@@ -126,7 +126,7 @@ static void dhRunJammer24() {
       if (isAttacking && j1Ok) jam1.startConstCarrier(RF24_PA_MAX, dhJamChToNrf(jamCh));
       drawGauge(); delay(180);
     }
-    if (digitalRead(BTN_RIGHT) == LOW) {
+    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
       jamCh = (jamCh == 14) ? 1 : jamCh + 1;
       if (isAttacking && j1Ok) jam1.startConstCarrier(RF24_PA_MAX, dhJamChToNrf(jamCh));
       drawGauge(); delay(180);
@@ -313,7 +313,7 @@ static void dhRunRadioScanner() {
     tft.drawString("</>:Mode HOLD:Back", SCALE_X(2), SCR_H - SCALE_Y(10), 1);
 
     // Input
-    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false)) || digitalRead(BTN_RIGHT) == LOW) {
+    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false)) || (digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
       showWaterfall = !showWaterfall;
       delay(200);
     }

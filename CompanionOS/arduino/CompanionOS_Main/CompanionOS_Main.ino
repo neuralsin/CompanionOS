@@ -46,6 +46,7 @@ char udpBuffer[2048];
 uint16_t* customEyeImg = nullptr;
 bool customEyeActive = false;
 bool customEyeReady = false;
+uint16_t spotifyArtCache[4096]; // 64x64 cache for Spotify persistence
 
 // Thought engine scheduler state
 unsigned long nextThoughtTime = 0;

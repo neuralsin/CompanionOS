@@ -126,6 +126,7 @@ String lastPrevLyric = "";
 bool artDrawn = false;
 static bool controlsDrawn = false;
 static bool cardDrawn = false;
+static bool lastPlaying = false;
 bool forceSpotifyRedraw = false;
 
 void redrawSpotifyPartial() {
@@ -781,8 +782,8 @@ void drawEyesPage() {
     return;
   }
   
-  if (activeTheme == 2) { t3_drawEyesPage(); drawStatusBar(); return; }
-  if (activeTheme == 1) { t2_drawEyesPage(); drawStatusBar(); return; }
+  if (activeTheme == 2) { tft.fillScreen(COLOR_BG); t3_drawEyesPage(); drawStatusBar(); return; }
+  if (activeTheme == 1) { tft.fillScreen(COLOR_BG); t2_drawEyesPage(); drawStatusBar(); return; }
   tft.fillRect(0, 16, SCREEN_W, SCREEN_H - 16, COLOR_BG);
   drawStarfield();
   drawEyes();
@@ -902,6 +903,8 @@ void changePage(int direction) {
   currentState = (AppState)next;
   // HIGH-06 FIX: Reset all page draw states on page change to prevent stale partial redraws
   resetSpotifyDrawState();
+  extern void t2_resetSpotifyDrawState();
+  t2_resetSpotifyDrawState();
   settingsScrollY = 0;
   #ifdef ESP32
   // Reset Dr. Hack state when leaving

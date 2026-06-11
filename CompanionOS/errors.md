@@ -1,34 +1,144 @@
-# CompanionOS v7 Live Audit Ledger
+# CompanionOS — Lint Errors & Code Issues Log
 
-Audited: 2026-06-05
-Scope: CompanionOS firmware, Python bridge, web remote, config, and V7 prompt compliance.
-Rule: Active checklist contains unresolved work only. Completed defects are removed from the active list and recorded in the change log.
+> Manually identified during full codebase audit on 2026-06-11.  
+> Severity: 🔴 Critical | 🟠 Major | 🟡 Minor | ⚪ Info
 
-## Active Checklist
+---
 
-- [ ] FW-06: Remove blocking Dr. Hack active-tool loops or add bounded timeouts and non-stuck exit paths. (Confirmed: `while (true)` loops remain in `page_dr_hack.h`, `dh_wifi_tools.h`, `dh_ir_tools.h`, `dh_evil_portal.h`, `dh_cc1101_tools.h`, `dh_rfid_tools.h`).
-- [ ] FW-07: Make `page_social.h` usable on the 160x128 ESP32 mini display. Currently uses an unscaled, hardcoded layout (e.g., `cardH = 185`, `cardY = 24`) that clips on 160x128 screens.
-- [ ] FW-08: Potential Memory Waste. `theme2_eyes.h` allocates a `TFT_eSprite` using `new` but provides no `delete` mechanism, wasting RAM when switching themes.
-- [ ] PY-01: Add missing `psutil` dependency to `requirements.txt`.
-- [ ] PY-02: Remove committed real API secrets from `python/config.json` (GitHub PAT, Spotify secrets, Weather API key); use environment variables and safe config fallbacks.
-- [ ] PY-03: `config.json` lacks a `twitch_client_id` and `twitch_client_secret` under the `gaming` block, rendering the `TWITCH_` environment variable injection in `companion_controller.py` partially incomplete.
-- [ ] PY-04: Shrink or split `STOCKS:` and `GAMING:` UDP payloads in Python so they cannot exceed the ESP parser budget. No size-checking logic exists in `stock_manager.py` or `steam_tracker.py` UDP sends.
-- [ ] PY-05: Fix UDP port conflicts: `web_remote.py` discovery (`LOCAL_PORT = 8889`), `bluetooth_bridge.py` (`UDP_PORT_RX = 8889`), and `companion_controller.py` (`PC_PORT_RX = 8889`) all conflict by binding to the same PC receive port.
-- [ ] PY-06: Fix Pomodoro timing drift by tracking integer milliseconds instead of subtracting floats.
-- [ ] UI-01: Polish no-touch UX: physical buttons and web e-buttons must cover navigation, page selection, Spotify, emotion, and thought workflows.
-- [ ] VERIFY-01: Run Python compile/lint checks and document Arduino verification status.
+## 🔴 Critical Errors
 
-## Change Log
+### ERR-001: `ieee80211_raw_frame_sanity_check` commented out
+- **File**: [page_dr_hack.h:422-425](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L422-L425)
+- **Impact**: ALL raw 802.11 TX tools silently fail (Deauth, Beacon Spam, KARMA)
+- **Comment says**: "ESP32 Core 3.x defines this internally" — this is **incorrect**
+- **Fix**: Uncomment the `extern "C"` function override
 
-- 2026-06-05: Fixed FW-05. Made `page_network.h`, `page_stocks.h`, `pages.h` (Spotify, Weather, Notifications), and `page_productivity.h` layout-aware for 160x128 via `SCREEN_W > 200` conditional logic.
-- 2026-06-05: Audited the entire codebase for mismatch bugs, old code residue, and failures. Appended FW-07 and FW-08 to the active checklist. Confirmed presence of blocking loops (FW-06) and Python UDP port binding conflicts (PY-05).
-- 2026-06-04: Initialized this live audit ledger from the stale full report, keeping only verified unresolved issues as active checklist items.
-- 2026-06-04: Verified Python syntax with `python -m compileall -q CompanionOS\python`; no Python syntax errors at audit start.
-- 2026-06-04: Verified local Arduino build tooling is absent: `arduino-cli` and `pio` commands are not installed, so firmware compilation cannot be executed in this CLI until one is installed.
-- 2026-06-04: Fixed firmware header-order blocker by including `config.h` before `#if HAS_TOUCH` in `arduino/CompanionOS_Main/globals.h`.
-- 2026-06-04: Removed duplicate `showFlashNotification()` from `arduino/CompanionOS_Main/pages.h`; `ui.h` is now the single notification overlay implementation.
-- 2026-06-04: Added `changePage`, `sendCommand`, `setEmotion`, `t2_nextExpression`, and `flashNotifEnabled` forward declarations in `arduino/CompanionOS_Main/network.h` for compile-safe virtual button handling.
-- 2026-06-04: Replaced fragile `BTN:` handling in `arduino/CompanionOS_Main/network.h` with `handleVirtualButton()`, covering LEFT/RIGHT/SELECT/HOME for page navigation, Spotify control, Pomodoro start/pause, notification toggle, settings theme toggle, and Dr. Hack navigation.
-- 2026-06-04: Hardened the binary `0xFE` image receiver in `arduino/CompanionOS_Main/network.h` by validating `startPixel`, image dimensions, and safe pixel count before writing into `albumArt[]`.
-- 2026-06-04: Corrected RGB565 binary reassembly in `arduino/CompanionOS_Main/network.h` to match the Python sender's high-byte/low-byte packet order, fixing wrong-color album/game art.
-- 2026-06-04: Added `getEffectivePageCount()` in `arduino/CompanionOS_Main/ui.h` and made `drawPageIndicator()` clamp to the platform-specific page count, removing the unreachable ESP32-only Dr. Hack dot from ESP8266 UI.
+### ERR-002: WiFi init sequence wrong for raw frame TX
+- **Files**: 
+  - [page_dr_hack.h:491-496](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L491-L496) (Beacon Spam)
+  - [page_dr_hack.h:631-636](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L631-L636) (Deauth)
+- **Impact**: `esp_wifi_80211_tx()` may silently fail even with ERR-001 fixed
+- **Fix**: Use full low-level init: `WIFI_MODE_NULL → esp_wifi_init → set_mode(STA) → start → set_promiscuous`
+
+### ERR-003: Missing WiFi cleanup after tool exit
+- **Files**: 
+  - [page_dr_hack.h:565](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L565) (Beacon Spam)
+  - [page_dr_hack.h:694](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L694) (Deauth)
+- **Impact**: WiFi left in broken promiscuous state; CompanionOS WiFi never reconnects
+- **Fix**: Add `esp_wifi_stop(); esp_wifi_deinit();` after `esp_wifi_set_promiscuous(false)`
+
+---
+
+## 🟠 Major Errors
+
+### ERR-004: Menu page/tool count mismatch
+- **File**: [globals.h:103-105](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/globals.h#L103-L105)
+- **Impact**: `DH_MENU_PAGES=2`, `DH_TOTAL_TOOLS=16` but `DrHackSubState` enum (L107-127) defines 48 states across 6 pages. All IR, CC1101, Radio, and System tools are **completely unreachable**.
+- **Fix**: Set `DH_MENU_PAGES=6`, `DH_TOTAL_TOOLS=48`; add corresponding tool names/colors/switch cases
+
+### ERR-005: Tool routing mismatch — "NRF Test" → HW Diagnostics
+- **File**: [page_dr_hack.h:49](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L49) vs [page_dr_hack.h:1168](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L1168)
+- **Impact**: Menu says "NRF Test" but runs `dhRunHwDiag()` instead
+- **Fix**: Route to correct function or rename menu label
+
+### ERR-006: `drawDrHackTile()` not called on Theme 2 and Theme 3
+- **File**: [CompanionOS_Main.ino:305-323](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/CompanionOS_Main.ino#L305-L323)
+- **Impact**: Dr.Hack entry tile ("H") is invisible when theme2 or theme3 is active
+- **Fix**: Add `drawDrHackTile()` calls within the `activeTheme == 1` and `activeTheme == 2` blocks
+
+### ERR-007: `dhWaitSelectPress()` doesn't check virtual button flag
+- **File**: [ui_components.h:15-22](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/ui_components.h#L15-L22)
+- **Impact**: When using web remote to control dr.hack, virtual button presses don't work for any tool that uses `dhWaitSelectPress()`. Only physical button works.
+- **Fix**: Add `virtualSelectPressed` check to the wait loop
+
+---
+
+## 🟡 Minor Errors
+
+### ERR-008: Packet Monitor has mixed button handling
+- **File**: [page_dr_hack.h:799-806](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L799-L806)
+- **Impact**: LEFT button checks `virtualLeftPressed` flag; RIGHT button on line 803 does NOT. Channel change via web remote only works in one direction.
+- **Fix**: Add `virtualRightPressed` check to the RIGHT button condition
+
+### ERR-009: Channel Scan uses bare `digitalRead` without virtual button checks
+- **File**: [dh_wifi_tools.h:153](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_wifi_tools.h#L153)
+- **Impact**: RIGHT navigation in Channel Scan doesn't respond to web remote
+- **Fix**: Add `(virtualRightPressed ? (virtualRightPressed=false, true) : false)` check
+
+### ERR-010: WiFi Radar RIGHT button missing virtual button check
+- **File**: [dh_wifi_tools.h:381](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_wifi_tools.h#L381)
+- **Impact**: Same as ERR-009 but for WiFi Radar tool
+- **Fix**: Add virtual button check
+
+### ERR-011: Probe Sniffer RIGHT button missing virtual button check
+- **File**: [dh_wifi_tools.h:684](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_wifi_tools.h#L684)
+- **Impact**: Same as ERR-009 but for Probe Sniffer
+- **Fix**: Add virtual button check
+
+### ERR-012: BLE Inspector RIGHT button missing virtual button check
+- **File**: [dh_ble_tools.h:238](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_ble_tools.h#L238)
+- **Impact**: BLE Inspector RIGHT navigation only works with physical button
+- **Fix**: Add virtual button check
+
+### ERR-013: BLE Spam RIGHT button missing virtual button check
+- **File**: [dh_ble_tools.h:411](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_ble_tools.h#L411)
+- **Fix**: Add virtual button check
+
+### ERR-014: BT Disruptor RIGHT button missing virtual button check
+- **File**: [dh_ble_tools.h:650](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_ble_tools.h#L650)
+- **Fix**: Add virtual button check
+
+### ERR-015: BT Disruptor attack mode RIGHT button missing virtual check
+- **File**: [dh_ble_tools.h:696](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_ble_tools.h#L696)
+- **Fix**: Add virtual button check
+
+### ERR-016: IR Remote RIGHT button missing virtual button check
+- **File**: [dh_ir_tools.h:640](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_ir_tools.h#L640)
+- **Fix**: Add virtual button check
+
+### ERR-017: IR Saved RIGHT button missing virtual button check
+- **File**: [dh_ir_tools.h:728](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_ir_tools.h#L728)
+- **Fix**: Add virtual button check
+
+### ERR-018: Radio Scanner LEFT/RIGHT merged check
+- **File**: [dh_radio_tools.h:316](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_radio_tools.h#L316)
+- **Impact**: Uses `||` to combine LEFT and RIGHT into one toggle — RIGHT has no virtual button check
+- **Fix**: Add virtual button check for RIGHT
+
+### ERR-019: Jammer RIGHT button missing virtual button check
+- **File**: [dh_radio_tools.h:129](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_radio_tools.h#L129)
+- **Fix**: Add virtual button check
+
+---
+
+## ⚪ Info / Style Issues
+
+### INF-001: `EvilPortalHTML.h` is empty (0 bytes)
+- **File**: [EvilPortalHTML.h](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/EvilPortalHTML.h)
+- **Impact**: None — HTML is defined inline in `dh_evil_portal.h`
+- **Note**: Dead file, can be removed
+
+### INF-002: `network.h.bak` backup file in source tree
+- **File**: [network.h.bak](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/network.h.bak)
+- **Impact**: None — backup file, not included
+- **Note**: Can be removed for cleanliness
+
+### INF-003: `exoticMode` is dead code
+- **File**: [globals.h:302](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/globals.h#L302)
+- **Impact**: None — defined as `false` constant, all conditionals evaluate false
+- **Note**: Already documented in code comment
+
+### INF-004: `dhAbout()` hardcodes "Tools: 48" but only 16 are accessible
+- **File**: [page_dr_hack.h:1091](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L1091)
+- **Impact**: UI shows incorrect tool count
+- **Fix**: Will be correct after ARCH-01 is fixed
+
+### INF-005: Port scan target uses `extern String pcIPStr` which may be uninitialized
+- **File**: [page_dr_hack.h:376](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L376)
+- **Impact**: Port scan targets empty string if PC IP was never received
+- **Fix**: Fall back to gateway IP if pcIPStr is empty
+
+### INF-006: Multiple `extern void handleButtons(); handleButtons();` in tool loops
+- **Files**: Multiple locations in page_dr_hack.h, dh_wifi_tools.h
+- **Impact**: None — valid C++ but verbose pattern
+- **Note**: Style issue only, works correctly

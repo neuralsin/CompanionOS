@@ -630,17 +630,26 @@ def start_notes_server():
                     </div>
                 </div>
 
-                <!-- CUSTOM EYE -->
+                <!-- MEMORIES -->
                 <div class="notes" style="margin-top: 24px;">
-                    <h2>&#128065; Custom Eye Image</h2>
+                    <h2>&#128247; Memories</h2>
                     <form id="eyeForm" style="display: flex; gap: 10px; margin-top: 10px;">
                         <input type="file" id="eyeImage" accept="image/*" style="flex: 1; padding: 5px; color: #fff;">
-                        <button type="button" class="notes-submit" style="flex: 1; margin-top: 0;" onclick="uploadEye()">Upload & Show</button>
+                        <button type="button" class="notes-submit" style="flex: 1; margin-top: 0;" onclick="uploadEye()">Upload Memory</button>
                     </form>
                     <div style="display: flex; gap: 10px; margin-top: 10px;">
-                        <button class="notes-submit" style="flex: 1; background: #00d4ff; color: #111;" onclick="toggleEye(1)">Show Image</button>
+                        <button class="notes-submit" style="flex: 1; background: #00d4ff; color: #111;" onclick="toggleEye(1)">Show Memory</button>
                         <button class="notes-submit" style="flex: 1; background: #ff416c; color: #fff;" onclick="toggleEye(0)">Revert to Eyes</button>
                     </div>
+                </div>
+
+                <!-- STOCKS SETTINGS -->
+                <div class="notes" style="margin-top: 24px;">
+                    <h2>&#128200; Stocks Settings</h2>
+                    <form action="/api/stock" method="POST" style="display: flex; gap: 10px; margin-top: 10px;">
+                        <input type="text" name="ticker" placeholder="Stock Ticker (e.g. AAPL)" style="flex: 1; padding: 10px; border-radius: 8px; border: none; background: #1a1a3e; color: #fff;" required>
+                        <button type="submit" class="notes-submit" style="margin-top: 0;">Set Primary Stock</button>
+                    </form>
                 </div>
 
                 <!-- POMODORO SETTINGS -->
@@ -719,9 +728,9 @@ def start_notes_server():
                             fb.className = 'feedback active';
                             setTimeout(() => {{ fb.className = 'feedback'; fb.textContent = ''; }}, 1000);
                         }});
-                    }
+                    }}
 
-                    function uploadEye() {
+                    function uploadEye() {{
                         const input = document.getElementById('eyeImage');
                         if (!input.files[0]) return;
                         const formData = new FormData();
@@ -731,28 +740,28 @@ def start_notes_server():
                         fb.textContent = 'Uploading... Please wait (~6s)';
                         fb.className = 'feedback active';
                         
-                        fetch('/api/eye_upload', {
+                        fetch('/api/eye_upload', {{
                             method: 'POST',
                             body: formData
-                        }).then(r => r.json()).then(res => {
+                        }}).then(r => r.json()).then(res => {{
                             fb.textContent = res.status;
-                            setTimeout(() => { fb.className = 'feedback'; fb.textContent = ''; }, 3000);
-                        }).catch(e => {
+                            setTimeout(() => {{ fb.className = 'feedback'; fb.textContent = ''; }}, 3000);
+                        }}).catch(e => {{
                             fb.textContent = 'Upload Error';
-                            setTimeout(() => { fb.className = 'feedback'; fb.textContent = ''; }, 3000);
-                        });
-                    }
+                            setTimeout(() => {{ fb.className = 'feedback'; fb.textContent = ''; }}, 3000);
+                        }});
+                    }}
 
-                    function toggleEye(state) {
-                        fetch('/api/eye_toggle', {
+                    function toggleEye(state) {{
+                        fetch('/api/eye_toggle', {{
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ state: state })
-                        });
+                            headers: {{ 'Content-Type': 'application/json' }},
+                            body: JSON.stringify({{ state: state }})
+                        }});
                         const fb = document.getElementById('feedback');
-                        fb.textContent = state ? 'Showing Custom Image' : 'Reverting to Eyes';
+                        fb.textContent = state ? 'Showing Memory' : 'Reverting to Eyes';
                         fb.className = 'feedback active';
-                        setTimeout(() => { fb.className = 'feedback'; fb.textContent = ''; }, 1500);
+                        setTimeout(() => {{ fb.className = 'feedback'; fb.textContent = ''; }}, 1500);
                     }}
 
                     function page(n) {{
@@ -790,6 +799,20 @@ def start_notes_server():
                 with open(notes_file, 'w') as f:
                     f.write(note)
                 print(f"📝 Note updated via web: {note[:50]}...")
+            return redirect('/')
+
+        @app.route('/api/stock', methods=['POST'])
+        def api_stock():
+            ticker = request.form.get('ticker')
+            if ticker:
+                stock_service.set_primary(ticker)
+                # optionally force an immediate update
+                try:
+                    payload = stock_service.get_esp_payload()
+                    msg = f"STOCKS:{json.dumps(payload)}"
+                    send_udp(msg)
+                except Exception as e:
+                    print(f"Error fetching new stock: {e}")
             return redirect('/')
 
         @app.route('/api/pomodoro', methods=['POST'])

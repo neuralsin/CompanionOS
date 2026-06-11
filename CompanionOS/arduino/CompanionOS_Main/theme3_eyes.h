@@ -226,6 +226,16 @@ void t3_applyVariant(int idx) {
 
 void t3_initEyes() {
   t3_applyVariant(t3EyeVariant);
+  
+  // Free Theme 2 sprite if it exists to prevent RAM fragmentation/OOM crashes
+  extern TFT_eSprite* t2CanvasPtr();
+  TFT_eSprite* t2c = t2CanvasPtr();
+  if (t2c != nullptr) {
+    t2c->deleteSprite();
+    delete t2c;
+    extern void t2CanvasSetNull();
+    t2CanvasSetNull();
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -327,7 +337,9 @@ static void t3_animLaugh()    { t3_laugh = true; }
 // CORE DRAW ENGINE (TFT_eSPI port of RoboEyes::drawEyes)
 // ═══════════════════════════════════════════════════════════
 
-static void t3_drawEyesInternal() {
+static TFT_eSprite* t3_canvas = nullptr;
+
+void t3_drawEyesInternal() {
   // ── PRE-CALCULATIONS ──
 
   // Curious mode: outer eye grows when looking far left/right
@@ -450,12 +462,13 @@ static void t3_drawEyesInternal() {
 
   // ── DRAWING ──
 
-  static TFT_eSprite* t3_canvas = nullptr;
   if (!t3_canvas) {
     t3_canvas = new TFT_eSprite(&tft);
     t3_canvas->setColorDepth(16);
     t3_canvas->createSprite(t3_screenW, t3_screenH);
   }
+  
+  if (!t3_canvas || !t3_canvas->created()) return; // Prevent panic if memory full
 
   // Clear the eye zone in the sprite
   t3_canvas->fillSprite(T3_BG_COLOR);
@@ -537,7 +550,7 @@ static void t3_drawEyesInternal() {
     }
   }
   
-  turetickThoughtScheduler(t3_canvas, true);
+  tickThoughtScheduler(t3_canvas, true);
   t3_canvas->pushSprite(0, t3_offsetY);
 
   // ── VARIANT LABEL ──
@@ -554,6 +567,7 @@ static void t3_drawEyesInternal() {
 
 // Called from the 50ms loop when STATE_EYES && activeTheme == 2
 void t3_updateEyes() {
+  if (customEyeActive && customEyeReady) return; // Pause animations for Memories image
   if (millis() - t3_fpsTimer >= (unsigned long)t3_frameInterval) {
     t3_drawEyesInternal();
     t3_fpsTimer = millis();
@@ -565,5 +579,9 @@ void t3_drawEyesPage() {
   t3_initEyes();
   t3_drawEyesInternal();
 }
+
+// Helper functions for memory management between themes
+TFT_eSprite* t3CanvasPtr() { return t3_canvas; }
+void t3CanvasSetNull() { t3_canvas = nullptr; }
 
 #endif // THEME3_EYES_H
