@@ -138,6 +138,12 @@ void redrawSpotifyPartial() {
   int infoY = alb_y + alb_s + 4; // Y = 86
   String title = currentTrack.substring(0, 24);
   String artist = currentArtist.substring(0, 20);
+
+  if (title != lastTrackTitle) {
+    tft.fillRect(alb_x, alb_y, alb_s + 3, alb_s + 3, COLOR_BG);
+    artDrawn = false;
+    albumArtReady = false;
+  }
   
   if (!artDrawn && albumArtReady) {
     tft.setSwapBytes(true);
@@ -159,11 +165,6 @@ void redrawSpotifyPartial() {
     tft.setTextColor(TFT_WHITE, COLOR_BG);
     tft.drawString(title, alb_x, infoY, 1);
     
-    if (title != lastTrackTitle) {
-      tft.fillRect(alb_x, alb_y, alb_s, alb_s, COLOR_BG); // Clear old art
-      artDrawn = false; // Force complete album art redraw for new song
-      albumArtReady = false; // Prevent ghosting of old art
-    }
     lastTrackTitle = title;
   }
   if (forceSpotifyRedraw || artist != lastArtist) {

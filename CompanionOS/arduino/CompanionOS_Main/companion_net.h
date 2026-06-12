@@ -200,7 +200,8 @@ void handleVirtualButton(String btn) {
 #ifdef ESP32
     if (currentState == STATE_DR_HACK) {
       extern void dhNavigate(int delta);
-      dhNavigate(-1);
+      extern DrHackSubState dhCurrentState;
+      if (dhCurrentState == DH_MENU) dhNavigate(-1);
       lastInteractionTime = millis();
       return;
     }
@@ -222,7 +223,8 @@ void handleVirtualButton(String btn) {
 #ifdef ESP32
     if (currentState == STATE_DR_HACK) {
       extern void dhNavigate(int delta);
-      dhNavigate(1);
+      extern DrHackSubState dhCurrentState;
+      if (dhCurrentState == DH_MENU) dhNavigate(1);
       lastInteractionTime = millis();
       return;
     }
@@ -236,7 +238,9 @@ void handleVirtualButton(String btn) {
   if (btn == "SELECT_LONG") {
     if (currentState == STATE_DR_HACK) {
       extern void dhSelect();
-      dhSelect();
+      extern DrHackSubState dhCurrentState;
+      if (dhCurrentState == DH_MENU) dhSelect();
+      else virtualSelectPressed = true;
     }
     lastInteractionTime = millis();
     return;
@@ -247,7 +251,9 @@ void handleVirtualButton(String btn) {
 #ifdef ESP32
     if (currentState == STATE_DR_HACK) {
       extern void dhSelect();
-      dhSelect();
+      extern DrHackSubState dhCurrentState;
+      if (dhCurrentState == DH_MENU) dhSelect();
+      else virtualSelectPressed = true;
       lastInteractionTime = millis();
       return;
     }
@@ -514,8 +520,10 @@ void handleNetwork() {
     if (len > 3 && (unsigned char)udpBuffer[0] == 0xFE) {
       int chunkIdx = ((unsigned char)udpBuffer[1] << 8) | ((unsigned char)udpBuffer[2]);
       int pixelsInChunk = (len - 3) / 2;
-      int imgWidth = (currentState == STATE_GAMING) ? 100 : ALBUM_ART_W;
-      int imgHeight = (currentState == STATE_GAMING) ? 60 : ALBUM_ART_H;
+      if (!receivingArt) return;
+
+      int imgWidth = ALBUM_ART_W;
+      int imgHeight = ALBUM_ART_H;
       int imagePixels = imgWidth * imgHeight;
       int maxPixels = ALBUM_ART_W * ALBUM_ART_H;
       int pixelsPerChunk = imgWidth;
@@ -531,13 +539,19 @@ void handleNetwork() {
           dest[i] = ((uint16_t)(unsigned char)udpBuffer[offset] << 8) | (unsigned char)udpBuffer[offset + 1];
         }
 
+        int firstRow = startPixel / imgWidth;
+        int rowCount = (safePixels + imgWidth - 1) / imgWidth;
+        for (int row = firstRow; row < firstRow + rowCount && row < ALBUM_ART_H; row++) {
+          if (!albumArtRowsReceived[row]) {
+            albumArtRowsReceived[row] = 1;
+            if (albumArtRowsComplete < ALBUM_ART_H) albumArtRowsComplete++;
+          }
+        }
+
         // Progressive rendering
         int imgX = SCALE_X(10);
         int imgY = SCALE_Y(25);
-        if (currentState == STATE_GAMING) {
-          imgX = SCALE_X(110);
-          imgY = SCALE_Y(32);
-        } else if (currentState == STATE_SPOTIFY && activeTheme == 0) {
+        if (currentState == STATE_SPOTIFY && activeTheme == 0) {
           imgX = 4;
           imgY = 18;
         } else if (currentState == STATE_SPOTIFY && activeTheme == 1) {
@@ -552,7 +566,7 @@ void handleNetwork() {
         if (currentState == STATE_SPOTIFY && activeTheme != 0) {
           enableProgressive = false;
         }
-        if ((currentState == STATE_SPOTIFY || currentState == STATE_GAMING) && enableProgressive) {
+        if (currentState == STATE_SPOTIFY && enableProgressive) {
           if (maxRows > 0) {
             tft.pushImage(imgX, imgY + yStart, imgWidth, maxRows, dest);
           }
@@ -682,8 +696,17 @@ void handleCommand(String msg) {
     receivingArt = true;
     albumArtReady = false;
     artDrawn = false;
+    albumArtRowsComplete = 0;
+    memset(albumArtRowsReceived, 0, sizeof(albumArtRowsReceived));
+    memset(albumArt, 0, sizeof(albumArt));
   } else if (msg.startsWith("ART_COMPLETE:")) {
-    completeAlbumArt();
+    if (albumArtRowsComplete >= ALBUM_ART_H) {
+      completeAlbumArt();
+    } else {
+      receivingArt = false;
+      albumArtReady = false;
+      Serial.printf("Album art incomplete: %u/%u rows\n", albumArtRowsComplete, ALBUM_ART_H);
+    }
   } else if (msg.startsWith("STATE:")) {
     String json = msg.substring(6);
     DynamicJsonDocument doc(512);
@@ -888,12 +911,11 @@ void handleCommand(String msg) {
 
   // HACK: — PC-side hack command relay (results pushed back)
   else if (msg.startsWith("HACK:")) {
-    // Commands from PC bridge:
-    // HACK:SCAN_RESULT:{json} — WiFi scan results from PC
-    // HACK:PORT_RESULT:{json} — Port scan results from PC
-    // Currently a placeholder — Dr. Hack mode uses on-device scanning
     Serial.print(F("HACK CMD: "));
     Serial.println(msg.substring(5));
+    if (currentState == STATE_DR_HACK) {
+      showFlashNotification("Dr.Hack event received");
+    }
   }
 
   // BTN: — Web remote virtual button press

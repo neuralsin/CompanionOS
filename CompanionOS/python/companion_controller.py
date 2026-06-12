@@ -133,14 +133,29 @@ def send_udp_bytes(packet):
 
 current_lyrics = []  # Make global so background thread can update it
 last_sent_lyrics = None
+_asset_generation = 0
+_asset_generation_lock = threading.Lock()
 
-def fetch_heavy_assets(track_name, artist_name, track_id, album_art_url):
+def _next_asset_generation():
+    global _asset_generation
+    with _asset_generation_lock:
+        _asset_generation += 1
+        return _asset_generation
+
+def _is_current_asset_generation(generation):
+    with _asset_generation_lock:
+        return generation == _asset_generation
+
+def fetch_heavy_assets(track_name, artist_name, track_id, album_art_url, generation):
     """Background thread to process lyrics and album art without blocking UDP STATE updates."""
     global current_lyrics
     
     # 1. Fetch Lyrics (Slow HTTP Call to LRCLib)
     if spotify_service.lyrics_enabled:
-        current_lyrics = spotify_service.get_lyrics(track_name, artist_name, track_id)
+        lyrics = spotify_service.get_lyrics(track_name, artist_name, track_id)
+        if not _is_current_asset_generation(generation):
+            return
+        current_lyrics = lyrics
     else:
         current_lyrics = []
         
@@ -150,9 +165,13 @@ def fetch_heavy_assets(track_name, artist_name, track_id, album_art_url):
             album_size = 64
             pixels = spotify_service.process_album_art(album_art_url, size=album_size)
             if not pixels: return
+            if not _is_current_asset_generation(generation):
+                return
             
             send_udp("ART_START:")
             time.sleep(0.1)   # Allow ESP memory clear margin
+            if not _is_current_asset_generation(generation):
+                return
             
             pixels_per_chunk = 64 * 4  # 4 rows of 64 pixels = 256 pixels = 512 bytes
             
@@ -164,6 +183,8 @@ def fetch_heavy_assets(track_name, artist_name, track_id, album_art_url):
             byte_array = bytes(flat_bytes)
             
             for i in range(0, len(byte_array), pixels_per_chunk * 2):
+                if not _is_current_asset_generation(generation):
+                    return
                 chunk_data = byte_array[i:i+(pixels_per_chunk*2)]  # type: ignore
                 idx = i // (64 * 2) # keep idx aligned with rows (each row is 64 pixels)
                 
@@ -716,10 +737,11 @@ RUVIEW_HTML = """<!DOCTYPE html>
 def start_notes_server():
     """Start Flask web server for Web Remote + Quick Notes"""
     try:
-        from flask import Flask, request, redirect, jsonify  # type: ignore
+        from flask import Flask, request, redirect, jsonify, send_from_directory  # type: ignore
         app = Flask(__name__)
         notes_file = os.path.join(SCRIPT_DIR, "notes.txt")
         port = config['features'].get('notes_web_port', 5555)
+        ruview_ui_dir = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "RuView", "ui"))
         
         @app.route('/')
         def index():
@@ -1385,6 +1407,7 @@ def start_notes_server():
                     return {'status': 'error', 'msg': 'No image file'}, 400
                 
                 file = request.files['image']
+                img = Image.open(file.stream)
                 # Resize strictly to 64x64 to match ESP32 ALBUM_ART_W and prevent array corruption
                 img = img.resize((64, 64), getattr(Image, 'Resampling', Image).LANCZOS)
                 img = img.convert('RGB')
@@ -1399,7 +1422,7 @@ def start_notes_server():
                 send_udp("ART_START:")
                 time.sleep(0.05)
                 
-                pixels_per_chunk = 96 * 2
+                pixels_per_chunk = 64 * 4
                 flat_bytes = []
                 for c in pixels:
                     flat_bytes.append((c >> 8) & 0xFF)
@@ -1409,10 +1432,10 @@ def start_notes_server():
                 raw_bytes = bytearray(byte_array)
                 for i in range(0, len(raw_bytes), pixels_per_chunk * 2):
                     chunk_data = raw_bytes[i:i+(pixels_per_chunk*2)]  # type: ignore
-                    idx = i // (pixels_per_chunk * 2)
+                    idx = i // (64 * 2)
                     packet = bytes([0xFE, (idx >> 8) & 0xFF, idx & 0xFF]) + chunk_data
                     send_udp_bytes(packet)
-                    time.sleep(0.005)
+                    time.sleep(0.02)
                 
                 send_udp("ART_COMPLETE:")
                 print(f"🖼️ Gallery image pushed to ESP")
@@ -1470,8 +1493,20 @@ def start_notes_server():
 
         # ── RuView CSI Presence Map ──────────────────────
         @app.route('/ruview')
+        def ruview_redirect():
+            return redirect('/ruview/')
+
+        @app.route('/ruview/')
         def ruview_page():
+            if os.path.isdir(ruview_ui_dir):
+                return send_from_directory(ruview_ui_dir, "index.html")
             return RUVIEW_HTML
+
+        @app.route('/ruview/<path:asset_path>')
+        def ruview_asset(asset_path):
+            if os.path.isdir(ruview_ui_dir):
+                return send_from_directory(ruview_ui_dir, asset_path)
+            return ("RuView UI assets not found", 404)
 
         @app.route('/api/ruview/state')
         def api_ruview_state():
@@ -1655,43 +1690,11 @@ def stock_feed_loop():
 
 
 def push_game_cover(title):
-    """Fetch, process, and stream game cover to ESP."""
+    """Fetch a game cover URL for cache warmup without touching Spotify art packets."""
     try:
         url = steam_service.get_game_cover_url(title)
         if not url: return
-        
-        import requests
-        from PIL import Image
-        import io
-        
-        resp = requests.get(url, timeout=10)
-        img = Image.open(io.BytesIO(resp.content))
-        # Keep it 100x60 to fit precisely inside the Gaming UI bounds
-        img = img.resize((100, 60), getattr(Image, 'Resampling', Image).LANCZOS)
-        img = img.convert('RGB')
-        
-        send_udp("ART_START:")
-        time.sleep(0.05)
-        
-        flat_bytes = []
-        for y in range(60):
-            for x in range(100):
-                r, g, b = img.getpixel((x, y))  # type: ignore
-                c = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
-                flat_bytes.append((c >> 8) & 0xFF)
-                flat_bytes.append(c & 0xFF)
-                
-        byte_array = bytes(flat_bytes)
-        pixels_per_chunk = 100 * 2
-        for i in range(0, len(byte_array), pixels_per_chunk * 2):
-            chunk_data = byte_array[i:i+(pixels_per_chunk*2)]  # type: ignore
-            idx = i // (pixels_per_chunk * 2)
-            packet = bytes([0xFE, (idx >> 8) & 0xFF, idx & 0xFF]) + chunk_data  # type: ignore
-            send_udp_bytes(packet)
-            time.sleep(0.005)
-            
-        send_udp("ART_COMPLETE:")
-        print(f"🖼️ Game cover pushed for {title}")
+        print(f"🖼️ Game cover found for {title}; not streamed over Spotify art channel")
     except Exception as e:
         print(f"Game cover push error: {e}")
 
@@ -2038,9 +2041,10 @@ def main():
                     # Fire-and-forget background thread for slow LRCLib and Image CDN fetches!
                     # This prevents the 20-30 second delay where the progress bar freezes waiting for downloads.
                     current_lyrics = []  # Instantly wipe old lyrics from screen during transition
+                    asset_generation = _next_asset_generation()
                     threading.Thread(
                         target=fetch_heavy_assets, 
-                        args=(track['name'], track['artist'], track['id'], track['album_art_url']),
+                        args=(track['name'], track['artist'], track['id'], track['album_art_url'], asset_generation),
                         daemon=True
                     ).start()
                 

@@ -207,18 +207,12 @@ void renderThoughtBubble(T* display, bool isSprite) {
 
   unsigned long now = millis();
   unsigned long elapsed = now - activeBubble.shownAt;
-  bool needsRedraw = bubbleChanged || activeBubble.fadingIn || activeBubble.fadingOut || isSprite;
+  bool needsRedraw = bubbleChanged || activeBubble.fadingOut || isSprite;
 
-  // Fade in phase (~1 second = 20 frames at 50ms)
-  if (activeBubble.fadingIn) {
-    activeBubble.fadeAlpha += (255 / THOUGHT_FADE_STEPS);
-    if (activeBubble.fadeAlpha >= 255) {
-      activeBubble.fadeAlpha = 255;
-      activeBubble.fadingIn = false;
-    }
-  }
-  // Fade out phase (after THOUGHT_DISPLAY_MS)
-  else if (elapsed >= THOUGHT_DISPLAY_MS && !activeBubble.fadingOut) {
+  activeBubble.fadeAlpha = 255;
+  activeBubble.fadingIn = false;
+
+  if (elapsed >= THOUGHT_DISPLAY_MS && !activeBubble.fadingOut) {
     activeBubble.fadingOut = true;
     needsRedraw = true;
   }
@@ -345,8 +339,8 @@ void tickThoughtScheduler(T* display, bool isSprite) {
     generateThought();  // will consume overrideThought
     activeBubble.active = true;
     activeBubble.shownAt = millis();
-    activeBubble.fadeAlpha = 0;
-    activeBubble.fadingIn = true;
+    activeBubble.fadeAlpha = 255;
+    activeBubble.fadingIn = false;
     activeBubble.fadingOut = false;
     return;
   }
@@ -356,8 +350,8 @@ void tickThoughtScheduler(T* display, bool isSprite) {
     generateThought();
     activeBubble.active = true;
     activeBubble.shownAt = millis();
-    activeBubble.fadeAlpha = 0;
-    activeBubble.fadingIn = true;
+    activeBubble.fadeAlpha = 255;
+    activeBubble.fadingIn = false;
     activeBubble.fadingOut = false;
 
     // Schedule next thought (45-90 min)

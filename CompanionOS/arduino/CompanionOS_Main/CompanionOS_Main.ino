@@ -330,7 +330,9 @@ void loop() {
   static unsigned long lastStatusBarUpdate = 0;
   if (millis() - lastStatusBarUpdate >= 1000) {
     lastStatusBarUpdate = millis();
-    drawStatusBar();
+    if (currentState != STATE_DR_HACK && currentState != STATE_RUVIEW) {
+      drawStatusBar();
+    }
   }
 
   // Network stats page refresh every 2 seconds

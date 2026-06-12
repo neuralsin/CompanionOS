@@ -81,6 +81,7 @@ class SteamTracker:
         'HaloInfinite.exe': 'Halo Infinite',
         'NoMansSky.exe': 'No Man\'s Sky',
     }
+    KNOWN_GAMES_LOWER = {name.lower(): title for name, title in KNOWN_GAMES.items()}
 
     # GPU-rendering DLLs (if a process loaded these, it's using the GPU)
     GPU_DLLS = {
@@ -336,6 +337,7 @@ class SteamTracker:
         3. Directory heuristics (Steam/Epic/Xbox/GOG paths)
         """
         gpu_candidates = []
+        foreground_title = self._foreground_window_title()
 
         for proc in psutil.process_iter(['pid', 'name', 'exe']):
             try:
@@ -349,8 +351,8 @@ class SteamTracker:
                     continue
 
                 # 1. Known games list (instant)
-                if name in self.KNOWN_GAMES:
-                    title = self.KNOWN_GAMES[name]
+                if name_lower in self.KNOWN_GAMES_LOWER:
+                    title = self.KNOWN_GAMES_LOWER[name_lower]
                     if title:
                         return title
                     continue  # Skip launchers (None entries)
@@ -383,7 +385,39 @@ class SteamTracker:
             # Otherwise return the first GPU-using non-blocklisted process
             return gpu_candidates[0][0][:23]
 
+        if foreground_title:
+            return foreground_title[:23]
+
         return ''
+
+    def _foreground_window_title(self):
+        """Last-resort detection from the active Windows title bar."""
+        if os.name != 'nt':
+            return ''
+        try:
+            hwnd = ctypes.windll.user32.GetForegroundWindow()
+            if not hwnd:
+                return ''
+            length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+            if length <= 0 or length > 256:
+                return ''
+            buffer = ctypes.create_unicode_buffer(length + 1)
+            ctypes.windll.user32.GetWindowTextW(hwnd, buffer, length + 1)
+            title = buffer.value.strip()
+            if not title:
+                return ''
+
+            lowered = title.lower()
+            blocked = [
+                'chrome', 'edge', 'firefox', 'visual studio code', 'cursor',
+                'discord', 'spotify', 'steam', 'settings', 'terminal',
+                'file explorer', 'windows powershell'
+            ]
+            if any(word in lowered for word in blocked):
+                return ''
+            return title
+        except Exception:
+            return ''
 
     def get_session_time(self):
         """Get formatted session duration."""

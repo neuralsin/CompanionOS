@@ -249,6 +249,8 @@ int notifCount = 0;
 uint16_t albumArt[ALBUM_ART_W * ALBUM_ART_H];   // 18432 bytes (ESP8266 near limit, ESP32 fine)
 bool albumArtReady = false;
 bool receivingArt = false;
+uint8_t albumArtRowsReceived[ALBUM_ART_H] = {0};
+uint8_t albumArtRowsComplete = 0;
 
 // Shared Spotify Lyrics
 String currentLyrics = "";

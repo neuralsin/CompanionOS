@@ -111,16 +111,16 @@ void t2_redrawSpotifyPartial() {
   String title = currentTrack.substring(0, 14); // Shorter for side layout
   String artist = currentArtist.substring(0, 16);
 
+  if (!forceSpotifyRedraw && title != t2s_lastTrack) {
+    tft.fillRect(T2S_ART_X - 2, T2S_ART_Y - 2, T2S_ART_SIZE + 4, T2S_ART_SIZE + 4, T2S_BG);
+    t2s_artDrawn = false;
+    albumArtReady = false;
+  }
+
   if (forceSpotifyRedraw || title != t2s_lastTrack) {
     tft.fillRect(infoX, infoY, SCREEN_W - infoX, 10, T2S_BG);
     tft.setTextColor(TFT_WHITE, T2S_BG);
     tft.drawString(title, infoX, infoY, 1);
-    
-    if (title != t2s_lastTrack) {
-      tft.fillRect(T2S_ART_X, T2S_ART_Y, T2S_ART_SIZE, T2S_ART_SIZE, T2S_BG); // Clear old art
-      t2s_artDrawn = false; // Force complete album art redraw for new song
-      albumArtReady = false; // Prevent ghosting of old art
-    }
     t2s_lastTrack = title;
   }
   if (forceSpotifyRedraw || artist != t2s_lastArtist) {

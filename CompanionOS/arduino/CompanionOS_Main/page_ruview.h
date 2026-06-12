@@ -288,7 +288,6 @@ void redrawRuviewPartial() {
 void drawRuviewPageFull() {
   resetRuviewDrawState();
   drawRuviewPage();
-  drawStatusBar();
 }
 
 #endif

@@ -548,8 +548,10 @@ def ruview_push_loop(send_udp_fn, interval: float = 2.0):
     """
     global ruview_enabled
     last_state_str = ''
+    last_push_at = 0.0
+    heartbeat_interval = 8.0
 
-    time.sleep(10)  # Wait for other services to initialize
+    time.sleep(2)  # Wait briefly for UDP discovery without leaving the page offline
     print("📡 RuView push loop started")
 
     while True:
@@ -581,11 +583,14 @@ def ruview_push_loop(send_udp_fn, interval: float = 2.0):
                 # For v1 single-node, send just the first zone
                 state = states[0]
                 state_str = json.dumps(state)
+                now = time.time()
 
-                # Only push if state changed
-                if state_str != last_state_str:
+                # Push on change and heartbeat the last state so the ESP recovers
+                # after missed packets, page changes, or late boot.
+                if state_str != last_state_str or (now - last_push_at) >= heartbeat_interval:
                     send_udp_fn(f"RUVIEW:{state_str}")
                     last_state_str = state_str
+                    last_push_at = now
 
                     if state.get('occupied') or state.get('motion'):
                         status_emoji = "🔴" if state.get('motion') else "🟡"
