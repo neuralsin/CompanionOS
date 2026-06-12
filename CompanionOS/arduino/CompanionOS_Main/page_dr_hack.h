@@ -437,13 +437,9 @@ static void dhRunPortScan() {
 // Adapted from BeaconSpam.cpp — fake AP broadcast
 // ═══════════════════════════════════════════════════════════
 
-// Override raw frame validation — required for deauth/beacon/karma TX.
-// Note: In newer ESP32 cores, this hack causes a multiple definition linker error.
-// If esp_wifi_80211_tx() fails, raw frames might require promiscuous mode or 
-// downgrading the ESP32 Arduino Core.
-// extern "C" int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3) {
-//   return 0;  // bypass validation for raw frame TX
-// }
+// ESP32 Core 3.x natively allows raw frame TX when in WIFI_MODE_STA.
+// Do not override ieee80211_raw_frame_sanity_check to avoid linker errors.
+
 
 
 static const char* DH_SPAM_SSIDS[] = {
@@ -516,7 +512,7 @@ void dhRunBeaconSpam() {
   wifi_init_config_t bcfg = WIFI_INIT_CONFIG_DEFAULT();
   esp_wifi_init(&bcfg);
   esp_wifi_set_storage(WIFI_STORAGE_RAM);
-  esp_wifi_set_mode(WIFI_MODE_AP); // bypass ESP32 v5 raw tx block
+  esp_wifi_set_mode(WIFI_MODE_STA); // STA mode supports raw 802.11 TX on ESP32 v3/v5
   esp_wifi_start();
   esp_wifi_set_promiscuous(true);
   esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
@@ -628,6 +624,45 @@ void dhRunDeauth() {
   dhRunWifiScan();
   if (dhNetCount == 0) return;
 
+  // Let user pick network from list
+  dhNetCursor = 0;
+  dhNetScroll = 0;
+  dhDrawNetList();
+  
+  unsigned long holdStart = 0; bool holding = false;
+  while (true) {
+    extern void handleNetwork(); handleNetwork();
+    extern void handleButtons(); handleButtons();
+    extern ButtonState btnLeft, btnRight, btnSelect;
+    extern bool consumeLong(ButtonState&);
+    
+    if (btnLeft.pressed || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false)) {
+      btnLeft.pressed = false;
+      dhNetCursor = (dhNetCursor <= 0) ? dhNetCount - 1 : dhNetCursor - 1;
+      if (dhNetCursor < dhNetScroll) dhNetScroll = dhNetCursor;
+      if (dhNetCursor >= dhNetScroll + DH_VISIBLE_LINES) dhNetScroll = dhNetCursor - DH_VISIBLE_LINES + 1;
+      dhDrawNetList();
+    }
+    if (btnRight.pressed || (virtualRightPressed ? (virtualRightPressed=false, true) : false)) {
+      btnRight.pressed = false;
+      dhNetCursor = (dhNetCursor >= dhNetCount - 1) ? 0 : dhNetCursor + 1;
+      if (dhNetCursor < dhNetScroll) dhNetScroll = dhNetCursor;
+      if (dhNetCursor >= dhNetScroll + DH_VISIBLE_LINES) dhNetScroll = dhNetCursor - DH_VISIBLE_LINES + 1;
+      dhDrawNetList();
+    }
+    
+    // Select to proceed, Long Select to cancel
+    if (btnSelect.pressed || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
+      btnSelect.pressed = false;
+      delay(200); 
+      break; // Proceed with selected AP
+    }
+    if (consumeLong(btnSelect)) {
+      return; // Cancel
+    }
+    delay(10);
+  }
+
   // Show disclaimer
   tft.fillScreen(CLR_BG);
   tft.drawRect(0, 0, SCR_W, SCR_H, CLR_SECONDARY);
@@ -637,25 +672,27 @@ void dhRunDeauth() {
   tft.drawCentreString("Only use on YOUR", SCR_CX, 40, 1);
   tft.drawCentreString("own network!", SCR_CX, 55, 1);
   tft.setTextColor(CLR_WARNING);
-  tft.drawCentreString("SEL:Accept <:Cancel", SCR_CX, SCR_H - 15, 1);
+  tft.drawCentreString("SEL:Accept HOLD:Cancel", SCR_CX, SCR_H - 15, 1);
 
   // Wait for accept or cancel
   while (true) {
     extern void handleNetwork(); handleNetwork();
-    #ifdef ESP32
     extern void handleButtons(); handleButtons();
-    extern ButtonState btnSelect, btnLeft;
-    extern bool consumePress(ButtonState&);
-    if (consumePress(btnSelect) || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) { delay(200); break; }
-    if (consumePress(btnLeft) || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false)) { delay(200); return; }
-    #else
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { delay(200); break; }
-    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { delay(200); return; }
-    #endif
+    extern ButtonState btnSelect;
+    extern bool consumeLong(ButtonState&);
+    
+    if (btnSelect.pressed || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) { 
+      btnSelect.pressed = false;
+      delay(200); 
+      break; // ACCEPT
+    }
+    if (consumeLong(btnSelect)) {
+      return; // CANCEL
+    }
     delay(20);
   }
 
-  // Use first (strongest) AP
+  // Use selected AP
   DH_NetInfo& ap = dhNetworks[dhNetCursor];
   uint8_t bssid[6];
   sscanf(ap.bssid.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
@@ -668,7 +705,7 @@ void dhRunDeauth() {
   wifi_init_config_t dcfg = WIFI_INIT_CONFIG_DEFAULT();
   esp_wifi_init(&dcfg);
   esp_wifi_set_storage(WIFI_STORAGE_RAM);
-  esp_wifi_set_mode(WIFI_MODE_AP); // bypass ESP32 v5 raw tx block
+  esp_wifi_set_mode(WIFI_MODE_STA); // STA mode supports raw 802.11 TX on ESP32 v3/v5
   esp_wifi_start();
   esp_wifi_set_channel(ap.channel, WIFI_SECOND_CHAN_NONE);
   esp_wifi_set_promiscuous(true);
@@ -717,20 +754,10 @@ void dhRunDeauth() {
       lastBarDrawDeauth = millis();
     }
 
-    #ifdef ESP32
-    extern void handleButtons(); handleButtons();
-    if (currentState != STATE_DR_HACK) break;
-    extern ButtonState btnSelect;
-    extern bool consumeLong(ButtonState&);
-    if (consumeLong(btnSelect) || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
-      break;
-    }
-    #else
     if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }
-    #endif
 
     yield();
   }
@@ -852,20 +879,10 @@ void dhRunPacketMonitor() {
     }
 
     // Exit on SELECT hold
-    #ifdef ESP32
-    extern void handleButtons(); handleButtons();
-    if (currentState != STATE_DR_HACK) break;
-    extern ButtonState btnSelect;
-    extern bool consumeLong(ButtonState&);
-    if (consumeLong(btnSelect) || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
-      break;
-    }
-    #else
     if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }
-    #endif
 
     delay(10);
   }
@@ -1221,10 +1238,7 @@ static void dhAbout() {
   
   while (true) {
     extern void handleNetwork(); handleNetwork();
-    #ifdef ESP32
-    extern void handleButtons(); handleButtons();
-    if (currentState != STATE_DR_HACK) break;
-    #endif
+
     if (digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
       break;
     }

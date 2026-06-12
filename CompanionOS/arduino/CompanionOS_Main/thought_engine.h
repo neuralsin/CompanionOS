@@ -246,9 +246,15 @@ void renderThoughtBubble(T* display, bool isSprite) {
   }
 
 
+  if (strlen(activeBubble.text) == 0) {
+    activeBubble.active = false;
+    activeBubble.fadingOut = false;
+    return; // Prevent blank thought boxes from spinning infinitely
+  }
+
   // Alpha blend factor (simulated — controls color mixing, not real alpha)
   float alpha = activeBubble.fadeAlpha / 255.0f;
-  if (strlen(activeBubble.text) == 0) return; // Prevent blank thought boxes
+
 
   // ── Position Calculation ──────────────────────────────
   // 🔴 BUG-05 FIX: Bubble sits BETWEEN status bar (y=0..15)

@@ -902,7 +902,7 @@ static void dhRunIphoneRemote() {
     }
 
     // RIGHT = Volume Up
-    if (digitalRead(BTN_RIGHT) == LOW) {
+    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
       uint8_t keys[8] = {0, 0, 0x80, 0, 0, 0, 0, 0};  // Volume Up
       input->setValue(keys, 8);
       input->notify();
@@ -1032,7 +1032,7 @@ static void dhRunBtJammer() {
       if (active && jam1Ok) jam1.startConstCarrier(RF24_PA_MAX, bleChs[chIdx]);
       drawState(); delay(180);
     }
-    if (digitalRead(BTN_RIGHT) == LOW) {
+    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
       chIdx = (chIdx + 1) % 3;
       if (active && jam1Ok) jam1.startConstCarrier(RF24_PA_MAX, bleChs[chIdx]);
       drawState(); delay(180);

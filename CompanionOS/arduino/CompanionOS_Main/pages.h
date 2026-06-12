@@ -9,6 +9,7 @@
 #include "page_social.h"
 #include "page_productivity.h"
 #include "page_network.h"
+#include "page_ruview.h"
 #include "theme2_eyes.h"
 #include "theme2_spotify.h"
 #ifdef ESP32
@@ -883,6 +884,7 @@ void renderCurrentPage() {
     case STATE_PRODUCTIVITY: drawProductivityPageFull(); break;
     case STATE_NETWORK: drawNetworkPageFull(); break;
     case STATE_SETTINGS: drawSettingsPage(); break;
+    case STATE_RUVIEW: drawRuviewPageFull(); break;
     #ifdef ESP32
     case STATE_DR_HACK: initDrHack(); break;
     #endif

@@ -518,7 +518,7 @@ void handleNetwork() {
       int imgHeight = (currentState == STATE_GAMING) ? 60 : ALBUM_ART_H;
       int imagePixels = imgWidth * imgHeight;
       int maxPixels = ALBUM_ART_W * ALBUM_ART_H;
-      int pixelsPerChunk = imgWidth * 2;
+      int pixelsPerChunk = imgWidth;
       int startPixel = chunkIdx * pixelsPerChunk;
 
       if (startPixel >= 0 && startPixel < imagePixels && startPixel < maxPixels) {
@@ -537,9 +537,12 @@ void handleNetwork() {
         if (currentState == STATE_GAMING) {
           imgX = SCALE_X(110);
           imgY = SCALE_Y(32);
+        } else if (currentState == STATE_SPOTIFY && activeTheme == 0) {
+          imgX = 4;
+          imgY = 18;
         } else if (currentState == STATE_SPOTIFY && activeTheme == 1) {
-          imgX = SCALE_X(140);
-          imgY = SCALE_Y(20);
+          imgX = 4;
+          imgY = 20;
         }
 
         int yStart = startPixel / imgWidth;
@@ -938,6 +941,47 @@ void handleCommand(String msg) {
       EEPROM.commit();
       EEPROM.end();
       renderCurrentPage();
+    }
+  } else if (msg.startsWith("RUVIEW:")) {
+    // ── RuView CSI Presence Data ──
+    String payload = msg.substring(7);
+    StaticJsonDocument<256> doc;
+    if (deserializeJson(doc, payload) == DeserializationError::Ok) {
+      extern bool    rvOccupied;
+      extern bool    rvMotion;
+      extern float   rvConfidence;
+      extern float   rvVariance;
+      extern int8_t  rvRSSI;
+      extern bool    rvCalibrating;
+      extern float   rvPPS;
+      extern int     rvSubcarriers;
+      extern char    rvStatus[];
+      extern char    rvZoneLabel[];
+
+      rvOccupied    = doc["occupied"] | false;
+      rvMotion      = doc["motion"] | false;
+      rvConfidence  = doc["confidence"] | 0.0f;
+      rvVariance    = doc["variance"] | 0.0f;
+      rvRSSI        = doc["rssi"] | (int8_t)0;
+      rvCalibrating = doc["calibrating"] | false;
+      rvPPS         = doc["pps"] | 0.0f;
+      rvSubcarriers = doc["subcarriers"] | 0;
+
+      const char* st = doc["status"] | "Unknown";
+      strncpy(rvStatus, st, 23);
+      rvStatus[23] = '\0';
+
+      if (doc.containsKey("label")) {
+        const char* lbl = doc["label"] | "Room";
+        strncpy(rvZoneLabel, lbl, 15);
+        rvZoneLabel[15] = '\0';
+      }
+
+      // Only redraw if on RuView page
+      if (currentState == STATE_RUVIEW) {
+        extern void redrawRuviewPartial();
+        redrawRuviewPartial();
+      }
     }
   }
 }

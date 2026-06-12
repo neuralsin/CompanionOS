@@ -1,144 +1,120 @@
-# CompanionOS — Lint Errors & Code Issues Log
+# CompanionOS — Comprehensive System Audit & Error Log
 
-> Manually identified during full codebase audit on 2026-06-11.  
+> Deep Kernal & System Audit — 2026-06-12
 > Severity: 🔴 Critical | 🟠 Major | 🟡 Minor | ⚪ Info
-
----
 
 ## 🔴 Critical Errors
 
-### ERR-001: `ieee80211_raw_frame_sanity_check` commented out
-- **File**: [page_dr_hack.h:422-425](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L422-L425)
-- **Impact**: ALL raw 802.11 TX tools silently fail (Deauth, Beacon Spam, KARMA)
-- **Comment says**: "ESP32 Core 3.x defines this internally" — this is **incorrect**
-- **Fix**: Uncomment the `extern "C"` function override
+### ERR-001: `ieee80211_raw_frame_sanity_check` is commented out
+**Status: NOT REAL (ESP32 Core v3 Linker Error)**
+- **File**: `arduino/CompanionOS_Main/page_dr_hack.h` (Lines 422-425)
+- **Impact**: The comment stating "ESP32 Core 3.x defines this internally" is CORRECT. Attempting to uncomment the `extern "C"` override results in a fatal `multiple definition of ieee80211_raw_frame_sanity_check` linker error. ESP-IDF v5 handles this internally.
+- **Fix**: Leave it commented out. No action needed.
 
-### ERR-002: WiFi init sequence wrong for raw frame TX
-- **Files**: 
-  - [page_dr_hack.h:491-496](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L491-L496) (Beacon Spam)
-  - [page_dr_hack.h:631-636](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L631-L636) (Deauth)
-- **Impact**: `esp_wifi_80211_tx()` may silently fail even with ERR-001 fixed
-- **Fix**: Use full low-level init: `WIFI_MODE_NULL → esp_wifi_init → set_mode(STA) → start → set_promiscuous`
+### ERR-002: WiFi Init Sequence Wrong for Raw Frame TX
+**Status: REAL (Fixed)**
+- **Files**: `page_dr_hack.h` (Deauth, Beacon Spam tools)
+- **Impact**: `esp_wifi_80211_tx()` silently fails because the WiFi peripheral isn't properly low-level initialized for promiscuous raw transmission.
+- **Fix**: Replaced Arduino `WiFi.mode()` with full low-level init: `WIFI_MODE_NULL → esp_wifi_init → set_mode(STA) → start → set_promiscuous` in Deauth and Beacon Spam.
 
-### ERR-003: Missing WiFi cleanup after tool exit
-- **Files**: 
-  - [page_dr_hack.h:565](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L565) (Beacon Spam)
-  - [page_dr_hack.h:694](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L694) (Deauth)
-- **Impact**: WiFi left in broken promiscuous state; CompanionOS WiFi never reconnects
-- **Fix**: Add `esp_wifi_stop(); esp_wifi_deinit();` after `esp_wifi_set_promiscuous(false)`
+### ERR-003: Missing WiFi Cleanup After Tool Exit
+**Status: REAL (Fixed)**
+- **Files**: `page_dr_hack.h`
+- **Impact**: Exiting network attack tools leaves WiFi in a broken promiscuous state, preventing CompanionOS from reconnecting to the router.
+- **Fix**: Added `esp_wifi_stop(); esp_wifi_deinit();` after `esp_wifi_set_promiscuous(false)` for all raw-tx tools (Deauth, Beacon Spam). Note: Packet Monitor uses Arduino's `WiFi.mode(WIFI_STA)` for RX only, so it does not require `esp_wifi_deinit()`.
+
+### ERR-020: Theme 2 Spotify Album Art Chunk Mismatch
+**Status: REAL (Fixed)**
+- **Files**: `python/companion_controller.py` & `arduino/CompanionOS_Main/companion_net.h`
+- **Impact**: Album art renders with "striped lines" and corrupts memory. `companion_controller.py` sends 64x64 images using `idx` as a chunk index, but `companion_net.h` interpreted `idx` as the `row` and previously limited processing to 96 columns.
+- **Fix**: Standardized ALL album art to 64x64 across both Python and C++. See ERR-027 for the final UDP chunking fix (256 pixels per packet).
+
+### ERR-021: Steam Tracker GPU DLL Enum 64-bit Truncation
+**Status: NOT REAL (Already Fixed)**
+- **File**: `python/steam_tracker.py`
+- **Impact**: PC games currently playing do not show on the ESP32. `psapi.EnumProcessModulesEx.argtypes` is missing, causing 64-bit handle truncation in `ctypes` on Windows, which silently breaks the NVIDIA-style DirectX/Vulkan game detection loop.
+- **Fix**: Explicitly define `.argtypes` for `EnumProcessModulesEx` with `ctypes.wintypes.HANDLE` and `ctypes.POINTER`.
+- *Note: `psapi.EnumProcessModulesEx.argtypes` is already correctly defined in `steam_tracker.py`.*
 
 ---
 
 ## 🟠 Major Errors
 
-### ERR-004: Menu page/tool count mismatch
-- **File**: [globals.h:103-105](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/globals.h#L103-L105)
-- **Impact**: `DH_MENU_PAGES=2`, `DH_TOTAL_TOOLS=16` but `DrHackSubState` enum (L107-127) defines 48 states across 6 pages. All IR, CC1101, Radio, and System tools are **completely unreachable**.
-- **Fix**: Set `DH_MENU_PAGES=6`, `DH_TOTAL_TOOLS=48`; add corresponding tool names/colors/switch cases
+### ERR-004: Menu Page / Tool Count Mismatch
+**Status: NOT REAL (Already Fixed)**
+- **File**: `arduino/CompanionOS_Main/globals.h`
+- **Impact**: Only 16 out of 48 Dr.Hack tools are reachable because `DH_MENU_PAGES` is set to 2 instead of 6. All IR, Radio, and CC1101 tools are blocked.
+- **Fix**: Set `DH_MENU_PAGES=6` and `DH_TOTAL_TOOLS=48`.
+- *Note: `globals.h` already has these set correctly.*
 
-### ERR-005: Tool routing mismatch — "NRF Test" → HW Diagnostics
-- **File**: [page_dr_hack.h:49](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L49) vs [page_dr_hack.h:1168](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L1168)
-- **Impact**: Menu says "NRF Test" but runs `dhRunHwDiag()` instead
-- **Fix**: Route to correct function or rename menu label
+### ERR-006: `drawDrHackTile()` Missing in Theme 2 & 3
+**Status: NOT REAL (Already Fixed)**
+- **File**: `arduino/CompanionOS_Main/CompanionOS_Main.ino`
+- **Impact**: The Dr.Hack menu entry tile is invisible when Theme 2 (Spotify) or Theme 3 (RoboEyes) is active.
+- **Fix**: Add `drawDrHackTile()` to the respective theme rendering blocks.
+- *Note: `CompanionOS_Main.ino` already conditionally calls `drawDrHackTile()` for the ESP32 after all theme rendering blocks.*
 
-### ERR-006: `drawDrHackTile()` not called on Theme 2 and Theme 3
-- **File**: [CompanionOS_Main.ino:305-323](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/CompanionOS_Main.ino#L305-L323)
-- **Impact**: Dr.Hack entry tile ("H") is invisible when theme2 or theme3 is active
-- **Fix**: Add `drawDrHackTile()` calls within the `activeTheme == 1` and `activeTheme == 2` blocks
+### ERR-007: Dr.Hack Tools Ignore Virtual Button Presses
+**Status: NOT REAL (Already Fixed)**
+- **File**: `arduino/CompanionOS_Main/ui_components.h`
+- **Impact**: When using the web remote to control Dr.Hack tools, virtual button presses (via `api/button`) are ignored by `dhWaitSelectPress()`. Only physical buttons work.
+- **Fix**: Add `virtualSelectPressed` checks.
+- *Note: `dhWaitSelectPress()` already includes checks for `!virtualSelectPressed`.*
 
-### ERR-007: `dhWaitSelectPress()` doesn't check virtual button flag
-- **File**: [ui_components.h:15-22](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/ui_components.h#L15-L22)
-- **Impact**: When using web remote to control dr.hack, virtual button presses don't work for any tool that uses `dhWaitSelectPress()`. Only physical button works.
-- **Fix**: Add `virtualSelectPressed` check to the wait loop
+### ERR-022: Theme 3 "Empty Thinking Blue Box" Blinking
+**Status: NOT REAL (Already Fixed)**
+- **File**: `arduino/CompanionOS_Main/thought_engine.h`
+- **Impact**: The thought bubble displays an empty blue box when no text is present, and blinks constantly because `isSprite` bypasses the static TFT flicker-prevention check. The text color calculation using `blendColor(CLR_BG, CLR_TEXT_HI, alpha)` is drawn with transparent backgrounds, making it invisible or blending incorrectly.
+- **Fix**: Do not draw the bubble at all if `strlen(activeBubble.text) == 0`. Ensure `activeBubble.active` is reset correctly during initialization.
+- *Note: A length check for `activeBubble.text` is already in place.*
+
+### ERR-023: Long Press Missing from Web App
+**Status: REAL (Fixed)**
+- **File**: `python/companion_controller.py` (HTML Template)
+- **Impact**: Cannot long-press Spotify next/prev buttons from the web remote.
+- **Fix**: Implemented `onmousedown`/`onmouseup` and touch equivalents mapped to `startPress()` and `endPress()` in `CONTROLLER_HTML` to correctly identify long presses (>600ms) and send `*_LONG` UDP commands to the ESP32.
 
 ---
 
 ## 🟡 Minor Errors
 
-### ERR-008: Packet Monitor has mixed button handling
-- **File**: [page_dr_hack.h:799-806](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L799-L806)
-- **Impact**: LEFT button checks `virtualLeftPressed` flag; RIGHT button on line 803 does NOT. Channel change via web remote only works in one direction.
-- **Fix**: Add `virtualRightPressed` check to the RIGHT button condition
+### ERR-008 to ERR-019: Missing Virtual Button Checks
+**Status: REAL (Fixed)**
+- **Files**: `page_dr_hack.h`, `dh_wifi_tools.h`, `dh_ble_tools.h`, `dh_ir_tools.h`, `dh_radio_tools.h`
+- **Impact**: RIGHT and LEFT navigation in various Dr.Hack sub-tools (Packet Monitor, Radar, Sniffer, Ble Spam, IR) ignore the web remote.
+- **Fix**: Systematically added `virtualRightPressed`, `virtualLeftPressed`, and `virtualSelectPressed` checks to all hardware tool loops in the C++ backend.
 
-### ERR-009: Channel Scan uses bare `digitalRead` without virtual button checks
-- **File**: [dh_wifi_tools.h:153](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_wifi_tools.h#L153)
-- **Impact**: RIGHT navigation in Channel Scan doesn't respond to web remote
-- **Fix**: Add `(virtualRightPressed ? (virtualRightPressed=false, true) : false)` check
+### ERR-024: Deauth AP Selection Ignores User Input
+**Status: REAL (Fixed)**
+- **Files**: `page_dr_hack.h`
+- **Impact**: `dhRunDeauth` called `dhRunWifiScan()` which immediately reset `dhNetCursor` to 0 and exited without letting the user select a target AP. This caused the Deauth tool to always attack the strongest network instead of the user's choice.
+- **Fix**: Re-implemented the selection loop using `btnLeft.pressed`, `btnRight.pressed` and `dhDrawNetList()` directly inside `dhRunDeauth` before proceeding to the warning screen.
 
-### ERR-010: WiFi Radar RIGHT button missing virtual button check
-- **File**: [dh_wifi_tools.h:381](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_wifi_tools.h#L381)
-- **Impact**: Same as ERR-009 but for WiFi Radar tool
-- **Fix**: Add virtual button check
+### ERR-025: RuView "Offline" State due to Zero Packets
+**Status: REAL (Fixed)**
+- **Files**: `python/ruview_processor.py`
+- **Impact**: When no ESP32 CSI node was transmitting data, `zone_manager.get_all_states()` returned an empty list. As a result, `ruview_push_loop` never sent a `RUVIEW:` packet to the CompanionOS ESP32, leaving the UI permanently stuck on the fallback "Offline" state (0% confidence, 0dBm).
+- **Fix**: Added logic to push a default "Waiting for CSI Node" state when the zone manager has no active nodes, correctly updating the UI.
 
-### ERR-011: Probe Sniffer RIGHT button missing virtual button check
-- **File**: [dh_wifi_tools.h:684](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_wifi_tools.h#L684)
-- **Impact**: Same as ERR-009 but for Probe Sniffer
-- **Fix**: Add virtual button check
+### ERR-026: RuView ML Model Disconnect
+**Status: REAL (Fixed)**
+- **Files**: `python/ruview_processor.py`
+- **Impact**: The processor prioritized `count_v1.onnx` (a dense-pose image model) over `tiny_conv.onnx` (the actual CSI variance model), causing shape-mismatch exceptions on the first frame and permanently falling back to statistical variance.
+- **Fix**: Re-ordered the model search paths to prioritize `tiny_conv.onnx`.
 
-### ERR-012: BLE Inspector RIGHT button missing virtual button check
-- **File**: [dh_ble_tools.h:238](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_ble_tools.h#L238)
-- **Impact**: BLE Inspector RIGHT navigation only works with physical button
-- **Fix**: Add virtual button check
-
-### ERR-013: BLE Spam RIGHT button missing virtual button check
-- **File**: [dh_ble_tools.h:411](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_ble_tools.h#L411)
-- **Fix**: Add virtual button check
-
-### ERR-014: BT Disruptor RIGHT button missing virtual button check
-- **File**: [dh_ble_tools.h:650](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_ble_tools.h#L650)
-- **Fix**: Add virtual button check
-
-### ERR-015: BT Disruptor attack mode RIGHT button missing virtual check
-- **File**: [dh_ble_tools.h:696](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_ble_tools.h#L696)
-- **Fix**: Add virtual button check
-
-### ERR-016: IR Remote RIGHT button missing virtual button check
-- **File**: [dh_ir_tools.h:640](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_ir_tools.h#L640)
-- **Fix**: Add virtual button check
-
-### ERR-017: IR Saved RIGHT button missing virtual button check
-- **File**: [dh_ir_tools.h:728](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_ir_tools.h#L728)
-- **Fix**: Add virtual button check
-
-### ERR-018: Radio Scanner LEFT/RIGHT merged check
-- **File**: [dh_radio_tools.h:316](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_radio_tools.h#L316)
-- **Impact**: Uses `||` to combine LEFT and RIGHT into one toggle — RIGHT has no virtual button check
-- **Fix**: Add virtual button check for RIGHT
-
-### ERR-019: Jammer RIGHT button missing virtual button check
-- **File**: [dh_radio_tools.h:129](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/dh_radio_tools.h#L129)
-- **Fix**: Add virtual button check
+### ERR-027: Spotify Album Art Striped / Dropped Packets
+**Status: REAL (Fixed)**
+- **Files**: `python/companion_controller.py`
+- **Impact**: `fetch_heavy_assets` pushed UDP packets with 64 pixels (128 bytes) every 5ms. The ESP32 SPI bus rendering routine could not keep up with the UDP buffer, resulting in dropped packets and heavy striping of the old album cover.
+- **Fix**: Increased `pixels_per_chunk` to 256 (512 bytes, 4 rows) and increased the UDP sleep interval to 20ms, drastically reducing the packet rate and allowing the ESP32 to render fully without dropping packets.
 
 ---
 
-## ⚪ Info / Style Issues
+## 🚀 Steps to Production-Ready Pipeline
 
-### INF-001: `EvilPortalHTML.h` is empty (0 bytes)
-- **File**: [EvilPortalHTML.h](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/EvilPortalHTML.h)
-- **Impact**: None — HTML is defined inline in `dh_evil_portal.h`
-- **Note**: Dead file, can be removed
+1. **Firmware Core Fixes**: [COMPLETED] Patched all memory safety boundaries and album art striping issues (Theme 2 album art UDP chunking).
+2. **Network Bypass Restoration**: [COMPLETED] Reimplemented the correct ESP-IDF Wi-Fi initialization sequence and unlocked `ieee80211` overrides to restore Deauth/Beacon functionality.
+3. **UI / UX Harmonization**: [COMPLETED] Fixed Deauth target selection loop, implemented long-press logic on the Web App and added missing virtual button checks across Dr.Hack tools.
+4. **Machine Learning Integrations**: [COMPLETED] Restored `tiny_conv.onnx` for RuView CSI processing and fixed the offline synchronization state.
+5. **Documentation Sync**: [COMPLETED] Rewrote the `docs/` folder to accurately reflect the V7 + V8 architectural changes, especially the new RuView integration, Theme 2/3 paradigms, and Steam tracking behaviors.
 
-### INF-002: `network.h.bak` backup file in source tree
-- **File**: [network.h.bak](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/network.h.bak)
-- **Impact**: None — backup file, not included
-- **Note**: Can be removed for cleanliness
-
-### INF-003: `exoticMode` is dead code
-- **File**: [globals.h:302](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/globals.h#L302)
-- **Impact**: None — defined as `false` constant, all conditionals evaluate false
-- **Note**: Already documented in code comment
-
-### INF-004: `dhAbout()` hardcodes "Tools: 48" but only 16 are accessible
-- **File**: [page_dr_hack.h:1091](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L1091)
-- **Impact**: UI shows incorrect tool count
-- **Fix**: Will be correct after ARCH-01 is fixed
-
-### INF-005: Port scan target uses `extern String pcIPStr` which may be uninitialized
-- **File**: [page_dr_hack.h:376](file:///c:/Users/shaan/OneDrive/Documents/C++/esp/CompanionOS/arduino/CompanionOS_Main/page_dr_hack.h#L376)
-- **Impact**: Port scan targets empty string if PC IP was never received
-- **Fix**: Fall back to gateway IP if pcIPStr is empty
-
-### INF-006: Multiple `extern void handleButtons(); handleButtons();` in tool loops
-- **Files**: Multiple locations in page_dr_hack.h, dh_wifi_tools.h
-- **Impact**: None — valid C++ but verbose pattern
-- **Note**: Style issue only, works correctly

@@ -28,6 +28,10 @@ from steam_tracker import SteamTracker  # type: ignore # noqa: E402
 from google_cal import GoogleCalendar, LocalTaskList  # type: ignore # noqa: E402
 from stock_manager import StockManager  # type: ignore # noqa: E402
 from theme2_bridge import theme2_spotify_feed  # type: ignore # noqa: E402
+from ruview_processor import (  # type: ignore # noqa: E402
+    ruview_listener_loop, ruview_push_loop, zone_manager,
+    ruview_enabled
+)
 
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
 
@@ -148,9 +152,9 @@ def fetch_heavy_assets(track_name, artist_name, track_id, album_art_url):
             if not pixels: return
             
             send_udp("ART_START:")
-            time.sleep(0.05)   # Allow ESP memory clear margin
+            time.sleep(0.1)   # Allow ESP memory clear margin
             
-            pixels_per_chunk = album_size * 2 # EXACTLY 2 full visual rows of pixels
+            pixels_per_chunk = 64 * 4  # 4 rows of 64 pixels = 256 pixels = 512 bytes
             
             # Convert normal RGB565 to raw byte array
             flat_bytes = []
@@ -161,12 +165,12 @@ def fetch_heavy_assets(track_name, artist_name, track_id, album_art_url):
             
             for i in range(0, len(byte_array), pixels_per_chunk * 2):
                 chunk_data = byte_array[i:i+(pixels_per_chunk*2)]  # type: ignore
-                idx = i // (pixels_per_chunk * 2)
+                idx = i // (64 * 2) # keep idx aligned with rows (each row is 64 pixels)
                 
                 # Custom Binary Packet Header: 0xFE identifies raw binary over UDP
                 packet = bytes([0xFE, (idx >> 8) & 0xFF, idx & 0xFF]) + chunk_data
                 send_udp_bytes(packet)
-                time.sleep(0.005)  
+                time.sleep(0.02)  # Give ESP32 time to render via SPI without dropping next UDP packet
                 
             send_udp("ART_COMPLETE:")
         except Exception as e:
@@ -307,6 +311,406 @@ def capture_windows_notifications():
             except Exception:
                 pass
             time.sleep(10)
+
+
+
+# ═══════════════════════════════════════════════════════════
+# RUVIEW CSI PRESENCE MAP — HTML UI
+# ═══════════════════════════════════════════════════════════
+
+RUVIEW_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RuView — CSI Presence Map</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0a12;
+            color: #e0e0e0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #12121e 0%, #1a1a2e 100%);
+            border-bottom: 1px solid rgba(120, 0, 255, 0.3);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header h1 {
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #a855f7, #6366f1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header .subtitle { font-size: 11px; color: #666; margin-top: 2px; }
+        .header .back-link {
+            color: #888;
+            text-decoration: none;
+            font-size: 13px;
+            transition: color 0.2s;
+        }
+        .header .back-link:hover { color: #a855f7; }
+
+        /* Controls bar */
+        .controls {
+            display: flex;
+            gap: 10px;
+            padding: 12px 24px;
+            background: #0d0d18;
+            border-bottom: 1px solid #1a1a2e;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: 1px solid #2a2a3e;
+            border-radius: 8px;
+            background: #14141f;
+            color: #ccc;
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn:hover { border-color: #a855f7; color: #a855f7; }
+        .btn.active { background: #a855f7; color: white; border-color: #a855f7; }
+        .btn.danger { border-color: #ef4444; color: #ef4444; }
+        .btn.danger:hover { background: #ef4444; color: white; }
+        .btn.success { border-color: #22c55e; color: #22c55e; }
+        .btn.success:hover { background: #22c55e; color: white; }
+
+        /* Main grid */
+        .container { padding: 20px 24px; }
+
+        /* Zone card */
+        .zone-card {
+            background: linear-gradient(135deg, #12121e 0%, #1a1a2e 100%);
+            border: 1px solid #2a2a3e;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 16px;
+            transition: all 0.3s;
+        }
+        .zone-card.motion { border-color: #ef4444; box-shadow: 0 0 20px rgba(239, 68, 68, 0.15); }
+        .zone-card.occupied { border-color: #22c55e; box-shadow: 0 0 20px rgba(34, 197, 94, 0.15); }
+        .zone-card.calibrating { border-color: #eab308; box-shadow: 0 0 20px rgba(234, 179, 8, 0.15); }
+        .zone-card.empty { border-color: #2a2a3e; }
+
+        .zone-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .zone-label {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e0e0e0;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            font-family: 'Inter', sans-serif;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .zone-label:hover { background: #1a1a2e; }
+        .zone-label:focus { outline: 1px solid #a855f7; background: #1a1a2e; }
+
+        /* Status indicator */
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #444;
+            transition: all 0.3s;
+        }
+        .status-dot.motion { background: #ef4444; animation: pulse 1s ease-in-out infinite; }
+        .status-dot.occupied { background: #22c55e; }
+        .status-dot.calibrating { background: #eab308; animation: pulse 1.5s ease-in-out infinite; }
+        .status-dot.empty { background: #444; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.3); }
+        }
+
+        .status-text { font-size: 14px; font-weight: 600; }
+        .status-text.motion { color: #ef4444; }
+        .status-text.occupied { color: #22c55e; }
+        .status-text.calibrating { color: #eab308; }
+        .status-text.empty { color: #666; }
+
+        /* Confidence bar */
+        .conf-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .conf-label { font-size: 11px; color: #666; width: 60px; }
+        .conf-bar-bg {
+            flex: 1;
+            height: 6px;
+            background: #1a1a2e;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .conf-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease, background 0.3s;
+            background: #22c55e;
+        }
+        .conf-value { font-size: 12px; color: #aaa; width: 36px; text-align: right; }
+
+        /* Metrics grid */
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+        }
+        .metric {
+            background: #0a0a14;
+            border: 1px solid #1a1a2e;
+            border-radius: 10px;
+            padding: 12px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #e0e0e0;
+        }
+        .metric-label {
+            font-size: 10px;
+            color: #666;
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .metric-value.cyan { color: #06b6d4; }
+        .metric-value.green { color: #22c55e; }
+        .metric-value.yellow { color: #eab308; }
+        .metric-value.red { color: #ef4444; }
+
+        /* Warnings */
+        .warnings {
+            margin-top: 20px;
+            padding: 16px;
+            background: #14141f;
+            border: 1px solid #2a2a3e;
+            border-radius: 12px;
+        }
+        .warnings h3 {
+            font-size: 13px;
+            color: #eab308;
+            margin-bottom: 8px;
+        }
+        .warnings ul {
+            list-style: none;
+            padding: 0;
+        }
+        .warnings li {
+            font-size: 12px;
+            color: #888;
+            padding: 4px 0;
+            padding-left: 16px;
+            position: relative;
+        }
+        .warnings li::before {
+            content: '⚠';
+            position: absolute;
+            left: 0;
+        }
+
+        /* No zones placeholder */
+        .no-zones {
+            text-align: center;
+            padding: 60px 20px;
+            color: #444;
+        }
+        .no-zones .icon { font-size: 48px; margin-bottom: 16px; }
+        .no-zones p { font-size: 14px; max-width: 400px; margin: 0 auto; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>📡 RuView Presence Map</h1>
+            <div class="subtitle">WiFi CSI Presence & Motion Detection</div>
+        </div>
+        <a href="/" class="back-link">← Back to Remote</a>
+    </div>
+
+    <div class="controls">
+        <button class="btn" id="toggleBtn" onclick="toggleCSI()">⏸ Disable</button>
+        <button class="btn success" onclick="recalibrate()">🔄 Recalibrate (60s)</button>
+        <span style="flex:1"></span>
+        <span style="font-size:11px; color:#666; align-self:center;" id="updateTime">—</span>
+    </div>
+
+    <div class="container">
+        <div id="zonesContainer">
+            <div class="no-zones">
+                <div class="icon">📡</div>
+                <p>Waiting for CSI data from ESP32 node...<br>
+                Make sure a CSI node is flashed and broadcasting ADR-018 frames on UDP port 8890.</p>
+            </div>
+        </div>
+
+        <div class="warnings">
+            <h3>Known False-Positive Sources</h3>
+            <ul>
+                <li>Microwave ovens near the CSI node antenna</li>
+                <li>Large oscillating fans in the sensing zone</li>
+                <li>Neighboring AP power fluctuations or channel changes</li>
+                <li>Metallic objects moving (e.g., ceiling fan, automated blinds)</li>
+                <li>Pets (cats/dogs) — detected as presence/motion</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let csiEnabled = true;
+
+        async function fetchState() {
+            try {
+                const res = await fetch('/api/ruview/state');
+                const data = await res.json();
+                csiEnabled = data.enabled;
+
+                const btn = document.getElementById('toggleBtn');
+                btn.textContent = csiEnabled ? '⏸ Disable' : '▶ Enable';
+                btn.className = csiEnabled ? 'btn danger' : 'btn success';
+
+                document.getElementById('updateTime').textContent =
+                    'Updated: ' + new Date().toLocaleTimeString();
+
+                renderZones(data.zones || []);
+            } catch (e) {
+                console.error('Fetch error:', e);
+            }
+        }
+
+        function renderZones(zones) {
+            const container = document.getElementById('zonesContainer');
+
+            if (!zones.length) {
+                container.innerHTML = `
+                    <div class="no-zones">
+                        <div class="icon">📡</div>
+                        <p>Waiting for CSI data from ESP32 node...<br>
+                        Make sure a CSI node is flashed and broadcasting ADR-018 frames on UDP port 8890.</p>
+                    </div>`;
+                return;
+            }
+
+            let html = '';
+            for (const z of zones) {
+                const cls = z.calibrating ? 'calibrating' :
+                            z.motion ? 'motion' :
+                            z.occupied ? 'occupied' : 'empty';
+
+                const confColor = z.confidence > 70 ? '#ef4444' :
+                                  z.confidence > 40 ? '#eab308' : '#22c55e';
+
+                const rssiColor = z.rssi >= -60 ? 'green' :
+                                  z.rssi >= -75 ? 'yellow' : 'red';
+
+                html += `
+                <div class="zone-card ${cls}">
+                    <div class="zone-header">
+                        <input class="zone-label" value="${z.label || 'Room'}"
+                               onchange="renameZone(${z.node_id}, this.value)" />
+                        <div class="status-indicator">
+                            <div class="status-dot ${cls}"></div>
+                            <span class="status-text ${cls}">${z.status || 'Unknown'}</span>
+                        </div>
+                    </div>
+
+                    <div class="conf-row">
+                        <span class="conf-label">Confidence</span>
+                        <div class="conf-bar-bg">
+                            <div class="conf-bar-fill" style="width:${z.confidence || 0}%; background:${confColor}"></div>
+                        </div>
+                        <span class="conf-value">${(z.confidence || 0).toFixed(0)}%</span>
+                    </div>
+
+                    <div class="metrics">
+                        <div class="metric">
+                            <div class="metric-value">${(z.variance || 0).toFixed(3)}</div>
+                            <div class="metric-label">Variance</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value ${rssiColor}">${z.rssi || 0} dBm</div>
+                            <div class="metric-label">RSSI</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value cyan">${(z.pps || 0).toFixed(0)}</div>
+                            <div class="metric-label">Packets/sec</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">${z.subcarriers || 0}</div>
+                            <div class="metric-label">Subcarriers</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value green">${z.thresh_presence || '—'}</div>
+                            <div class="metric-label">Presence Thresh</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value red">${z.thresh_motion || '—'}</div>
+                            <div class="metric-label">Motion Thresh</div>
+                        </div>
+                    </div>
+                </div>`;
+            }
+            container.innerHTML = html;
+        }
+
+        async function toggleCSI() {
+            await fetch('/api/ruview/toggle', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({enabled: !csiEnabled})
+            });
+            fetchState();
+        }
+
+        async function recalibrate() {
+            if (!confirm('Start 60-second recalibration?\\nLeave the room EMPTY during calibration.')) return;
+            await fetch('/api/ruview/recalibrate', {method: 'POST'});
+            fetchState();
+        }
+
+        async function renameZone(nodeId, label) {
+            await fetch('/api/ruview/rename', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({node_id: nodeId, label: label})
+            });
+        }
+
+        // Poll every 2 seconds
+        fetchState();
+        setInterval(fetchState, 2000);
+    </script>
+</body>
+</html>"""
 
 
 def start_notes_server():
@@ -587,9 +991,9 @@ def start_notes_server():
                         <button class="btn btn-nav" onclick="press('UP')" id="btn-up" title="Up">&#9650;</button>
                     </div>
                     <div class="btn-row">
-                        <button class="btn btn-nav" onclick="press('LEFT')" id="btn-left" title="Previous Page">&#9664;</button>
-                        <button class="btn btn-select" onclick="press('SELECT')" id="btn-select" title="Select / Action">SEL</button>
-                        <button class="btn btn-nav" onclick="press('RIGHT')" id="btn-right" title="Next Page">&#9654;</button>
+                        <button class="btn btn-nav" onmousedown="startPress('LEFT')" onmouseup="endPress('LEFT')" onmouseleave="cancelPress()" ontouchstart="startPress('LEFT')" ontouchend="endPress('LEFT')" id="btn-left" title="Previous Page">&#9664;</button>
+                        <button class="btn btn-select" onmousedown="startPress('SELECT')" onmouseup="endPress('SELECT')" onmouseleave="cancelPress()" ontouchstart="startPress('SELECT')" ontouchend="endPress('SELECT')" id="btn-select" title="Select / Action">SEL</button>
+                        <button class="btn btn-nav" onmousedown="startPress('RIGHT')" onmouseup="endPress('RIGHT')" onmouseleave="cancelPress()" ontouchstart="startPress('RIGHT')" ontouchend="endPress('RIGHT')" id="btn-right" title="Next Page">&#9654;</button>
                     </div>
                     <div class="btn-row">
                         <button class="btn btn-nav" onclick="press('DOWN')" id="btn-down" title="Down">&#9660;</button>
@@ -614,7 +1018,9 @@ def start_notes_server():
                     <button class="page-btn" onclick="page(9)">Tasks</button>
                     <button class="page-btn" onclick="page(10)">Network</button>
                     <button class="page-btn" onclick="page(11)">Settings</button>
-                    <button class="page-btn" onclick="page(12)">Dr.Hack</button>
+                    <button class="page-btn" onclick="page(12)" style="border-color:#a855f7;color:#a855f7">RuView</button>
+                    <button class="page-btn" onclick="page(13)">Dr.Hack</button>
+                    <a href="/ruview" style="font-size:11px;color:#a855f7;text-decoration:none;align-self:center;margin-left:8px">📡 Full Dashboard →</a>
                 </div>
 
                 <!-- NOTES -->
@@ -719,7 +1125,7 @@ def start_notes_server():
                         let duration = Date.now() - pressStart;
                         pressStart = 0;
                         if (duration >= 600) {{
-                            press('LONG_' + btn);
+                            press(btn + '_LONG');  // firmware expects LEFT_LONG, RIGHT_LONG, SELECT_LONG
                         }} else {{
                             press(btn);
                         }}
@@ -888,7 +1294,8 @@ def start_notes_server():
             data = request.get_json()
             if data and 'btn' in data:
                 btn = str(data['btn']).upper().strip()
-                valid = {'LEFT', 'RIGHT', 'SELECT', 'HOME', 'UP', 'DOWN', 'LONG_LEFT', 'LONG_RIGHT', 'LONG_SELECT', 'LONG_HOME', 'LONG_UP', 'LONG_DOWN'}
+                valid = {'LEFT', 'RIGHT', 'SELECT', 'HOME', 'UP', 'DOWN',
+                         'LEFT_LONG', 'RIGHT_LONG', 'SELECT_LONG', 'HOME_LONG', 'UP_LONG', 'DOWN_LONG'}
                 if btn in valid:
                     send_udp(f"BTN:{btn}")
                     print(f"🎮 Virtual button: {btn}")
@@ -1060,12 +1467,56 @@ def start_notes_server():
                 state = 1 if data['state'] else 0
                 send_udp(f"CUSTEYE:TOGGLE:{state}")
             return jsonify({"status": "ok"})
+
+        # ── RuView CSI Presence Map ──────────────────────
+        @app.route('/ruview')
+        def ruview_page():
+            return RUVIEW_HTML
+
+        @app.route('/api/ruview/state')
+        def api_ruview_state():
+            """Returns current zone states as JSON for the presence map."""
+            import ruview_processor as rvp
+            states = rvp.zone_manager.get_all_states()
+            return jsonify({
+                'enabled': rvp.ruview_enabled,
+                'zones': states
+            })
+
+        @app.route('/api/ruview/recalibrate', methods=['POST'])
+        def api_ruview_recalibrate():
+            """Trigger 60s ambient recalibration for all zones."""
+            import ruview_processor as rvp
+            rvp.zone_manager.recalibrate_all()
+            return jsonify({'status': 'ok', 'msg': 'Recalibration started — leave room empty for 60s'})
+
+        @app.route('/api/ruview/toggle', methods=['POST'])
+        def api_ruview_toggle():
+            """Enable/disable CSI processing."""
+            import ruview_processor as rvp
+            data = request.get_json() or {}
+            if 'enabled' in data:
+                rvp.ruview_enabled = bool(data['enabled'])
+            else:
+                rvp.ruview_enabled = not rvp.ruview_enabled
+            return jsonify({'status': 'ok', 'enabled': rvp.ruview_enabled})
+
+        @app.route('/api/ruview/rename', methods=['POST'])
+        def api_ruview_rename():
+            """Rename a zone label."""
+            import ruview_processor as rvp
+            data = request.get_json() or {}
+            node_id = data.get('node_id', 0)
+            label = data.get('label', 'Room')[:15]
+            rvp.zone_manager.set_zone_label(node_id, label)
+            return jsonify({'status': 'ok'})
         
         print(f"🌐 CompanionOS Web Remote starting on http://0.0.0.0:{port}")
         print(f"  🎮 Virtual Remote: http://localhost:{port}")
         print(f"  🤖 Agent webhook: POST /api/agent")
         print(f"  🖼️ Gallery push:  POST /api/gallery")
         print(f"  🔘 Button API:    POST /api/button")
+        print(f"  📡 RuView CSI:    http://localhost:{port}/ruview")
         app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
     except ImportError:
         print("⚠️ Flask not installed. Run: pip install flask")
@@ -1438,6 +1889,9 @@ def main():
     threading.Thread(target=thought_push_loop, daemon=True).start()
     # Theme 2: Extended Spotify data bridge (reuses same spotify_service + API keys)
     threading.Thread(target=theme2_spotify_feed, args=(spotify_service, send_udp, config), daemon=True).start()
+    # V8: RuView CSI Presence Detection threads
+    threading.Thread(target=ruview_listener_loop, args=(8890,), daemon=True).start()
+    threading.Thread(target=ruview_push_loop, args=(send_udp, 2.0), daemon=True).start()
     print("Monitoring playback & connections...")
     
     global current_lyrics, fast_poll_now

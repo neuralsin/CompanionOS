@@ -243,6 +243,11 @@ class SteamTracker:
             kernel32.CloseHandle.argtypes = [ctypes.wintypes.HANDLE]
             kernel32.CloseHandle.restype = ctypes.wintypes.BOOL
             psapi.EnumProcessModulesEx.restype = ctypes.wintypes.BOOL
+            psapi.EnumProcessModulesEx.argtypes = [
+                ctypes.wintypes.HANDLE, ctypes.POINTER(ctypes.c_void_p),
+                ctypes.wintypes.DWORD, ctypes.POINTER(ctypes.wintypes.DWORD),
+                ctypes.wintypes.DWORD
+            ]
             
             psapi.GetModuleBaseNameA.argtypes = [
                 ctypes.wintypes.HANDLE, ctypes.c_void_p,

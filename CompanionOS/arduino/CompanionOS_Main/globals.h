@@ -73,8 +73,9 @@ enum AppState {
   STATE_PRODUCTIVITY,  // 9
   STATE_NETWORK,       // 10
   STATE_SETTINGS,      // 11
-  STATE_DR_HACK,       // 12 — ESP32 only (#ifdef ESP32 guard in page_dr_hack.h)
-  STATE_COUNT          // = 13 pages
+  STATE_RUVIEW,        // 12 — RuView CSI Presence Detection
+  STATE_DR_HACK,       // 13 — ESP32 only (#ifdef ESP32 guard in page_dr_hack.h)
+  STATE_COUNT          // = 14 pages
 };
 
 extern AppState currentState;

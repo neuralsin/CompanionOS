@@ -401,7 +401,7 @@ static void dhRunCcSpectrum() {
     bool stay = true;
     while (stay) {
       if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { bandIdx = (bandIdx + DH_CC_BAND_COUNT - 1) % DH_CC_BAND_COUNT; stay = false; delay(200); }
-      if (digitalRead(BTN_RIGHT) == LOW) { bandIdx = (bandIdx + 1) % DH_CC_BAND_COUNT; stay = false; delay(200); }
+      if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { bandIdx = (bandIdx + 1) % DH_CC_BAND_COUNT; stay = false; delay(200); }
       if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
         if (!holding) { holdStart = millis(); holding = true; }
         if (millis() - holdStart > 800) { dhCcStrobe(CC_SIDLE); return; }
@@ -468,7 +468,7 @@ static void dhRunCcWaterfall() {
     tft.drawString("</>:Band HOLD:Back", SCALE_X(2), SCR_H - SCALE_Y(10), 1);
 
     if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { bandIdx = (bandIdx+3) % 4; dhCcPrepareRx(DH_CC_BANDS[bandIdx].startKHz); memset(wf,-120,sizeof(wf)); wfRow=0; delay(200); }
-    if (digitalRead(BTN_RIGHT) == LOW) { bandIdx = (bandIdx+1) % 4; dhCcPrepareRx(DH_CC_BANDS[bandIdx].startKHz); memset(wf,-120,sizeof(wf)); wfRow=0; delay(200); }
+    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { bandIdx = (bandIdx+1) % 4; dhCcPrepareRx(DH_CC_BANDS[bandIdx].startKHz); memset(wf,-120,sizeof(wf)); wfRow=0; delay(200); }
     if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) { dhCcStrobe(CC_SIDLE); return; }
@@ -535,7 +535,7 @@ static void dhRunCcFreqMon() {
       }
 
       if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { freqIdx = (freqIdx + DH_CC_MON_COUNT - 1) % DH_CC_MON_COUNT; retune = true; delay(200); }
-      if (digitalRead(BTN_RIGHT) == LOW) { freqIdx = (freqIdx + 1) % DH_CC_MON_COUNT; retune = true; delay(200); }
+      if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { freqIdx = (freqIdx + 1) % DH_CC_MON_COUNT; retune = true; delay(200); }
       if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
         if (!holding) { holdStart = millis(); holding = true; }
         if (millis() - holdStart > 800) { dhCcStrobe(CC_SIDLE); return; }
@@ -947,7 +947,7 @@ static void dhRunCcRawView() {
   while (true) {
     extern void handleNetwork(); handleNetwork();
     if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { page = (page + totalPages - 1) % totalPages; drawPage(); delay(200); }
-    if (digitalRead(BTN_RIGHT) == LOW) { page = (page + 1) % totalPages; drawPage(); delay(200); }
+    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { page = (page + 1) % totalPages; drawPage(); delay(200); }
     if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) return;
