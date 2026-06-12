@@ -259,6 +259,9 @@ void drawAgentOverlay() {
   if (agentStatus == "error" && millis() - agentStatusStart > 8000) {
     agentOverlayActive = false;
   }
+  if (agentStatus == "thinking" && millis() - agentStatusStart > 15000) {
+    agentOverlayActive = false;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════

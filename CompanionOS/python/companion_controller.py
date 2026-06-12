@@ -701,6 +701,40 @@ def start_notes_server():
                 </div>
 
                 <script>
+                    let pressTimer = null;
+                    let pressStart = 0;
+
+                    function startPress(btn) {{
+                        pressStart = Date.now();
+                        pressTimer = setTimeout(() => {{
+                            const fb = document.getElementById('feedback');
+                            fb.textContent = btn + ' holding...';
+                            fb.className = 'feedback active';
+                        }}, 500);
+                    }}
+
+                    function endPress(btn) {{
+                        if (pressStart === 0) return;
+                        clearTimeout(pressTimer);
+                        let duration = Date.now() - pressStart;
+                        pressStart = 0;
+                        if (duration >= 600) {{
+                            press('LONG_' + btn);
+                        }} else {{
+                            press(btn);
+                        }}
+                    }}
+
+                    function cancelPress() {{
+                        clearTimeout(pressTimer);
+                        if (pressStart > 0) {{
+                            const fb = document.getElementById('feedback');
+                            fb.className = 'feedback';
+                            fb.textContent = '';
+                        }}
+                        pressStart = 0;
+                    }}
+
                     function press(btn) {{
                         const fb = document.getElementById('feedback');
                         fb.textContent = btn + ' pressed';
@@ -787,6 +821,23 @@ def start_notes_server():
                             case 'h':          e.preventDefault(); press('HOME'); break;
                         }}
                     }});
+                    
+                    // Setup long press handlers for UI buttons
+                    window.addEventListener('DOMContentLoaded', () => {{
+                        document.querySelectorAll('.btn-nav, .btn-select, .btn-home').forEach(el => {{
+                            const onclickAttr = el.getAttribute('onclick');
+                            if (onclickAttr && onclickAttr.includes("press('")) {{
+                                const btnType = onclickAttr.match(/'(.*?)'/)[1];
+                                el.removeAttribute('onclick');
+                                el.addEventListener('mousedown', () => startPress(btnType));
+                                el.addEventListener('mouseup', () => endPress(btnType));
+                                el.addEventListener('mouseleave', cancelPress);
+                                el.addEventListener('touchstart', (e) => {{ e.preventDefault(); startPress(btnType); }}, {{passive: false}});
+                                el.addEventListener('touchend', (e) => {{ e.preventDefault(); endPress(btnType); }}, {{passive: false}});
+                                el.addEventListener('touchcancel', cancelPress);
+                            }}
+                        }});
+                    }});
                 </script>
             </body>
             </html>
@@ -837,7 +888,7 @@ def start_notes_server():
             data = request.get_json()
             if data and 'btn' in data:
                 btn = str(data['btn']).upper().strip()
-                valid = {'LEFT', 'RIGHT', 'SELECT', 'HOME', 'UP', 'DOWN'}
+                valid = {'LEFT', 'RIGHT', 'SELECT', 'HOME', 'UP', 'DOWN', 'LONG_LEFT', 'LONG_RIGHT', 'LONG_SELECT', 'LONG_HOME', 'LONG_UP', 'LONG_DOWN'}
                 if btn in valid:
                     send_udp(f"BTN:{btn}")
                     print(f"🎮 Virtual button: {btn}")

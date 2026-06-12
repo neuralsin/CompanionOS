@@ -131,8 +131,10 @@ void handleButtons() {
 
   // ── Long press actions ──
   if (consumeLong(btnLeft)) {
-    // Go HOME (eyes page)
-    if (currentState != STATE_EYES) {
+    if (currentState == STATE_SPOTIFY) {
+      extern void sendCommand(String cmd);
+      sendCommand("PREV");
+    } else if (currentState != STATE_EYES) {
       changePage(-(int)currentState);  // go to index 0
     }
     lastInteractionTime = millis();
@@ -140,8 +142,10 @@ void handleButtons() {
   }
 
   if (consumeLong(btnRight)) {
-    // Go to SETTINGS
-    if (currentState != STATE_SETTINGS) {
+    if (currentState == STATE_SPOTIFY) {
+      extern void sendCommand(String cmd);
+      sendCommand("NEXT");
+    } else if (currentState != STATE_SETTINGS) {
       int delta = STATE_SETTINGS - (int)currentState;
       changePage(delta);
     }
@@ -171,13 +175,6 @@ void handleButtons() {
     if (currentState == STATE_DR_HACK) {
       extern void dhNavigate(int delta);
       dhNavigate(-1);
-      lastInteractionTime = millis();
-      return;
-    }
-
-    if (currentState == STATE_SPOTIFY) {
-      extern void sendCommand(String cmd);
-      sendCommand("PREV");
     } else {
       changePage(-1);
     }
@@ -189,13 +186,6 @@ void handleButtons() {
     if (currentState == STATE_DR_HACK) {
       extern void dhNavigate(int delta);
       dhNavigate(1);
-      lastInteractionTime = millis();
-      return;
-    }
-
-    if (currentState == STATE_SPOTIFY) {
-      extern void sendCommand(String cmd);
-      sendCommand("NEXT");
     } else {
       changePage(1);
     }

@@ -97,10 +97,16 @@ void t2_redrawSpotifyPartial() {
     // Draw art frame border
     tft.drawRect(T2S_ART_X - 2, T2S_ART_Y - 2, T2S_ART_SIZE + 4, T2S_ART_SIZE + 4, T2S_FRAME);
     tft.drawRect(T2S_ART_X - 1, T2S_ART_Y - 1, T2S_ART_SIZE + 2, T2S_ART_SIZE + 2, T2S_DIM);
-    // Push the actual album art with correct endianness
-    tft.setSwapBytes(true);
-    tft.pushImage(T2S_ART_X, T2S_ART_Y, T2S_ART_SIZE, T2S_ART_SIZE, albumArt);
-    tft.setSwapBytes(false);
+    // Fast nearest-neighbor scale 96x96 to 64x64
+    tft.setWindow(T2S_ART_X, T2S_ART_Y, T2S_ART_X + 63, T2S_ART_Y + 63);
+    for (int y = 0; y < 64; y++) {
+      int srcY = (y * 96) / 64;
+      for (int x = 0; x < 64; x++) {
+        int srcX = (x * 96) / 64;
+        uint16_t color = albumArt[srcY * 96 + srcX];
+        tft.pushColor(color);
+      }
+    }
     t2s_artDrawn = true;
   }
 

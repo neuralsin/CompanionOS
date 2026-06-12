@@ -8,6 +8,13 @@
 
 #ifdef ESP32
 
+#undef SCALE_X
+#undef SCALE_Y
+#undef SCALE_MIN
+#define SCALE_X(v)  ((int)((v) * ((float)SCREEN_W / 160.0f) + 0.5f))
+#define SCALE_Y(v)  ((int)((v) * ((float)SCREEN_H / 128.0f) + 0.5f))
+#define SCALE_MIN(v) max(1, SCALE_X(v))
+
 #include "globals.h"
 #include "ui_components.h"
 #include <WiFi.h>
@@ -487,7 +494,7 @@ static void dhSendBeacon(const char* ssid, int channel) {
   memcpy(&dhBeaconFrame[tailOff], DH_BEACON_TAIL, sizeof(DH_BEACON_TAIL));
   dhBeaconFrame[tailOff + sizeof(DH_BEACON_TAIL) - 1] = (uint8_t)channel;
   
-  esp_wifi_80211_tx(WIFI_IF_STA, dhBeaconFrame, tailOff + sizeof(DH_BEACON_TAIL), false);
+  esp_wifi_80211_tx(WIFI_IF_AP, dhBeaconFrame, tailOff + sizeof(DH_BEACON_TAIL), false);
   dhBeaconsSent++;
 }
 
@@ -509,7 +516,7 @@ void dhRunBeaconSpam() {
   wifi_init_config_t bcfg = WIFI_INIT_CONFIG_DEFAULT();
   esp_wifi_init(&bcfg);
   esp_wifi_set_storage(WIFI_STORAGE_RAM);
-  esp_wifi_set_mode(WIFI_MODE_STA);
+  esp_wifi_set_mode(WIFI_MODE_AP); // bypass ESP32 v5 raw tx block
   esp_wifi_start();
   esp_wifi_set_promiscuous(true);
   esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
@@ -552,17 +559,23 @@ void dhRunBeaconSpam() {
       tft.setTextColor(CLR_TEXT_MED);
       drawTruncatedText(SCALE_X(4), SCALE_Y(70), DH_SPAM_SSIDS[ssidIdx], SCR_W - SCALE_X(8), CLR_TEXT_MED, 1);
 
-      // Activity bar
-      int barW = random(20, SCR_W - SCALE_X(8));
-      tft.fillRect(SCALE_X(4), SCALE_Y(90), SCR_W - SCALE_X(8), SCALE_Y(4), CLR_SURFACE);
-      tft.fillRect(SCALE_X(4), SCALE_Y(90), barW, SCALE_Y(4), CLR_SECONDARY);
-
       lastDraw = millis();
+    }
+
+    static unsigned long lastBarDrawSpam = 0;
+    if (millis() - lastBarDrawSpam > 30) {
+      int maxW = SCR_W - SCALE_X(8);
+      int sweep = (millis() / 5) % (maxW * 2);
+      if (sweep > maxW) sweep = (maxW * 2) - sweep;
+      tft.fillRect(SCALE_X(4), SCALE_Y(90), maxW, SCALE_Y(4), CLR_SURFACE);
+      tft.fillRect(SCALE_X(4), SCALE_Y(90), sweep, SCALE_Y(4), CLR_SECONDARY);
+      lastBarDrawSpam = millis();
     }
 
     // Detect SELECT long hold to stop
     #ifdef ESP32
     extern void handleButtons(); handleButtons();
+    if (currentState != STATE_DR_HACK) break;
     extern ButtonState btnSelect;
     extern bool consumeLong(ButtonState&);
     if (consumeLong(btnSelect) || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
@@ -606,7 +619,7 @@ static void dhSendDeauth(const uint8_t target[6], const uint8_t bssid[6]) {
   memcpy(&dhDeauthFrame[4], target, 6);
   memcpy(&dhDeauthFrame[10], bssid, 6);
   memcpy(&dhDeauthFrame[16], bssid, 6);
-  esp_wifi_80211_tx(WIFI_IF_STA, dhDeauthFrame, sizeof(dhDeauthFrame), false);
+  esp_wifi_80211_tx(WIFI_IF_AP, dhDeauthFrame, sizeof(dhDeauthFrame), false);
   dhDeauthPkts++;
 }
 
@@ -655,7 +668,7 @@ void dhRunDeauth() {
   wifi_init_config_t dcfg = WIFI_INIT_CONFIG_DEFAULT();
   esp_wifi_init(&dcfg);
   esp_wifi_set_storage(WIFI_STORAGE_RAM);
-  esp_wifi_set_mode(WIFI_MODE_STA);
+  esp_wifi_set_mode(WIFI_MODE_AP); // bypass ESP32 v5 raw tx block
   esp_wifi_start();
   esp_wifi_set_channel(ap.channel, WIFI_SECOND_CHAN_NONE);
   esp_wifi_set_promiscuous(true);
@@ -689,18 +702,24 @@ void dhRunDeauth() {
       tft.setTextColor(CLR_SUCCESS);
       tft.drawString(buf, 10, 50, 1);
 
-      // Activity indicator
-      int barW = random(10, SCR_W - 20);
-      tft.fillRect(10, 80, SCR_W - 20, 4, CLR_SURFACE);
-      tft.fillRect(10, 80, barW, 4, CLR_SECONDARY);
-
       tft.setTextColor(CLR_TEXT_LO);
       tft.drawString("HOLD SEL: stop", 10, SCR_H - 12, 1);
       lastDraw = millis();
     }
 
+    static unsigned long lastBarDrawDeauth = 0;
+    if (millis() - lastBarDrawDeauth > 30) {
+      int maxW = SCR_W - 20;
+      int sweep = (millis() / 5) % (maxW * 2);
+      if (sweep > maxW) sweep = (maxW * 2) - sweep;
+      tft.fillRect(10, 80, maxW, 4, CLR_SURFACE);
+      tft.fillRect(10, 80, sweep, 4, CLR_SECONDARY);
+      lastBarDrawDeauth = millis();
+    }
+
     #ifdef ESP32
     extern void handleButtons(); handleButtons();
+    if (currentState != STATE_DR_HACK) break;
     extern ButtonState btnSelect;
     extern bool consumeLong(ButtonState&);
     if (consumeLong(btnSelect) || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
@@ -835,6 +854,7 @@ void dhRunPacketMonitor() {
     // Exit on SELECT hold
     #ifdef ESP32
     extern void handleButtons(); handleButtons();
+    if (currentState != STATE_DR_HACK) break;
     extern ButtonState btnSelect;
     extern bool consumeLong(ButtonState&);
     if (consumeLong(btnSelect) || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
@@ -1201,6 +1221,10 @@ static void dhAbout() {
   
   while (true) {
     extern void handleNetwork(); handleNetwork();
+    #ifdef ESP32
+    extern void handleButtons(); handleButtons();
+    if (currentState != STATE_DR_HACK) break;
+    #endif
     if (digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
       break;
     }

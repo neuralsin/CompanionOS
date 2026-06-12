@@ -97,11 +97,12 @@ class SteamTracker:
         'dwm.exe', 'explorer.exe', 'shellexperiencehost.exe',
         'searchhost.exe', 'startmenuexperiencehost.exe',
         'systemsettings.exe', 'textinputhost.exe', 'lockapp.exe',
-        'widgets.exe', 'windowsterminal.exe', 'wt.exe',
+        'widgets.exe', 'windowsterminal.exe', 'wt.exe', 'applicationframehost.exe',
+        'shellhost.exe', 'crossdeviceresume.exe',
         # Dev tools
         'code.exe', 'devenv.exe', 'rider64.exe', 'clion64.exe',
         'idea64.exe', 'pycharm64.exe', 'androidstudio64.exe',
-        'cursor.exe',
+        'cursor.exe', 'antigravity ide.exe',
         # Communication
         'discord.exe', 'slack.exe', 'teams.exe', 'zoom.exe',
         'telegram.exe', 'whatsapp.exe', 'signal.exe',
@@ -133,7 +134,8 @@ class SteamTracker:
         'wallpaperengine.exe', 'lively.exe', 'rainmeter.exe',
         'powertoys.exe', 'windowspackagemanagerserver.exe',
         'msedgewebview2.exe', 'cefsharp.browsersubprocess.exe',
-        'crashhandler64.exe', 'crashreporter.exe',
+        'crashhandler64.exe', 'crashreporter.exe', 'ds4windows.exe',
+        'nahimicsvc64.exe', 'nahimicsvc32.exe', 'cloudflare.exe', 'cloudflare warp.exe',
     }
 
     def __init__(self, steam_api_key='', steam_id=''):
@@ -240,16 +242,10 @@ class SteamTracker:
             kernel32.OpenProcess.restype = ctypes.wintypes.HANDLE
             kernel32.CloseHandle.argtypes = [ctypes.wintypes.HANDLE]
             kernel32.CloseHandle.restype = ctypes.wintypes.BOOL
-            
-            psapi.EnumProcessModulesEx.argtypes = [
-                ctypes.wintypes.HANDLE, ctypes.POINTER(ctypes.wintypes.HMODULE),
-                ctypes.wintypes.DWORD, ctypes.POINTER(ctypes.wintypes.DWORD),
-                ctypes.wintypes.DWORD
-            ]
             psapi.EnumProcessModulesEx.restype = ctypes.wintypes.BOOL
             
             psapi.GetModuleBaseNameA.argtypes = [
-                ctypes.wintypes.HANDLE, ctypes.wintypes.HMODULE,
+                ctypes.wintypes.HANDLE, ctypes.c_void_p,
                 ctypes.c_char_p, ctypes.wintypes.DWORD
             ]
             psapi.GetModuleBaseNameA.restype = ctypes.wintypes.DWORD
@@ -276,7 +272,7 @@ class SteamTracker:
                 for i in range(min(num_mods, 1024)):
                     modname = ctypes.create_string_buffer(260)
                     psapi.GetModuleBaseNameA(
-                        hProcess, hMods[i], modname, 260
+                        hProcess, ctypes.c_void_p(hMods[i]), modname, 260
                     )
                     if modname.value.lower() in self.GPU_DLLS:
                         return True
@@ -375,7 +371,7 @@ class SteamTracker:
                 exe_lower = (exe or '').lower()
                 if any(marker in exe_lower for marker in [
                     'steamapps', 'epic games', 'xboxgames',
-                    'gog galaxy', 'riot games', 'ubisoft'
+                    'gog galaxy', 'riot games', 'ubisoft', '\\games\\'
                 ]):
                     return title[:23]
 

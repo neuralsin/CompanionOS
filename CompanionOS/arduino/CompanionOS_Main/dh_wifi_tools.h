@@ -753,7 +753,7 @@ static void dhKarmaProbeCallback(void* buf, wifi_promiscuous_pkt_type_t type) {
   memcpy(&beacon[tailOff], tail, sizeof(tail));
   beacon[tailOff + sizeof(tail) - 1] = pkt->rx_ctrl.channel;
 
-  esp_wifi_80211_tx(WIFI_IF_STA, beacon, tailOff + sizeof(tail), false);
+  esp_wifi_80211_tx(WIFI_IF_AP, beacon, tailOff + sizeof(tail), false);
   dhKarmaCount++;
   dhKarmaSSIDs++;
 }

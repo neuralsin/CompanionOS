@@ -545,7 +545,11 @@ void handleNetwork() {
         int yStart = startPixel / imgWidth;
         int maxRows = safePixels / imgWidth;
 
-        if (currentState == STATE_SPOTIFY || currentState == STATE_GAMING) {
+        bool enableProgressive = true;
+        if (currentState == STATE_SPOTIFY && activeTheme != 0) {
+          enableProgressive = false;
+        }
+        if ((currentState == STATE_SPOTIFY || currentState == STATE_GAMING) && enableProgressive) {
           if (maxRows > 0) {
             tft.pushImage(imgX, imgY + yStart, imgWidth, maxRows, dest);
           }
@@ -639,10 +643,12 @@ void handleCommand(String msg) {
     if (!deserializeJson(doc, json)) {
       agentStatus = doc["status"].as<String>();
       agentStatusText = doc["text"].as<String>();
-      agentStatusStart = millis();
-      agentOverlayActive = true;
-      lastInteractionTime = millis();
-
+      if (agentStatusText.length() > 0) {
+        agentStatusStart = millis();
+        agentOverlayActive = true;
+        lastInteractionTime = millis();
+      }
+      
       if (agentStatus == "thinking") {
         if (activeTheme == 2) t3_setEmotion(EMO_EXCITED);
         else if (activeTheme == 1) t2_setEmotion(EMO_EXCITED);
