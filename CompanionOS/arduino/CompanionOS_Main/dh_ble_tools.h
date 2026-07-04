@@ -966,8 +966,7 @@ static void dhRunBtJammer() {
   RF24 jam1(NRF1_CE_PIN, NRF1_CSN_PIN);
   RF24 jam2(NRF2_CE_PIN, NRF2_CSN_PIN);
 
-  SPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI);
-  delay(20);
+  // SPI initialized globally
 
   bool jam1Ok = jam1.begin();
   if (jam1Ok) {

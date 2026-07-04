@@ -18,7 +18,8 @@
 // ═══════════════════════════════════════════════════════════
 
 static uint8_t dhJamChToNrf(int wifiCh) {
-  return (uint8_t)((wifiCh * 5) + 2);
+  if (wifiCh == 14) return 84; // CH 14 is 2484 MHz (nRF24 CH 84)
+  return (uint8_t)((wifiCh * 5) + 7);
 }
 
 static void dhRunJammer24() {
@@ -33,8 +34,7 @@ static void dhRunJammer24() {
   pinMode(NRF1_CE_PIN, OUTPUT); digitalWrite(NRF1_CE_PIN, LOW);
   pinMode(NRF2_CE_PIN, OUTPUT); digitalWrite(NRF2_CE_PIN, LOW);
 
-  SPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI);
-  delay(20);
+  // SPI initialized globally
 
   bool j1Ok = jam1.begin();
   if (j1Ok) {
@@ -119,6 +119,12 @@ static void dhRunJammer24() {
   unsigned long holdStart = 0; bool holding = false;
   unsigned long lastDraw = millis();
 
+  // Wait for Select button release to prevent bleed-through from menu selection
+  while (digitalRead(BTN_SELECT) == LOW) {
+    delay(10);
+  }
+  virtualSelectPressed = false;
+
   while (true) {
     extern void handleNetwork(); handleNetwork();
     if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
@@ -194,8 +200,7 @@ static void dhRunRfClownJammer() {
   pinMode(NRF1_CE_PIN, OUTPUT); digitalWrite(NRF1_CE_PIN, LOW);
   pinMode(NRF2_CE_PIN, OUTPUT); digitalWrite(NRF2_CE_PIN, LOW);
 
-  SPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI);
-  delay(20);
+  // SPI initialized globally
 
   bool j1Ok = jam1.begin();
   if (j1Ok) {
@@ -292,6 +297,12 @@ static void dhRunRfClownJammer() {
     0x55,0xAA,0x55,0xAA,0x55,0xAA,0x55,0xAA
   };
 
+  // Wait for Select button release to prevent bleed-through from menu selection
+  while (digitalRead(BTN_SELECT) == LOW) {
+    delay(10);
+  }
+  virtualSelectPressed = false;
+
   while (true) {
     extern void handleNetwork(); handleNetwork();
     
@@ -378,8 +389,7 @@ static void dhRunRadioScanner() {
   pinMode(TFT_CS, OUTPUT); digitalWrite(TFT_CS, HIGH);
   pinMode(NRF1_CSN_PIN, OUTPUT); digitalWrite(NRF1_CSN_PIN, HIGH);
 
-  SPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI);
-  delay(20);
+  // SPI initialized globally
 
   bool ok = radio.begin();
   if (!ok) {

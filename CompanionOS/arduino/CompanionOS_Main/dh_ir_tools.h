@@ -804,13 +804,17 @@ static void dhRunHwDiag() {
 
   // nRF24 #1
   tft.setTextColor(CLR_TEXT_LO); tft.drawString("nRF1:", SCALE_X(4), y, 1);
-  sprintf(buf, "CE%d CS%d", NRF1_CE_PIN, NRF1_CSN_PIN);
-  tft.setTextColor(CLR_PRIMARY); tft.drawString(buf, SCALE_X(50), y, 1); y += lineH;
+  RF24 t_jam1(NRF1_CE_PIN, NRF1_CSN_PIN);
+  bool t_jam1Ok = t_jam1.begin();
+  sprintf(buf, "CE%d CS%d %s", NRF1_CE_PIN, NRF1_CSN_PIN, t_jam1Ok ? "OK" : "FAIL");
+  tft.setTextColor(t_jam1Ok ? CLR_SUCCESS : CLR_SECONDARY); tft.drawString(buf, SCALE_X(50), y, 1); y += lineH;
 
   // nRF24 #2
   tft.setTextColor(CLR_TEXT_LO); tft.drawString("nRF2:", SCALE_X(4), y, 1);
-  sprintf(buf, "CE%d CS%d", NRF2_CE_PIN, NRF2_CSN_PIN);
-  tft.setTextColor(CLR_PRIMARY); tft.drawString(buf, SCALE_X(50), y, 1); y += lineH;
+  RF24 t_jam2(NRF2_CE_PIN, NRF2_CSN_PIN);
+  bool t_jam2Ok = t_jam2.begin();
+  sprintf(buf, "CE%d CS%d %s", NRF2_CE_PIN, NRF2_CSN_PIN, t_jam2Ok ? "OK" : "FAIL");
+  tft.setTextColor(t_jam2Ok ? CLR_SUCCESS : CLR_SECONDARY); tft.drawString(buf, SCALE_X(50), y, 1); y += lineH;
 
   // CC1101
   tft.setTextColor(CLR_TEXT_LO); tft.drawString("CC1101:", SCALE_X(4), y, 1);

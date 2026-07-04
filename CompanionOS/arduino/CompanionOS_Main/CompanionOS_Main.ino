@@ -207,6 +207,7 @@ void setup() {
   tft.init();
   #ifdef ESP32
     tft.setRotation(1);
+    SPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI);
   #else
     tft.setRotation(1);
   #endif
