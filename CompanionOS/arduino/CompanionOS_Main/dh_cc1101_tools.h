@@ -275,17 +275,9 @@ static bool dhHasRfCapture = false;
 // ═══════════════════════════════════════════════════════════
 
 static bool dhCcShowError(const char* title) {
-  tft.fillScreen(CLR_BG);
-  tft.setTextColor(CLR_SECONDARY);
-  tft.drawCentreString("CC1101 ERROR", SCR_CX, SCALE_Y(30), 1);
-  tft.setTextColor(CLR_TEXT_MED);
-  tft.drawCentreString("Check SPI wiring", SCR_CX, SCALE_Y(50), 1);
-  char buf[40]; sprintf(buf, "CSN:%d GDO0:%d", CC1101_CSN_PIN, CC1101_GDO0_PIN);
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawCentreString(buf, SCR_CX, SCALE_Y(65), 1);
-  tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
-  dhWaitSelectPress();
-  delay(200);
+  char errMsg[64];
+  sprintf(errMsg, "CC1101 Disconnected\nCSN:%d GDO0:%d", CC1101_CSN_PIN, CC1101_GDO0_PIN);
+  dhShowError(errMsg);
   return false;
 }
 

@@ -53,15 +53,9 @@ static void dhRunJammer24() {
 
   int activeCount = (j1Ok?1:0) + (j2Ok?1:0);
   if (activeCount == 0) {
-    tft.fillScreen(CLR_BG);
-    tft.setTextColor(CLR_SECONDARY);
-    tft.drawCentreString("nRF24 ERROR", SCR_CX, SCALE_Y(40), 1);
-    tft.setTextColor(CLR_TEXT_MED);
-    tft.drawCentreString("Check SPI wiring", SCR_CX, SCALE_Y(60), 1);
-    char pins[40]; sprintf(pins, "CE:%d/%d CSN:%d/%d", NRF1_CE_PIN, NRF2_CE_PIN, NRF1_CSN_PIN, NRF2_CSN_PIN);
-    tft.setTextColor(CLR_TEXT_LO);
-    tft.drawCentreString(pins, SCR_CX, SCALE_Y(80), 1);
-    delay(3000);
+    char errMsg[64];
+    sprintf(errMsg, "nRF24 Init Failed\nCE:%d CSN:%d", NRF1_CE_PIN, NRF1_CSN_PIN);
+    dhShowError(errMsg);
     return;
   }
 
@@ -164,9 +158,23 @@ static void dhRunJammer24() {
 
     if (isAttacking) {
       uint8_t freq = dhJamChToNrf(jamCh);
-      if (j2Ok) {
-        jam2.setChannel(freq);
-        for (int i = 0; i < 20; i++) jam2.startWrite(noise, 32, true);
+      static unsigned long lastHop = 0;
+      static uint8_t scanCh = 0;
+      
+      // Sweep channels to blanket the 2.4GHz spectrum
+      if (millis() - lastHop > 20) {
+        scanCh = (scanCh + 2) % 80; // Rapidly sweep through nRF channels 0 to 80
+        
+        if (j1Ok) {
+          jam1.stopConstCarrier();
+          jam1.setChannel(scanCh);
+          jam1.startConstCarrier(RF24_PA_MAX, scanCh);
+        }
+        if (j2Ok) {
+          jam2.setChannel((scanCh + 40) % 80); // Offset second radio
+          for (int i = 0; i < 5; i++) jam2.startWrite(noise, 32, true);
+        }
+        lastHop = millis();
       }
 
       if (millis() - lastDraw > 250) {
@@ -220,12 +228,9 @@ static void dhRunRfClownJammer() {
 
   int activeCount = (j1Ok?1:0) + (j2Ok?1:0);
   if (activeCount == 0) {
-    tft.fillScreen(CLR_BG);
-    tft.setTextColor(CLR_SECONDARY);
-    tft.drawCentreString("nRF24 ERROR", SCR_CX, SCALE_Y(40), 1);
-    tft.setTextColor(CLR_TEXT_MED);
-    tft.drawCentreString("Check SPI wiring", SCR_CX, SCALE_Y(60), 1);
-    delay(3000);
+    char errMsg[64];
+    sprintf(errMsg, "nRF24 Init Failed\nCE:%d CSN:%d", NRF1_CE_PIN, NRF1_CSN_PIN);
+    dhShowError(errMsg);
     return;
   }
 
@@ -344,17 +349,30 @@ static void dhRunRfClownJammer() {
       const byte* arr; int size;
       getChannelData(currentMode, arr, size);
       
-      // Hopping logic ported 1:1 from RfClown: 
-      // Pick ONE random channel and blast it on all radios simultaneously using ConstCarrier
-      byte channel = arr[random(0, size)];
+      // Hopping logic: rapidly cycle through all channels in the map.
+      // Radio 1 takes lower half of the channels, Radio 2 takes upper half,
+      // creating a wider spread of interference.
+      static unsigned long lastHop = 0;
+      static int hopIdx1 = 0;
+      static int hopIdx2 = size / 2;
       
-      if (j1Ok) { 
-        jam1.setChannel(channel); 
-        jam1.startConstCarrier(RF24_PA_MAX, channel); 
-      }
-      if (j2Ok) { 
-        jam2.setChannel(channel); 
-        jam2.startConstCarrier(RF24_PA_MAX, channel); 
+      if (millis() - lastHop > 20) { // Hop every 20ms
+        hopIdx1 = (hopIdx1 + 1) % size;
+        hopIdx2 = (hopIdx2 + 1) % size;
+        
+        byte ch1 = arr[hopIdx1];
+        byte ch2 = arr[hopIdx2];
+        
+        if (j1Ok) {
+          jam1.stopConstCarrier();
+          jam1.setChannel(ch1);
+          jam1.startConstCarrier(RF24_PA_MAX, ch1);
+        }
+        if (j2Ok) {
+          jam2.setChannel(ch2);
+          for (int i = 0; i < 5; i++) jam2.startWrite(noise, 32, true);
+        }
+        lastHop = millis();
       }
 
       if (millis() - lastDraw > 150) {
@@ -393,10 +411,9 @@ static void dhRunRadioScanner() {
 
   bool ok = radio.begin();
   if (!ok) {
-    tft.fillScreen(CLR_BG);
-    tft.setTextColor(CLR_SECONDARY);
-    tft.drawCentreString("nRF24 ERROR", SCR_CX, SCALE_Y(40), 1);
-    delay(2500);
+    char errMsg[64];
+    sprintf(errMsg, "nRF24 Init Failed\nCE:%d CSN:%d", NRF1_CE_PIN, NRF1_CSN_PIN);
+    dhShowError(errMsg);
     return;
   }
 

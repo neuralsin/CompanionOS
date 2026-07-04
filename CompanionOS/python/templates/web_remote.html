@@ -540,6 +540,14 @@
     </div>
   </div>
 
+  <!-- Hardware Diagnostics -->
+  <div class="section">
+    <div class="section-title">Hardware Diagnostics</div>
+    <button class="thought-send" onclick="checkNrf()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
+      <span class="icon" style="font-size: 16px;">📡</span> Trigger nRF Diagnostic Check
+    </button>
+  </div>
+
   <div class="footer">
     CompanionOS v7.0 • neuralsin<br>
     Web Remote Control
@@ -580,6 +588,13 @@
   async function pressBtn(btn) {
     const r = await api(`/api/btn/${btn}`);
     if (r.ok) showToast(`${btn} pressed`);
+  }
+
+  // ── Hardware Diagnostics ─────────────────────────────
+
+  async function checkNrf() {
+    const r = await api('/api/nrf_check');
+    if (r.ok) showToast('nRF Check Triggered');
   }
 
   // ── Direct Page Nav ──────────────────────────────────

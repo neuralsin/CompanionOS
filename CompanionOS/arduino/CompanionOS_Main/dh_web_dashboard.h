@@ -12,6 +12,7 @@
 #include "ui_components.h"
 #include <WiFi.h>
 #include <WebServer.h>
+#include <RF24.h>
 
 // ═══════════════════════════════════════════════════════════
 // HTML DASHBOARD PAGE
@@ -88,10 +89,16 @@ max-height:200px;overflow-y:auto;color:#0f0}
 <div class="actions">
 <h3 style="color:#05ff;margin-bottom:12px">Quick Actions</h3>
 <a class="btn" href="/scan">WiFi Scan</a>
+<a class="btn" href="javascript:radioTest()">Radio Test</a>
 <a class="btn" href="/status">Refresh Status</a>
 </div>
 <div class="log" id="log">System ready...</div>
 <script>
+function radioTest(){
+fetch('/api/nrftest').then(r=>r.json()).then(d=>{
+alert('nRF1: '+(d.nrf1?'OK':'ERR')+' | nRF2: '+(d.nrf2?'OK':'ERR'));
+}).catch(()=>alert('Test failed'));
+}
 function refresh(){
 fetch('/api/status').then(r=>r.json()).then(d=>{
 document.getElementById('uptime').textContent=d.uptime+'s';
@@ -136,6 +143,17 @@ static void dhDashHandleStatus() {
     WiFi.softAPgetStationNum(),
     WiFi.macAddress().c_str()
   );
+  dhDashServer->send(200, "application/json", json);
+}
+
+static void dhDashHandleNrfTest() {
+  RF24 jam1(NRF1_CE_PIN, NRF1_CSN_PIN);
+  bool ok1 = jam1.begin();
+  RF24 jam2(NRF2_CE_PIN, NRF2_CSN_PIN);
+  bool ok2 = jam2.begin();
+  
+  char json[128];
+  snprintf(json, sizeof(json), "{\"nrf1\":%s,\"nrf2\":%s}", ok1?"true":"false", ok2?"true":"false");
   dhDashServer->send(200, "application/json", json);
 }
 
@@ -222,6 +240,7 @@ static void dhRunWebDashboard() {
   dhDashServer->on("/btn", HTTP_GET, dhDashHandleBtn);
   dhDashServer->on("/scan", HTTP_GET, dhDashHandleScan);
   dhDashServer->on("/status", HTTP_GET, dhDashHandleRoot);
+  dhDashServer->on("/api/nrftest", HTTP_GET, dhDashHandleNrfTest);
   dhDashServer->begin();
   dhDashRunning = true;
   dhDashBtnQueue = -1;

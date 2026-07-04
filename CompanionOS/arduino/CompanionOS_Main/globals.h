@@ -233,6 +233,7 @@ bool wifiConnected = false;
 #endif
 bool musicPlaying = false;
 int notifCount = 0;
+bool dhNetPaused = false; // Flag to pause background network loop during Dr. Hack tools
 
 // Transport capability flag
 // 🟠 CRIT-02 FIX: BT cannot carry binary image streams

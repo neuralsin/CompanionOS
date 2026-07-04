@@ -239,8 +239,13 @@ void handleVirtualButton(String btn) {
     if (currentState == STATE_DR_HACK) {
       extern void dhSelect();
       extern DrHackSubState dhCurrentState;
-      if (dhCurrentState == DH_MENU) dhSelect();
-      else virtualSelectPressed = true;
+      if (dhCurrentState == DH_MENU) {
+        dhSelect();
+      } else {
+        extern unsigned long virtualSelectHoldUntil;
+        virtualSelectPressed = true;
+        virtualSelectHoldUntil = millis() + 850;
+      }
     }
     lastInteractionTime = millis();
     return;
@@ -456,6 +461,10 @@ bool pcFound = false;
 unsigned long lastDiscoveryShout = 0;
 
 void handleNetwork() {
+  if (dhNetPaused) {
+    return; // Pause background services during intense RF/WiFi Dr. Hack operations
+  }
+
   if (wifiConnected) {
     sysWebServer.handleClient();
   }
@@ -480,6 +489,17 @@ void handleNetwork() {
     udp.write((const uint8_t*)hello, strlen(hello));
     udp.endPacket();
     lastDiscoveryShout = millis();
+  }
+
+  // Sustain virtual select long press for tools
+  extern unsigned long virtualSelectHoldUntil;
+  extern bool virtualSelectPressed;
+  if (virtualSelectHoldUntil != 0) {
+    if (millis() < virtualSelectHoldUntil) {
+      virtualSelectPressed = true;
+    } else {
+      virtualSelectHoldUntil = 0;
+    }
   }
 
   // UDP packet processing
@@ -998,6 +1018,17 @@ void handleCommand(String msg) {
   else if (msg.startsWith("BTN:")) {
     String btn = msg.substring(4);
     handleVirtualButton(btn);
+  }
+  
+  // CMD: — Custom commands from Web Remote
+  else if (msg.startsWith("CMD:")) {
+    String cmd = msg.substring(4);
+    if (cmd == "NRF_CHECK") {
+      extern int settingsScrollY;
+      currentState = STATE_SETTINGS;
+      settingsScrollY = 0;
+      renderCurrentPage();
+    }
   }
 
   // PAGE: — Direct page navigation from web remote

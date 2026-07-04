@@ -985,12 +985,9 @@ static void dhRunBtJammer() {
   }
 
   if (!jam1Ok && !jam2Ok) {
-    tft.fillScreen(CLR_BG);
-    tft.setTextColor(CLR_SECONDARY);
-    tft.drawCentreString("nRF24 ERROR", SCR_CX, SCALE_Y(40), 1);
-    tft.setTextColor(CLR_TEXT_MED);
-    tft.drawCentreString("Check SPI wiring", SCR_CX, SCALE_Y(60), 1);
-    delay(2500);
+    char errMsg[64];
+    sprintf(errMsg, "nRF24 Modules Failed\nCheck SPI / CE/CSN");
+    dhShowError(errMsg);
     return;
   }
 
@@ -1030,13 +1027,12 @@ static void dhRunBtJammer() {
   while (true) {
     extern void handleNetwork(); handleNetwork();
     if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
+      // Manual selection is overridden by hopping when active, but leave UI capability for when inactive
       chIdx = (chIdx + 2) % 3;
-      if (active && jam1Ok) jam1.startConstCarrier(RF24_PA_MAX, bleChs[chIdx]);
       drawState(); delay(180);
     }
     if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
       chIdx = (chIdx + 1) % 3;
-      if (active && jam1Ok) jam1.startConstCarrier(RF24_PA_MAX, bleChs[chIdx]);
       drawState(); delay(180);
     }
 
@@ -1063,9 +1059,22 @@ static void dhRunBtJammer() {
       holding = false;
     }
 
-    if (active && jam2Ok) {
-      jam2.setChannel(bleChs[chIdx]);
-      for (int i = 0; i < 10; i++) jam2.startWrite(noise, 32, true);
+    if (active) {
+      static unsigned long lastHop = 0;
+      if (millis() - lastHop > 30) { // Hop every 30ms to disrupt fast BLE advertisements
+        chIdx = (chIdx + 1) % 3;
+        
+        if (jam1Ok) {
+          jam1.stopConstCarrier();
+          jam1.setChannel(bleChs[chIdx]);
+          jam1.startConstCarrier(RF24_PA_MAX, bleChs[chIdx]);
+        }
+        if (jam2Ok) {
+          jam2.setChannel(bleChs[(chIdx + 1) % 3]); // Offset second radio
+          for (int i = 0; i < 5; i++) jam2.startWrite(noise, 32, true);
+        }
+        lastHop = millis();
+      }
     }
 
     if (active && millis() - lastDraw > 300) {

@@ -161,6 +161,13 @@ def send_raw_command():
     return jsonify({"ok": False, "error": "cmd required"}), 400
 
 
+@app.route("/api/nrf_check", methods=["POST"])
+def nrf_check():
+    """Trigger an nRF hardware check on the ESP."""
+    send_to_esp("CMD:NRF_CHECK")
+    return jsonify({"ok": True, "action": "NRF_CHECK"})
+
+
 @app.route("/api/status", methods=["GET"])
 def get_status():
     """Return current device state."""

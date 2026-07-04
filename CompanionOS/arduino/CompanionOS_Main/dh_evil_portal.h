@@ -192,6 +192,7 @@ static void dhRunEvilPortal() {
   }
 
   // Setup AP
+  dhNetPaused = true;
   dhEpCredCount = 0;
   WiFi.mode(WIFI_AP);
   WiFi.softAP("CompanionOS-Free", "");
@@ -242,6 +243,7 @@ static void dhRunEvilPortal() {
   WiFi.softAPdisconnect(true);
   WiFi.mode(WIFI_STA);
   dhEpRunning = false;
+  dhNetPaused = false;
   delay(100);
 }
 

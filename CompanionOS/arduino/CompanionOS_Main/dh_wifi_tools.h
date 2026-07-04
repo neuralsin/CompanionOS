@@ -641,6 +641,7 @@ static void dhRunProbeSniffer() {
   static const int hopChs[] = {1, 6, 11};
   int hopIdx = 0;
 
+  dhNetPaused = true;
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
   delay(100);
@@ -698,6 +699,7 @@ static void dhRunProbeSniffer() {
 
   esp_wifi_set_promiscuous(false);
   esp_wifi_set_promiscuous_rx_cb(NULL);
+  dhNetPaused = false;
   delay(100);
 }
 
@@ -779,9 +781,10 @@ static void dhRunKarma() {
   for (int i = 0; i < 6; i++) dhKarmaMac[i] = (uint8_t)random(0, 256);
   dhKarmaMac[0] &= 0xFE;
 
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
-  delay(50);
+  dhNetPaused = true;
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP("dh_karma_temp", "12345678"); // Dummy AP to bring up interface
+  delay(100);
   esp_wifi_set_promiscuous(true);
   esp_wifi_set_promiscuous_rx_cb(&dhKarmaProbeCallback);
   esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
@@ -833,6 +836,9 @@ static void dhRunKarma() {
 
   esp_wifi_set_promiscuous(false);
   esp_wifi_set_promiscuous_rx_cb(NULL);
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_STA);
+  dhNetPaused = false;
   delay(100);
 }
 

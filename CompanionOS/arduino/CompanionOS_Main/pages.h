@@ -718,6 +718,25 @@ void redrawSettingsPartial() {
     #endif
   }
   
+  y += 10;
+  if (y > -20 && y < SCREEN_H) {
+    #ifdef ESP32
+    int valX = (SCREEN_W > 200) ? 100 : 50;
+    tft.setTextColor(0x8410);
+    tft.drawString("nRF24:", SCALE_X(10), y, 1);
+    
+    RF24 t_jam1(NRF1_CE_PIN, NRF1_CSN_PIN);
+    bool ok1 = t_jam1.begin();
+    RF24 t_jam2(NRF2_CE_PIN, NRF2_CSN_PIN);
+    bool ok2 = t_jam2.begin();
+    
+    char buf[16];
+    sprintf(buf, "%s | %s", ok1 ? "OK" : "ERR", ok2 ? "OK" : "ERR");
+    tft.setTextColor((ok1 && ok2) ? TFT_GREEN : ((ok1 || ok2) ? TFT_YELLOW : TFT_RED));
+    tft.drawString(buf, valX, y, 1);
+    #endif
+  }
+  
   y += 16;
   // Time
   if (y > -20 && y < SCREEN_H) {
