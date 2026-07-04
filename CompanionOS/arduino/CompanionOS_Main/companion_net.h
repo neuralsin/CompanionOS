@@ -575,6 +575,52 @@ void handleNetwork() {
       return;
     }
 
+    if (len > 3 && (unsigned char)udpBuffer[0] == 0xFC) {
+      int chunkIdx = ((unsigned char)udpBuffer[1] << 8) | ((unsigned char)udpBuffer[2]);
+      int pixelsInChunk = (len - 3) / 2;
+      if (!receivingArt) return;
+
+      int imgWidth = ALBUM_ART_W;
+      int imgHeight = ALBUM_ART_H;
+      int imagePixels = imgWidth * imgHeight;
+      int maxPixels = ALBUM_ART_W * ALBUM_ART_H;
+      int pixelsPerChunk = imgWidth;
+      int startPixel = chunkIdx * pixelsPerChunk;
+
+      if (startPixel >= 0 && startPixel < imagePixels && startPixel < maxPixels) {
+        uint16_t* dest = albumArt + startPixel;
+        int safePixels = min(pixelsInChunk, min(imagePixels - startPixel, maxPixels - startPixel));
+        if (safePixels <= 0) return;
+
+        for (int i = 0; i < safePixels; i++) {
+          int offset = 3 + (i * 2);
+          dest[i] = ((uint16_t)(unsigned char)udpBuffer[offset] << 8) | (unsigned char)udpBuffer[offset + 1];
+        }
+
+        int firstRow = startPixel / imgWidth;
+        int rowCount = (safePixels + imgWidth - 1) / imgWidth;
+        for (int row = firstRow; row < firstRow + rowCount && row < ALBUM_ART_H; row++) {
+          if (!albumArtRowsReceived[row]) {
+            albumArtRowsReceived[row] = 1;
+            if (albumArtRowsComplete < ALBUM_ART_H) albumArtRowsComplete++;
+          }
+        }
+
+        // Progressive rendering for gaming page
+        int imgX = SCALE_X(12);
+        int imgY = SCALE_Y(36);
+        int yStart = startPixel / imgWidth;
+        int maxRows = safePixels / imgWidth;
+
+        if (currentState == STATE_GAMING) {
+          if (maxRows > 0) {
+            tft.pushImage(imgX, imgY + yStart, imgWidth, maxRows, dest);
+          }
+        }
+      }
+      return;
+    }
+
     // Standard string packet
     udpBuffer[len] = 0;
     String msg = String(udpBuffer);
@@ -706,6 +752,36 @@ void handleCommand(String msg) {
       receivingArt = false;
       albumArtReady = false;
       Serial.printf("Album art incomplete: %u/%u rows\n", albumArtRowsComplete, ALBUM_ART_H);
+    }
+  } else if (msg.startsWith("SPOTIFY_RESET:")) {
+    currentLyrics = "";
+    currentLyricsLine2 = "";
+    prevLyricsLine = "";
+    memset(albumArt, 0, sizeof(albumArt));
+    albumArtRowsComplete = 0;
+    memset(albumArtRowsReceived, 0, sizeof(albumArtRowsReceived));
+    artDrawn = false;
+    albumArtReady = false;
+    extern void t2_redrawSpotifyPartial();
+    if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
+    else if (currentState == STATE_SPOTIFY) redrawSpotifyPartial();
+  } else if (msg.startsWith("GAME_ART_START:")) {
+    receivingArt = true;
+    albumArtReady = false;
+    artDrawn = false;
+    albumArtRowsComplete = 0;
+    memset(albumArtRowsReceived, 0, sizeof(albumArtRowsReceived));
+    memset(albumArt, 0, sizeof(albumArt));
+  } else if (msg.startsWith("GAME_ART_END:")) {
+    if (albumArtRowsComplete >= ALBUM_ART_H) {
+      albumArtReady = true;
+      if (currentState == STATE_GAMING) {
+        extern void redrawGamingPartial();
+        redrawGamingPartial();
+      }
+    } else {
+      receivingArt = false;
+      albumArtReady = false;
     }
   } else if (msg.startsWith("STATE:")) {
     String json = msg.substring(6);
@@ -962,6 +1038,7 @@ void handleCommand(String msg) {
       EEPROM.write(EEPROM_ACTIVE_THEME_ADDR, activeTheme);
       EEPROM.commit();
       EEPROM.end();
+      showFlashNotification("Theme Changed");
       renderCurrentPage();
     }
   } else if (msg.startsWith("RUVIEW:")) {

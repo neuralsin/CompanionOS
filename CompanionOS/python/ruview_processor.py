@@ -202,115 +202,209 @@ class WelfordOnline:
 
 class PresenceClassifier:
     """
-    Variance-threshold presence/motion classifier.
+    Presence / motion classifier that drives the RuView UI.
 
-    Uses rolling variance of subcarrier amplitude over a sliding window.
-    Implements a 60-second ambient calibration window on startup
-    (RuView's documented approach — calibrate in empty room).
+    Two operating modes — chosen automatically:
+
+    1. ML mode (preferred):
+       The loaded tiny_conv.onnx is a pre-trained CNN.  It does NOT need
+       any ambient calibration — its decision boundary was learned during
+       training on real CSI data.  The classifier skips the calibration
+       phase entirely and starts producing predictions from the 3rd frame.
+       Each 8×8 CSI frame is z-score normalised before inference so raw
+       ESP32 amplitude scale doesn't matter.  Class probabilities are
+       smoothed with an EMA(α=0.25) to suppress per-frame noise.
+
+    2. Variance fallback:
+       Used when onnxruntime or the model file is not available.  Runs a
+       60-second ambient calibration on first boot, then persists the
+       learned thresholds to ruview_calib.json so subsequent restarts
+       skip the wait.
     """
 
-    WINDOW_SIZE = 100        # ~5 seconds at 20 Hz
-    CALIB_FRAMES = 1200      # ~60 seconds at 20 Hz
-    SIGMA_MULT = 3.0         # threshold = mean + 3*sigma of ambient
-    MOTION_MULT = 6.0        # motion threshold = mean + 6*sigma
-    TOP_K = 8                # Track top-K most variant subcarriers
+    WINDOW_SIZE   = 100   # rolling window depth (~5 s at 20 Hz)
+    CALIB_FRAMES  = 1200  # frames to collect for variance calibration (~60 s)
+    SIGMA_MULT    = 3.0   # presence threshold = ambient_mean + 3σ
+    MOTION_MULT   = 6.0   # motion threshold   = ambient_mean + 6σ
+    EMA_ALPHA     = 0.25  # EMA smoothing for ML class probabilities
+    CALIB_CACHE   = os.path.join(os.path.dirname(__file__), "ruview_calib.json")
 
     def __init__(self):
-        self.calibrating = True
-        self.calib_count = 0
-        self.calib_stats = []  # WelfordOnline per subcarrier (for calibration)
+        # ── Variance-fallback calibration state ────────────────────────────
+        self.calib_count  = 0
+        self.calib_stats  = []           # WelfordOnline accumulators
 
-        # Ambient baseline (set after calibration)
-        self.ambient_mean = 0.0
-        self.ambient_sigma = 0.0
-        self.presence_threshold = 5.0   # default until calibrated
-        self.motion_threshold = 10.0    # default until calibrated
+        # Ambient baseline (set after calibration or loaded from cache)
+        self.ambient_mean       = 0.0
+        self.ambient_sigma      = 0.0
+        self.presence_threshold = 5.0    # safe default until calibrated
+        self.motion_threshold   = 10.0
 
-        # Rolling window for runtime detection
+        # Rolling window for variance-fallback runtime detection
         self.variance_window = deque(maxlen=self.WINDOW_SIZE)
+        # Temporal buffer for ONNX model input [1, 3, 8, 8]
+        self.csi_frame_buffer = deque(maxlen=3)
 
-        # Output state
-        self.occupied = False
-        self.motion = False
-        self.confidence = 0.0
+        # ── Output state ───────────────────────────────────────────────────
+        self.occupied         = False
+        self.motion           = False
+        self.confidence       = 0.0
         self.current_variance = 0.0
-        self.rssi = 0
-        self.n_subcarriers = 0
+        self.rssi             = 0
+        self.n_subcarriers    = 0
         self.frames_processed = 0
-        self.pps = 0.0  # packets per second
+        self.pps              = 0.0
+
+        # EMA-smoothed class probabilities [Empty, Occupied, Motion, Fall]
+        self._ema_probs = [0.5, 0.0, 0.0, 0.0]
 
         # PPS tracking
         self._pps_count = 0
-        self._pps_last = time.time()
+        self._pps_last  = time.time()
+        self.last_frame_time = 0.0
 
-        # ML Support (Original RuView)
-        self.ml_model = None
+        # ── ML support ─────────────────────────────────────────────────────
+        self.ml_model   = None
         self.ml_enabled = False
         self._load_pretrained_model()
 
+        # ── Calibration gating ─────────────────────────────────────────────
+        # If a pre-trained ML model loaded successfully, skip calibration
+        # completely — the model's weights already encode the decision boundary.
+        # Only use calibration for the statistical variance fallback.
+        if self.ml_enabled:
+            self.calibrating = False
+            print("✅ RuView: ML model active — calibration skipped (pretrained weights used)")
+        else:
+            # Try loading persisted thresholds from a previous calibration run
+            self.calibrating = not self._load_cached_calibration()
+            if not self.calibrating:
+                print("✅ RuView: Loaded cached calibration — no recalibration needed")
+            else:
+                print("📡 RuView: No cache — starting 60-second ambient calibration")
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Model loading
+    # ──────────────────────────────────────────────────────────────────────
+
     def _load_pretrained_model(self):
-        # Check standard model paths
-        model_paths = [
-            os.path.join(os.path.dirname(__file__), "models", "tiny_conv.onnx"),
-            os.path.join(os.path.dirname(__file__), "models", "count_v1.onnx"),
-            os.path.join(os.path.dirname(__file__), "models", "pose_v1.onnx")
+        """Try each model in priority order; stop at first successful load."""
+        model_priority = [
+            "tiny_conv.onnx",   # smallest, self-contained, highest priority
+            "count_v1.onnx",    # needs .data sidecar
+            "pose_v1.onnx",     # needs .data sidecar
         ]
-        if HAS_ML:
-            for p in model_paths:
-                if os.path.exists(p):
-                    try:
-                        self.ml_model = ort.InferenceSession(p)
-                        self.ml_enabled = True
-                        print(f"🚀 RuView ML: Loaded pretrained ONNX model from {p}")
-                        break
-                    except Exception as e:
-                        print(f"⚠️ RuView ML: Failed to load {p} - {e}")
-        
-        if not self.ml_enabled:
-            print("⚠️ RuView ML: No pretrained ONNX model found. Using statistical variance fallback.")
+        if not HAS_ML:
+            print("⚠️ RuView ML: onnxruntime not installed. Using variance fallback.")
+            return
+
+        models_dir = os.path.join(os.path.dirname(__file__), "models")
+        for fname in model_priority:
+            path = os.path.join(models_dir, fname)
+            if not os.path.exists(path):
+                continue
+            try:
+                self.ml_model   = ort.InferenceSession(path)
+                self.ml_enabled = True
+                print(f"🚀 RuView ML: Loaded {fname} — instant detection, no calibration needed")
+                return
+            except Exception as e:
+                print(f"⚠️ RuView ML: Could not load {fname}: {e}")
+
+        print("⚠️ RuView ML: No model loaded. Using variance fallback.")
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Calibration persistence (variance fallback only)
+    # ──────────────────────────────────────────────────────────────────────
+
+    def _load_cached_calibration(self) -> bool:
+        """
+        Load previously computed variance thresholds from disk.
+        Returns True if a valid cache was found and applied.
+        """
+        try:
+            if not os.path.exists(self.CALIB_CACHE):
+                return False
+            with open(self.CALIB_CACHE, 'r') as f:
+                d = json.load(f)
+            # Validate required keys
+            if not all(k in d for k in ('ambient_mean', 'ambient_sigma',
+                                         'presence_threshold', 'motion_threshold')):
+                return False
+            self.ambient_mean       = float(d['ambient_mean'])
+            self.ambient_sigma      = float(d['ambient_sigma'])
+            self.presence_threshold = float(d['presence_threshold'])
+            self.motion_threshold   = float(d['motion_threshold'])
+            return True
+        except Exception:
+            return False
+
+    def _save_cached_calibration(self):
+        """Persist current variance thresholds to disk for future restarts."""
+        try:
+            d = {
+                'ambient_mean':       self.ambient_mean,
+                'ambient_sigma':      self.ambient_sigma,
+                'presence_threshold': self.presence_threshold,
+                'motion_threshold':   self.motion_threshold,
+            }
+            with open(self.CALIB_CACHE, 'w') as f:
+                json.dump(d, f, indent=2)
+            print(f"💾 RuView: Calibration cached to {self.CALIB_CACHE}")
+        except Exception as e:
+            print(f"⚠️ RuView: Could not save calibration cache: {e}")
 
     def reset_calibration(self):
-        """Restart the 60-second ambient calibration."""
-        self.calibrating = True
-        self.calib_count = 0
-        self.calib_stats = []
+        """
+        Manually restart ambient calibration.
+        Has no effect when ML model is active — the model is always
+        'calibrated' via its training weights.
+        """
+        if self.ml_enabled:
+            print("ℹ️  RuView: Recalibration not needed — pre-trained ML model is active.")
+            return
+        self.calibrating  = True
+        self.calib_count  = 0
+        self.calib_stats  = []
         self.variance_window.clear()
-        self.occupied = False
-        self.motion = False
-        self.confidence = 0.0
+        self.csi_frame_buffer.clear()
+        self._ema_probs   = [0.5, 0.0, 0.0, 0.0]
+        self.occupied     = False
+        self.motion       = False
+        self.confidence   = 0.0
         print("📡 RuView: Calibration RESET — leave room empty for 60 seconds")
 
     def process_frame(self, frame: ADR018Frame):
-        """Process a single CSI frame and update presence/motion state."""
+        """Process a single CSI frame and update presence / motion state."""
         if not frame.amplitudes:
             return
 
         self.frames_processed += 1
-        self.rssi = frame.rssi
+        self.rssi          = frame.rssi
         self.n_subcarriers = frame.n_subcarriers
 
-        # PPS calculation
+        # ── PPS tracking ───────────────────────────────────────────────────
         self._pps_count += 1
         now = time.time()
+        self.last_frame_time = now
         elapsed = now - self._pps_last
         if elapsed >= 1.0:
-            self.pps = self._pps_count / elapsed
+            self.pps        = self._pps_count / elapsed
             self._pps_count = 0
-            self._pps_last = now
+            self._pps_last  = now
 
-        # Compute per-frame variance across all subcarrier amplitudes
+        # ── Per-frame amplitude variance (used by variance fallback) ───────
         n = len(frame.amplitudes)
         if n < 2:
             return
-
         mean_amp = sum(frame.amplitudes) / n
-        var_amp = sum((a - mean_amp) ** 2 for a in frame.amplitudes) / (n - 1)
+        var_amp  = sum((a - mean_amp) ** 2 for a in frame.amplitudes) / (n - 1)
 
+        # ── Variance-fallback calibration phase ────────────────────────────
+        # Only runs when no ML model is loaded AND no cached thresholds exist.
         if self.calibrating:
-            # ── Calibration phase: collect ambient statistics ──
             if not self.calib_stats:
-                self.calib_stats = [WelfordOnline() for _ in range(1)]
-
+                self.calib_stats = [WelfordOnline()]
             self.calib_stats[0].update(var_amp)
             self.calib_count += 1
 
@@ -320,68 +414,83 @@ class PresenceClassifier:
                       f"(frame {self.calib_count}/{self.CALIB_FRAMES})")
 
             if self.calib_count >= self.CALIB_FRAMES:
-                # Calibration complete — set thresholds
-                self.ambient_mean = self.calib_stats[0].mean
-                self.ambient_sigma = math.sqrt(self.calib_stats[0].variance) if self.calib_stats[0].variance > 0 else 1.0
-                self.presence_threshold = self.ambient_mean + self.SIGMA_MULT * self.ambient_sigma
-                self.motion_threshold = self.ambient_mean + self.MOTION_MULT * self.ambient_sigma
-
-                # Ensure minimum thresholds
-                self.presence_threshold = max(self.presence_threshold, 2.0)
-                self.motion_threshold = max(self.motion_threshold, 5.0)
-
+                self.ambient_mean   = self.calib_stats[0].mean
+                self.ambient_sigma  = (math.sqrt(self.calib_stats[0].variance)
+                                       if self.calib_stats[0].variance > 0 else 1.0)
+                self.presence_threshold = max(
+                    self.ambient_mean + self.SIGMA_MULT  * self.ambient_sigma, 2.0)
+                self.motion_threshold   = max(
+                    self.ambient_mean + self.MOTION_MULT * self.ambient_sigma, 5.0)
                 self.calibrating = False
+                # Persist thresholds so future restarts skip this step
+                self._save_cached_calibration()
                 print(f"✅ RuView: Calibration COMPLETE — "
                       f"ambient_mean={self.ambient_mean:.2f}, "
-                      f"ambient_sigma={self.ambient_sigma:.2f}, "
-                      f"presence_thresh={self.presence_threshold:.2f}, "
-                      f"motion_thresh={self.motion_threshold:.2f}")
-            return
+                      f"sigma={self.ambient_sigma:.2f}, "
+                      f"pres_thresh={self.presence_threshold:.2f}, "
+                      f"mot_thresh={self.motion_threshold:.2f}")
+            return  # don't run detection during calibration
 
-        # ── Runtime detection ──
+        # ── Runtime detection ──────────────────────────────────────────────
         self.variance_window.append(var_amp)
         self.current_variance = var_amp
 
-        if self.ml_enabled and HAS_ML:
+        # Build 8×8 matrix from up to 64 subcarrier amplitudes
+        amps = list(frame.amplitudes[:64])
+        if len(amps) < 64:
+            amps += [0.0] * (64 - len(amps))
+
+        # Z-score normalise within this frame so raw ESP32 ADC scale is
+        # irrelevant — matches the normalisation applied to training data.
+        amp_arr   = np.array(amps, dtype=np.float32)
+        amp_mean  = amp_arr.mean()
+        amp_std   = amp_arr.std() + 1e-6   # prevent div-by-zero on silent channel
+        amp_norm  = (amp_arr - amp_mean) / amp_std
+        frame_8x8 = amp_norm.reshape(8, 8)
+        self.csi_frame_buffer.append(frame_8x8)
+
+        # ── ML path (pre-trained ONNX — no calibration required) ──────────
+        if self.ml_enabled and HAS_ML and len(self.csi_frame_buffer) == 3 and self.ml_model is not None:
             try:
-                # Basic feature vector prep (ensure correct input size)
-                # Note: Exact shape depends on the ONNX model input
+                # Stack last 3 frames → [1, 3, 8, 8]
+                features   = np.stack(self.csi_frame_buffer, axis=0)
+                features   = np.expand_dims(features, axis=0)
+
                 input_name = self.ml_model.get_inputs()[0].name
-                expected_shape = self.ml_model.get_inputs()[0].shape
-                
-                features = np.array(frame.amplitudes, dtype=np.float32).flatten()
-                
-                # Try to reshape into expected shape if it's dynamic or known
-                try:
-                    if len(expected_shape) >= 2:
-                        features = features[:np.prod(expected_shape[1:])].reshape(1, *expected_shape[1:])
-                    else:
-                        features = features.reshape(1, -1)
-                except:
-                    features = features.reshape(1, -1)
-                
-                prediction = self.ml_model.run(None, {input_name: features})[0]
-                
-                # Assume prediction is a score or classification array
-                # e.g. prediction[0][0] > 0.5 means occupied
-                val = prediction.flatten()[0]
-                self.occupied = bool(val > 0.5)
-                self.motion = var_amp > self.motion_threshold
-                self.confidence = float(min(100.0, max(0.0, val * 100.0)))
+                raw_out    = self.ml_model.run(None, {input_name: features})[0]
+
+                # Output [1, 4, 8, 8] → spatial mean → [4] class scores
+                # Classes: 0=Empty, 1=Occupied, 2=Motion, 3=Fall/Anomaly
+                spatial_avg = np.mean(raw_out, axis=(2, 3))[0]
+
+                # Softmax so probabilities sum to 1 and are comparable
+                e_x  = np.exp(spatial_avg - spatial_avg.max())
+                probs = (e_x / e_x.sum()).tolist()   # [p_empty, p_occ, p_mot, p_fall]
+
+                # EMA smoothing (α=0.25) to reduce per-frame flicker
+                a = self.EMA_ALPHA
+                self._ema_probs = [
+                    a * probs[i] + (1 - a) * self._ema_probs[i]
+                    for i in range(4)
+                ]
+                p_empty, p_occ, p_mot, _ = self._ema_probs
+
+                self.occupied   = (p_occ > p_empty or p_mot > p_empty)
+                self.motion     = (p_mot > p_occ   and p_mot > p_empty)
+                max_conf        = max(p_occ, p_mot)
+                self.confidence = min(100.0, max(0.0, max_conf * 100.0))
                 return
             except Exception as e:
-                self.ml_enabled = False # fallback to variance if predict fails
+                print(f"⚠️ RuView ML: Prediction error: {e}. Switching to variance fallback.")
+                self.ml_enabled = False  # permanent fallback for this session
 
-        # Rolling mean of variance window
+        # ── Variance-threshold fallback ────────────────────────────────────
         if len(self.variance_window) >= 10:
-            rolling_mean = sum(self.variance_window) / len(self.variance_window)
-
-            self.occupied = rolling_mean > self.presence_threshold
-            self.motion = rolling_mean > self.motion_threshold
-
-            # Confidence: 0-100 based on how far above threshold
+            rolling_mean    = sum(self.variance_window) / len(self.variance_window)
+            self.occupied   = rolling_mean > self.presence_threshold
+            self.motion     = rolling_mean > self.motion_threshold
             if self.presence_threshold > 0:
-                ratio = rolling_mean / self.presence_threshold
+                ratio           = rolling_mean / self.presence_threshold
                 self.confidence = min(100.0, max(0.0, (ratio - 0.5) * 200))
             else:
                 self.confidence = 0.0
@@ -398,7 +507,16 @@ class PresenceClassifier:
 
     def get_state(self) -> dict:
         """Return current state as a dict for JSON serialization."""
-        if self.calibrating:
+        now = time.time()
+        if now - self.last_frame_time > 3.0:
+            self.pps = 0.0
+
+        if self.pps == 0.0:
+            if self.last_frame_time == 0.0:
+                status = "Waiting for CSI..."
+            else:
+                status = f"Offline ({int(now - self.last_frame_time)}s ago)"
+        elif self.calibrating:
             remaining = max(0, (self.CALIB_FRAMES - self.calib_count) / 20)
             status = f"Calibrating ({remaining:.0f}s)"
         elif self.motion:
@@ -496,6 +614,13 @@ zone_manager = ZoneManager()
 # Toggle: enable/disable CSI processing
 ruview_enabled = True
 
+# Global stats for diagnostics
+ruview_stats = {
+    'packets_rx': 0,
+    'invalid_rx': 0,
+    'last_rx_time': 0.0
+}
+
 
 def ruview_listener_loop(port: int = 8890):
     """
@@ -518,6 +643,8 @@ def ruview_listener_loop(port: int = 8890):
 
         try:
             data, addr = sock.recvfrom(2048)
+            ruview_stats['packets_rx'] += 1
+            ruview_stats['last_rx_time'] = time.time()
         except socket.timeout:
             continue
         except Exception as e:
@@ -526,6 +653,7 @@ def ruview_listener_loop(port: int = 8890):
             continue
 
         if len(data) < 4:
+            ruview_stats['invalid_rx'] += 1
             continue
 
         magic = struct.unpack_from('<I', data, 0)[0]
@@ -534,11 +662,16 @@ def ruview_listener_loop(port: int = 8890):
             frame = parse_adr018(data)
             if frame:
                 zone_manager.process_frame(frame)
+            else:
+                ruview_stats['invalid_rx'] += 1
         elif magic == VITALS_MAGIC:
             vitals = parse_vitals(data)
             if vitals:
                 zone_manager.process_vitals(vitals)
-        # else: unknown packet type, silently ignore
+            else:
+                ruview_stats['invalid_rx'] += 1
+        else:
+            ruview_stats['invalid_rx'] += 1
 
 
 def ruview_push_loop(send_udp_fn, interval: float = 2.0):
@@ -563,17 +696,26 @@ def ruview_push_loop(send_udp_fn, interval: float = 2.0):
             states = zone_manager.get_all_states()
             if not states:
                 # Push a default offline/waiting state
+                time_since_rx = time.time() - ruview_stats['last_rx_time']
+                msg = "Waiting for CSI..."
+                if ruview_stats['packets_rx'] == 0:
+                    msg = "No CSI data (ESP32 → PC:8890)"
+                elif time_since_rx > 5.0:
+                    msg = f"CSI Offline ({int(time_since_rx)}s ago)"
+                elif ruview_stats['invalid_rx'] > 0:
+                    msg = f"Bad packets: {ruview_stats['invalid_rx']}"
+
                 state = {
                     'occupied': False,
                     'motion': False,
                     'confidence': 0.0,
-                    'status': "Waiting for CSI Node",
+                    'status': msg,
                     'variance': 0.0,
                     'rssi': 0,
                     'calibrating': False,
                     'subcarriers': 0,
                     'pps': 0,
-                    'frames': 0,
+                    'frames': ruview_stats['packets_rx'],
                     'thresh_presence': 0,
                     'thresh_motion': 0
                 }

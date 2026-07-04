@@ -124,7 +124,7 @@ enum DrHackSubState {
   DH_CC_RAW_VIEW,      DH_CC_RF_LIVE,        DH_CC_LAB_REPLAY,     DH_CC_TEST_BEACON,
   // Page 6: System
   DH_PORT_SCANNER,     DH_PACKET_MONITOR,    DH_INFO,              DH_WEB_DASHBOARD,
-  DH_HW_DIAG,          DH_INPUT_MONITOR,     DH_ABOUT,             DH_RESERVED
+  DH_HW_DIAG,          DH_INPUT_MONITOR,     DH_ABOUT,             DH_RFCLOWN_JAM
 };
 
 extern DrHackSubState dhCurrentState;

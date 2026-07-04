@@ -103,7 +103,7 @@ class SteamTracker:
         # Dev tools
         'code.exe', 'devenv.exe', 'rider64.exe', 'clion64.exe',
         'idea64.exe', 'pycharm64.exe', 'androidstudio64.exe',
-        'cursor.exe', 'antigravity ide.exe',
+        'cursor.exe', 'antigravity ide.exe', 'antigravity.exe',
         # Communication
         'discord.exe', 'slack.exe', 'teams.exe', 'zoom.exe',
         'telegram.exe', 'whatsapp.exe', 'signal.exe',
@@ -411,7 +411,7 @@ class SteamTracker:
             blocked = [
                 'chrome', 'edge', 'firefox', 'visual studio code', 'cursor',
                 'discord', 'spotify', 'steam', 'settings', 'terminal',
-                'file explorer', 'windows powershell'
+                'file explorer', 'windows powershell', 'antigravity'
             ]
             if any(word in lowered for word in blocked):
                 return ''

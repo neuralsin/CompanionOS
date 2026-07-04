@@ -1,4 +1,6 @@
 {
+  "venvPath": "c:\\Users\\shaan\\OneDrive\\Documents\\C++",
+  "venv": "venv",
   "pythonVersion": "3.11",
   "pythonPlatform": "Windows",
   "extraPaths": [

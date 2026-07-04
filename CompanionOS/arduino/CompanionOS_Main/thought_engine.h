@@ -259,17 +259,17 @@ void renderThoughtBubble(T* display, bool isSprite) {
   // ESP8266 320×240: x=180, y=20 (just below 16px status bar)
   // ESP32  160×128:  x=90,  y=18 (scaled)
 
-  int bubbleW = 60; // Reduced from 78 to 60 (approx 60% area)
-  int bubbleX = SCR_W - bubbleW - 2; 
+  int bubbleW = 50; // Shrunk width
+  int bubbleX = SCR_W - bubbleW - 2; // Pinned to top-right
   int bubbleY = 16;  
   int maxW = bubbleW;
   
-  int lineH = 9; 
-  int maxChars = (maxW - 6) / 6; 
+  int lineH = 8; // Slightly smaller line height
+  int maxChars = (maxW - 4) / 6; // Adjust char capacity based on width
 
   int numLines = countThoughtLines(activeBubble.text, maxChars);
-  if (numLines > 4) numLines = 4;
-  int padding = 3;
+  if (numLines > 2) numLines = 2; // Clamp to 2 lines
+  int padding = 2; // Tighter padding
   int bubbleH = numLines * lineH + padding * 2;
 
   if (bubbleY + bubbleH > 58) bubbleH = 58 - bubbleY;

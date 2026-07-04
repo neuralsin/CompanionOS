@@ -22,6 +22,9 @@
 #include "ui_components.h"
 #include "companion_net.h"
 #include "eyes.h"
+#ifdef ESP32
+  #include "csi_collector.h"
+#endif
 #include "thought_engine.h"
 #include "theme3_eyes.h"
 #include "pages.h"
@@ -261,6 +264,13 @@ void setup() {
   // Initialize thought engine
   initThoughtScheduler();
 
+  // V8: Start CSI collection for RuView (ESP32 self-sensing)
+  #ifdef ESP32
+    if (wifiConnected) {
+      setupCSICollector();
+    }
+  #endif
+
   lastInteractionTime = millis();
 
   renderCurrentPage();
@@ -288,6 +298,11 @@ void loop() {
   */
 
   handleNetwork();
+
+  // V8: Tick CSI collector — drain buffer and send to PC
+  #ifdef ESP32
+    tickCSICollector();
+  #endif
 
   // Input handling — platform specific
   #if HAS_TOUCH

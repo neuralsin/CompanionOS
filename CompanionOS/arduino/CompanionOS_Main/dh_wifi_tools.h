@@ -73,9 +73,9 @@ static void dhChScan() {
 
   int n = WiFi.scanNetworks(false, true);
   if (n < 0) n = 0;
-  if (n > DH_CH_MAX_NETS) n = DH_CH_MAX_NETS;
 
   for (int i = 0; i < n; i++) {
+    if (dhChNetCount >= DH_CH_MAX_NETS) break;
     int ch = WiFi.channel(i);
     if (ch < DH_CH_MIN || ch > DH_CH_MAX) continue;
     DH_ChNet& net = dhChNets[dhChNetCount++];
@@ -320,8 +320,8 @@ static void dhRunWifiRadar() {
   dhRadarCount = 0;
   int n = WiFi.scanNetworks(false, true);
   if (n < 0) n = 0;
-  if (n > DH_RADAR_MAX) n = DH_RADAR_MAX;
   for (int i = 0; i < n; i++) {
+    if (dhRadarCount >= DH_RADAR_MAX) break;
     DH_RadarAp& ap = dhRadarAps[dhRadarCount++];
     ap.ssid = WiFi.SSID(i); ap.bssid = WiFi.BSSIDstr(i);
     ap.channel = WiFi.channel(i); ap.rssi = WiFi.RSSI(i);
@@ -438,8 +438,9 @@ static void dhRunWifiDirection() {
 
   dhRadarCount = 0;
   int n = WiFi.scanNetworks(false, true);
-  if (n < 0) n = 0; if (n > DH_RADAR_MAX) n = DH_RADAR_MAX;
+  if (n < 0) n = 0;
   for (int i = 0; i < n; i++) {
+    if (dhRadarCount >= DH_RADAR_MAX) break;
     DH_RadarAp& ap = dhRadarAps[dhRadarCount++];
     ap.ssid = WiFi.SSID(i); ap.bssid = WiFi.BSSIDstr(i);
     ap.channel = WiFi.channel(i); ap.rssi = WiFi.RSSI(i);
@@ -640,15 +641,11 @@ static void dhRunProbeSniffer() {
   static const int hopChs[] = {1, 6, 11};
   int hopIdx = 0;
 
-  WiFi.mode(WIFI_MODE_NULL);
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
   delay(100);
-  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-  esp_wifi_init(&cfg);
-  esp_wifi_set_storage(WIFI_STORAGE_RAM);
-  esp_wifi_set_mode(WIFI_MODE_STA);
-  esp_wifi_start();
-  esp_wifi_set_channel(dhProbeCh, WIFI_SECOND_CHAN_NONE);
   esp_wifi_set_promiscuous(true);
+  esp_wifi_set_channel(dhProbeCh, WIFI_SECOND_CHAN_NONE);
   esp_wifi_set_promiscuous_rx_cb(&dhProbeCallback);
 
   wifi_promiscuous_filter_t filter;
@@ -700,8 +697,7 @@ static void dhRunProbeSniffer() {
   }
 
   esp_wifi_set_promiscuous(false);
-  esp_wifi_stop();
-  esp_wifi_deinit();
+  esp_wifi_set_promiscuous_rx_cb(NULL);
   delay(100);
 }
 
@@ -711,6 +707,7 @@ static void dhRunProbeSniffer() {
 
 static volatile unsigned long dhKarmaCount = 0;
 static volatile int dhKarmaSSIDs = 0;
+static uint8_t dhKarmaMac[6];
 
 static void dhKarmaProbeCallback(void* buf, wifi_promiscuous_pkt_type_t type) {
   if (type != WIFI_PKT_MGMT) return;
@@ -743,10 +740,9 @@ static void dhKarmaProbeCallback(void* buf, wifi_promiscuous_pkt_type_t type) {
   };
 
   for (int i = 0; i < 6; i++) {
-    beacon[10 + i] = (uint8_t)random(0, 256);
-    beacon[16 + i] = beacon[10 + i];
+    beacon[10 + i] = dhKarmaMac[i];
+    beacon[16 + i] = dhKarmaMac[i];
   }
-  beacon[10] &= 0xFE;
   beacon[37] = (uint8_t)tagLen;
   memcpy(&beacon[38], ssid, tagLen);
   int tailOff = 38 + tagLen;
@@ -780,14 +776,12 @@ static void dhRunKarma() {
   }
 
   dhKarmaCount = 0; dhKarmaSSIDs = 0;
+  for (int i = 0; i < 6; i++) dhKarmaMac[i] = (uint8_t)random(0, 256);
+  dhKarmaMac[0] &= 0xFE;
 
-  WiFi.mode(WIFI_MODE_NULL);
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
   delay(50);
-  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-  esp_wifi_init(&cfg);
-  esp_wifi_set_storage(WIFI_STORAGE_RAM);
-  esp_wifi_set_mode(WIFI_MODE_STA);
-  esp_wifi_start();
   esp_wifi_set_promiscuous(true);
   esp_wifi_set_promiscuous_rx_cb(&dhKarmaProbeCallback);
   esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
@@ -838,8 +832,7 @@ static void dhRunKarma() {
   }
 
   esp_wifi_set_promiscuous(false);
-  esp_wifi_stop();
-  esp_wifi_deinit();
+  esp_wifi_set_promiscuous_rx_cb(NULL);
   delay(100);
 }
 

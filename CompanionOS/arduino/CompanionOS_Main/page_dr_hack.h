@@ -65,7 +65,7 @@ static const char* DH_TOOL_NAMES[DH_TOTAL_TOOLS] = {
   "RF Raw View", "RF Live", "Lab Replay", "Test Beacon",
   // Page 6: System
   "Port Scan", "Pkt Monitor", "Sys Info", "Web Dash",
-  "HW Diag", "Input Mon", "About", "Back"
+  "HW Diag", "Input Mon", "About", "RfClown Jam"
 };
 
 static const uint16_t DH_TOOL_COLORS[DH_TOTAL_TOOLS] = {
@@ -86,7 +86,7 @@ static const uint16_t DH_TOOL_COLORS[DH_TOTAL_TOOLS] = {
   CLR_WARNING, CLR_WARNING, CLR_WARNING, CLR_SUCCESS,
   // Page 6
   CLR_PRIMARY, CLR_SUCCESS, CLR_TEXT_MED, CLR_PRIMARY,
-  CLR_PRIMARY, CLR_TEXT_MED, CLR_TEXT_MED, CLR_TEXT_LO
+  CLR_PRIMARY, CLR_TEXT_MED, CLR_TEXT_MED, CLR_SECONDARY
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -338,20 +338,21 @@ static void dhRunWifiScan() {
 
   int n = WiFi.scanNetworks(false, true);  // sync, show hidden
   if (n < 0) n = 0;
-  if (n > DH_MAX_NETWORKS) n = DH_MAX_NETWORKS;
 
   // Fill progress
   tft.fillRect(barX + 1, barY + 1, barW - 2, barH - 2, CLR_PRIMARY);
 
+  dhNetCount = 0;
   for (int i = 0; i < n; i++) {
-    dhNetworks[i].ssid = WiFi.SSID(i);
-    dhNetworks[i].channel = WiFi.channel(i);
-    dhNetworks[i].rssi = WiFi.RSSI(i);
-    dhNetworks[i].bssid = WiFi.BSSIDstr(i);
-    dhNetworks[i].authType = WiFi.encryptionType(i);
+    if (dhNetCount >= DH_MAX_NETWORKS) break;
+    dhNetworks[dhNetCount].ssid = WiFi.SSID(i);
+    dhNetworks[dhNetCount].channel = WiFi.channel(i);
+    dhNetworks[dhNetCount].rssi = WiFi.RSSI(i);
+    dhNetworks[dhNetCount].bssid = WiFi.BSSIDstr(i);
+    dhNetworks[dhNetCount].authType = WiFi.encryptionType(i);
+    dhNetCount++;
   }
   WiFi.scanDelete();
-  dhNetCount = n;
 
   // Sort by RSSI desc
   for (int i = 0; i < n - 1; i++) {
@@ -409,8 +410,7 @@ static void dhRunPortScan() {
     // 🟠 CRIT-07 FIX: 300ms timeout per port + yield() to
     // prevent WDT reset and 30s+ UI freeze.
     WiFiClient client;
-    client.setTimeout(300);  // 300ms max per port
-    bool open = client.connect(target.c_str(), DH_COMMON_PORTS[i]);
+    bool open = client.connect(target.c_str(), DH_COMMON_PORTS[i], 300);
     client.stop();
     yield();  // Feed the watchdog timer
 
@@ -507,13 +507,9 @@ void dhRunBeaconSpam() {
 
   btStop(); // Disable Bluetooth to prevent RF coexistence panics
   // Full low-level WiFi init required for raw 802.11 TX
-  WiFi.mode(WIFI_MODE_NULL);
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
   delay(50);
-  wifi_init_config_t bcfg = WIFI_INIT_CONFIG_DEFAULT();
-  esp_wifi_init(&bcfg);
-  esp_wifi_set_storage(WIFI_STORAGE_RAM);
-  esp_wifi_set_mode(WIFI_MODE_STA); // STA mode supports raw 802.11 TX on ESP32 v3/v5
-  esp_wifi_start();
   esp_wifi_set_promiscuous(true);
   esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
 
@@ -591,8 +587,6 @@ void dhRunBeaconSpam() {
   }
 
   esp_wifi_set_promiscuous(false);
-  esp_wifi_stop();
-  esp_wifi_deinit();
   delay(100);
 }
 
@@ -665,35 +659,6 @@ void dhRunDeauth() {
     delay(10);
   }
 
-  // Show disclaimer
-  tft.fillScreen(CLR_BG);
-  tft.drawRect(0, 0, SCR_W, SCR_H, CLR_SECONDARY);
-  tft.setTextColor(CLR_SECONDARY);
-  tft.drawCentreString("DEAUTH WARNING", SCR_CX, 15, 1);
-  tft.setTextColor(CLR_TEXT_MED);
-  tft.drawCentreString("Only use on YOUR", SCR_CX, 40, 1);
-  tft.drawCentreString("own network!", SCR_CX, 55, 1);
-  tft.setTextColor(CLR_WARNING);
-  tft.drawCentreString("SEL:Accept HOLD:Cancel", SCR_CX, SCR_H - 15, 1);
-
-  // Wait for accept or cancel
-  while (true) {
-    extern void handleNetwork(); handleNetwork();
-    extern void handleButtons(); handleButtons();
-    extern ButtonState btnSelect;
-    extern bool consumeLong(ButtonState&);
-    
-    if (btnSelect.pressed || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) { 
-      btnSelect.pressed = false;
-      delay(200); 
-      break; // ACCEPT
-    }
-    if (consumeLong(btnSelect)) {
-      return; // CANCEL
-    }
-    delay(20);
-  }
-
   // Use selected AP
   DH_NetInfo& ap = dhNetworks[dhNetCursor];
   uint8_t bssid[6];
@@ -702,15 +667,11 @@ void dhRunDeauth() {
 
   // Full low-level WiFi init required for raw 802.11 TX
   btStop(); // Disable Bluetooth
-  WiFi.mode(WIFI_MODE_NULL);
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
   delay(50);
-  wifi_init_config_t dcfg = WIFI_INIT_CONFIG_DEFAULT();
-  esp_wifi_init(&dcfg);
-  esp_wifi_set_storage(WIFI_STORAGE_RAM);
-  esp_wifi_set_mode(WIFI_MODE_STA); // STA mode supports raw 802.11 TX on ESP32 v3/v5
-  esp_wifi_start();
-  esp_wifi_set_channel(ap.channel, WIFI_SECOND_CHAN_NONE);
   esp_wifi_set_promiscuous(true);
+  esp_wifi_set_channel(ap.channel, WIFI_SECOND_CHAN_NONE);
 
   tft.fillScreen(CLR_BG);
   tft.drawRect(0, 0, SCR_W, SCR_H, CLR_SECONDARY);
@@ -724,8 +685,8 @@ void dhRunDeauth() {
   dhDeauthErrs = 0;
   uint8_t broadcast[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
   unsigned long lastDraw = 0;
-  unsigned long holdStart = 0;
-  bool holding = false;
+  holdStart = 0;
+  holding = false;
 
   while (true) {
     extern void handleNetwork(); handleNetwork();
@@ -769,8 +730,6 @@ void dhRunDeauth() {
   }
 
   esp_wifi_set_promiscuous(false);
-  esp_wifi_stop();
-  esp_wifi_deinit();
   delay(100);
 }
 
@@ -894,6 +853,7 @@ void dhRunPacketMonitor() {
   }
 
   esp_wifi_set_promiscuous(false);
+  esp_wifi_set_promiscuous_rx_cb(NULL);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -997,10 +957,10 @@ static void dhRunBleScan() {
 
   BLEScanResults* results = scan->start(5, false);  // 5 second scan
   int n = results->getCount();
-  if (n > DH_BLE_MAX) n = DH_BLE_MAX;
 
   dhBleCount = 0;
   for (int i = 0; i < n; i++) {
+    if (dhBleCount >= DH_BLE_MAX) break;
     BLEAdvertisedDevice d = results->getDevice(i);
     DH_BleDevice& out = dhBleDevices[dhBleCount++];
     out.name = d.haveName() ? String(d.getName().c_str()) : "";
@@ -1314,10 +1274,7 @@ void dhSelect() {
       case 44: DH_ENTER_TOOL(DH_HW_DIAG, dhRunHwDiag())
       case 45: DH_RUN_TOOL(DH_INPUT_MONITOR, dhRunInputMonitor())
       case 46: DH_RUN_TOOL(DH_ABOUT, dhAbout())
-      case 47:
-        currentState = STATE_EYES;
-        renderCurrentPage();
-        break;
+      case 47: DH_RUN_TOOL(DH_RFCLOWN_JAM, dhRunRfClownJammer())
     }
   }
   else {

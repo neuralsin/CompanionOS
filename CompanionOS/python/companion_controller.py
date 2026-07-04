@@ -1409,7 +1409,11 @@ def start_notes_server():
                 file = request.files['image']
                 img = Image.open(file.stream)
                 # Resize strictly to 64x64 to match ESP32 ALBUM_ART_W and prevent array corruption
-                img = img.resize((64, 64), getattr(Image, 'Resampling', Image).LANCZOS)
+                try:
+                    resample_filter = Image.Resampling.LANCZOS
+                except AttributeError:
+                    resample_filter = getattr(Image, 'LANCZOS', 1)
+                img = img.resize((64, 64), resample_filter)
                 img = img.convert('RGB')
                 
                 pixels = []
@@ -1455,7 +1459,11 @@ def start_notes_server():
                 from PIL import Image
                 import time
                 img = Image.open(file.stream)
-                img = img.resize((160, 128), getattr(Image, 'Resampling', Image).LANCZOS).convert('RGB')
+                try:
+                    resample_filter = Image.Resampling.LANCZOS
+                except AttributeError:
+                    resample_filter = getattr(Image, 'LANCZOS', 1)
+                img = img.resize((160, 128), resample_filter).convert('RGB')
                 
                 send_udp("CUSTEYE:START")
                 time.sleep(0.5)
@@ -1467,7 +1475,11 @@ def start_notes_server():
                     chunk_data.append(row & 0xFF)
                     
                     for col in range(160):
-                        r, g, b = img.getpixel((col, row))
+                        pixel = img.getpixel((col, row))
+                        if isinstance(pixel, tuple) and len(pixel) >= 3:
+                            r, g, b = pixel[:3]
+                        else:
+                            r, g, b = 0, 0, 0
                         rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
                         chunk_data.append((rgb565 >> 8) & 0xFF)
                         chunk_data.append(rgb565 & 0xFF)
@@ -1507,6 +1519,56 @@ def start_notes_server():
             if os.path.isdir(ruview_ui_dir):
                 return send_from_directory(ruview_ui_dir, asset_path)
             return ("RuView UI assets not found", 404)
+
+        @app.route('/api/v1/pose/current')
+        def api_pose_current():
+            """Bridge companion_controller ruview states to RuView UI format."""
+            import ruview_processor as rvp
+            import time
+            states = rvp.zone_manager.get_all_states()
+            persons = []
+            zones = []
+            for state in states:
+                is_occ = state.get('occupied', False)
+                if is_occ:
+                    persons.append({
+                        "id": state.get('node_id', 1),
+                        "confidence": state.get('confidence', 0),
+                        "keypoints": [],
+                        "boundingBox": {"x": 0.4, "y": 0.4, "width": 0.2, "height": 0.4}
+                    })
+                zones.append({
+                    "id": str(state.get('node_id', 1)),
+                    "occupancy": is_occ,
+                    "person_count": 1 if is_occ else 0
+                })
+            return jsonify({
+                "timestamp": time.time(),
+                "persons": persons,
+                "zones": zones
+            })
+
+        @app.route('/api/v1/pose/stats')
+        def api_pose_stats():
+            """Bridge stats to RuView UI format."""
+            import ruview_processor as rvp
+            import time
+            states = rvp.zone_manager.get_all_states()
+            active_persons = sum(1 for s in states if s.get('occupied'))
+            total_conf = sum(s.get('confidence', 0) for s in states if s.get('occupied'))
+            avg_conf = (total_conf / active_persons) if active_persons > 0 else 0
+            return jsonify({
+                "total_detections": rvp.ruview_stats.get('packets_rx', 0),
+                "uptime": time.time() - rvp.ruview_stats.get('last_rx_time', time.time()),
+                "avg_confidence": avg_conf,
+                "active_persons": active_persons
+            })
+
+        @app.route('/ws/sensing')
+        def ws_sensing():
+            # The dashboard attempts a WS connection. We don't have WS in this fallback,
+            # so we explicitly return 400 to fail the WS handshake cleanly without spamming.
+            return "WebSocket not supported by fallback controller", 400
 
         @app.route('/api/ruview/state')
         def api_ruview_state():
