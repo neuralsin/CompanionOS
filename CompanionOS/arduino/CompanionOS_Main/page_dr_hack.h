@@ -25,7 +25,7 @@
 #include <RF24.h>
 
 // DR. HACK TOOL MODULES
-void dhShowError(const char* errMsg);
+static void dhShowError(const char* errMsg);
 #include "dh_wifi_tools.h"
 #include "dh_evil_portal.h"
 #include "dh_ble_tools.h"
@@ -602,7 +602,7 @@ void dhRunBeaconSpam() {
       break;
     }
     #else
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else {
@@ -753,7 +753,7 @@ void dhRunDeauth() {
       lastBarDrawDeauth = millis();
     }
 
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }
@@ -869,17 +869,17 @@ void dhRunPacketMonitor() {
     }
 
     // Button: change channel
-    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
+    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
       if (ch > 1) { ch--; esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE); }
       delay(200);
     }
-    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
+    if ((digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
       if (ch < 13) { ch++; esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE); }
       delay(200);
     }
 
     // Exit on SELECT hold
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }
@@ -1221,7 +1221,7 @@ static void dhRunInfo() {
   
   while (true) {
     extern void handleNetwork(); handleNetwork();
-    if (digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
+    if (digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
       break;
     }
     delay(10);
@@ -1240,7 +1240,7 @@ static void dhAbout() {
   while (true) {
     extern void handleNetwork(); handleNetwork();
 
-    if (digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
+    if (digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
       break;
     }
     delay(10);

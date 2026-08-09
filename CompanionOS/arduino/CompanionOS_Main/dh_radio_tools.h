@@ -114,25 +114,25 @@ static void dhRunJammer24() {
   unsigned long lastDraw = millis();
 
   // Wait for Select button release to prevent bleed-through from menu selection
-  while (digitalRead(BTN_SELECT) == LOW) {
+  while (digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL) {
     delay(10);
   }
   virtualSelectPressed = false;
 
   while (true) {
     extern void handleNetwork(); handleNetwork();
-    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
+    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
       jamCh = (jamCh == 1) ? 14 : jamCh - 1;
       if (isAttacking && j1Ok) jam1.startConstCarrier(RF24_PA_MAX, dhJamChToNrf(jamCh));
       drawGauge(); delay(180);
     }
-    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
+    if ((digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
       jamCh = (jamCh == 14) ? 1 : jamCh + 1;
       if (isAttacking && j1Ok) jam1.startConstCarrier(RF24_PA_MAX, dhJamChToNrf(jamCh));
       drawGauge(); delay(180);
     }
 
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) {
         if (isAttacking) { if (j1Ok) jam1.stopConstCarrier(); if (j2Ok) jam2.stopConstCarrier(); }
@@ -303,7 +303,7 @@ static void dhRunRfClownJammer() {
   };
 
   // Wait for Select button release to prevent bleed-through from menu selection
-  while (digitalRead(BTN_SELECT) == LOW) {
+  while (digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL) {
     delay(10);
   }
   virtualSelectPressed = false;
@@ -312,17 +312,17 @@ static void dhRunRfClownJammer() {
     extern void handleNetwork(); handleNetwork();
     
     if (!isAttacking) {
-      if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
+      if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
         currentMode = (currentMode == 0) ? 7 : currentMode - 1;
         drawUI(); delay(180);
       }
-      if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
+      if ((digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
         currentMode = (currentMode == 7) ? 0 : currentMode + 1;
         drawUI(); delay(180);
       }
     }
 
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) {
         isAttacking = !isAttacking;
@@ -522,11 +522,11 @@ static void dhRunRadioScanner() {
     tft.drawString("</>:Mode HOLD:Back", SCALE_X(2), SCR_H - SCALE_Y(10), 1);
 
     // Input
-    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false)) || (digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
+    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false)) || (digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
       showWaterfall = !showWaterfall;
       delay(200);
     }
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) {
         radio.powerDown();

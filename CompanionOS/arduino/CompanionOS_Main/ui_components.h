@@ -14,7 +14,7 @@
 #define DH_BTN_TIMEOUT_MS 30000
 static inline void dhWaitSelectPress() {
   unsigned long _t = millis();
-  while (digitalRead(BTN_SELECT) == HIGH && !virtualSelectPressed && (millis() - _t < DH_BTN_TIMEOUT_MS)) {
+  while (digitalRead(BTN_SELECT) == BTN_UNPRESSED_LEVEL && !virtualSelectPressed && (millis() - _t < DH_BTN_TIMEOUT_MS)) {
     extern void handleNetwork(); handleNetwork();
     delay(20);
     yield();

@@ -43,6 +43,17 @@ const char* DEFAULT_PC_IP = "192.168.1.100";
 const int UDP_PORT_RX = 8888;
 const int UDP_PORT_TX = 8889;
 
+// Button Active Logic Defaults (if not specified by platform config)
+#ifndef BTN_ACTIVE_LEVEL
+#define BTN_ACTIVE_LEVEL      HIGH
+#endif
+#ifndef BTN_UNPRESSED_LEVEL
+#define BTN_UNPRESSED_LEVEL   LOW
+#endif
+#ifndef BTN_PIN_MODE
+#define BTN_PIN_MODE          INPUT
+#endif
+
 // NTP
 #define NTP_SERVER       "pool.ntp.org"
 #define NTP_OFFSET       19800   // IST UTC+5:30

@@ -47,18 +47,15 @@ extern void t3_setEmotion(Emotion e);
 // ── Init ─────────────────────────────────────────────────
 
 void initButtons() {
-  // 🔴 BUG-01 FIX: GPIO13/14/27 support INPUT_PULLUP.
-  // Wire buttons from pin to GND. Internal pullup holds HIGH;
-  // pressing button pulls LOW (active LOW).
-  pinMode(BTN_LEFT,   INPUT_PULLUP);
-  pinMode(BTN_RIGHT,  INPUT_PULLUP);
-  pinMode(BTN_SELECT, INPUT_PULLUP);
+  pinMode(BTN_LEFT,   BTN_PIN_MODE);
+  pinMode(BTN_RIGHT,  BTN_PIN_MODE);
+  pinMode(BTN_SELECT, BTN_PIN_MODE);
 }
 
 // ── Core State Machine ──────────────────────────────────
 
 static void updateButtonState(ButtonState& btn) {
-  bool raw = (digitalRead(btn.pin) == LOW);  // active LOW with pullup
+  bool raw = (digitalRead(btn.pin) == BTN_ACTIVE_LEVEL);  // Configured active state
   unsigned long now = millis();
 
   if (raw && !btn.pressed) {
