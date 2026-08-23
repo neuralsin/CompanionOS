@@ -358,6 +358,12 @@ void loop() {
     redrawNetworkPartial();
   }
 
+  // Clock / Screensaver Dashboard page refresh
+  if (currentState == STATE_CLOCK_DASHBOARD) {
+    extern void redrawClockDashboardPartial();
+    redrawClockDashboardPartial();
+  }
+
   // V4: Pet mood decay (every 60 seconds of no interaction)
   if (millis() - lastMoodDecay > 60000) {
     lastMoodDecay = millis();

@@ -124,6 +124,7 @@ extern void redrawStocksPartial();
 extern void redrawGamingPartial();
 extern void redrawSocialPartial();
 extern void redrawProductivityPartial();
+extern void redrawClockDashboardPartial();
 extern void drawStatusBar();
 extern void processArtChunk(int chunkIdx, String hexData);
 extern void completeAlbumArt();

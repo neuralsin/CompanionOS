@@ -61,21 +61,22 @@ WiFiUDP udp;
 
 // [LEGACY - v6.0] AppState had 12 entries (STATE_EYES..STATE_SETTINGS + STATE_COUNT=12)
 enum AppState {
-  STATE_EYES,          // 0
-  STATE_SPOTIFY,       // 1
-  STATE_POMODORO,      // 2
-  STATE_WEATHER,       // 3
-  STATE_NOTIFICATIONS, // 4
-  STATE_NOTES,         // 5
-  STATE_STOCKS,        // 6
-  STATE_GAMING,        // 7
-  STATE_SOCIAL,        // 8
-  STATE_PRODUCTIVITY,  // 9
-  STATE_NETWORK,       // 10
-  STATE_SETTINGS,      // 11
-  STATE_RUVIEW,        // 12 — RuView CSI Presence Detection
-  STATE_DR_HACK,       // 13 — ESP32 only (#ifdef ESP32 guard in page_dr_hack.h)
-  STATE_COUNT          // = 14 pages
+  STATE_EYES,            // 0
+  STATE_SPOTIFY,         // 1
+  STATE_POMODORO,        // 2
+  STATE_WEATHER,         // 3
+  STATE_NOTIFICATIONS,   // 4
+  STATE_NOTES,           // 5
+  STATE_STOCKS,          // 6
+  STATE_GAMING,          // 7
+  STATE_SOCIAL,          // 8
+  STATE_PRODUCTIVITY,    // 9
+  STATE_NETWORK,         // 10
+  STATE_SETTINGS,        // 11
+  STATE_RUVIEW,          // 12 — RuView CSI Presence Detection
+  STATE_CLOCK_DASHBOARD, // 13 — Screensaver / Clock Dashboard Tile
+  STATE_DR_HACK,         // 14 — ESP32 only (#ifdef ESP32 guard in page_dr_hack.h)
+  STATE_COUNT            // = 15 pages
 };
 
 extern AppState currentState;

@@ -10,6 +10,7 @@
 #include "page_productivity.h"
 #include "page_network.h"
 #include "page_ruview.h"
+#include "page_clock_dashboard.h"
 #include "theme2_eyes.h"
 #include "theme2_spotify.h"
 #ifdef ESP32
@@ -890,6 +891,12 @@ void drawNetworkPageFull() {
   drawStatusBar();
 }
 
+void drawClockDashboardPageFull() {
+  resetClockDashboardDrawState();
+  drawClockDashboardPage();
+  drawStatusBar();
+}
+
 void renderCurrentPage() {
   switch(currentState) {
     case STATE_EYES: drawEyesPage(); break;
@@ -905,6 +912,7 @@ void renderCurrentPage() {
     case STATE_NETWORK: drawNetworkPageFull(); break;
     case STATE_SETTINGS: drawSettingsPage(); break;
     case STATE_RUVIEW: drawRuviewPageFull(); break;
+    case STATE_CLOCK_DASHBOARD: drawClockDashboardPageFull(); break;
     #ifdef ESP32
     case STATE_DR_HACK: initDrHack(); break;
     #endif
@@ -925,6 +933,7 @@ void changePage(int direction) {
   currentState = (AppState)next;
   // HIGH-06 FIX: Reset all page draw states on page change to prevent stale partial redraws
   resetSpotifyDrawState();
+  resetClockDashboardDrawState();
   extern void t2_resetSpotifyDrawState();
   t2_resetSpotifyDrawState();
   settingsScrollY = 0;
