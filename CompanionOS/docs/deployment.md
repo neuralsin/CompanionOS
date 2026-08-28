@@ -19,7 +19,12 @@ This guide covers setting up the ESP32 hardware and the Python PC Bridge require
    #define WIFI_PASS "YourPassword"
    #define PC_IP "192.168.1.50" // The IP of the computer running the Python bridge
    ```
-3. Compile and flash using the standard ESP32 Dev Module profile.
+3. **Arduino IDE Board Settings**:
+   - **Board**: `ESP32 Dev Module` (or `DOIT ESP32 DEVKIT V1`)
+   - **Flash Size**: `4MB (32Mb)`
+   - **Partition Scheme**: `Huge APP (3MB No OTA/1MB SPIFFS)`  *(Required because BLE + WiFi + Dr.Hack uses ~2.0MB)*
+   - **Core Debug Level**: `None` (or `Error`)
+4. Compile and flash to the ESP32.
 
 ## 3. Python Bridge Setup
 The Python daemon is required for Spotify, Steam tracking, Weather, and RuView processing.

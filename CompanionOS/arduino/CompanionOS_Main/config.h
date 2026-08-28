@@ -35,8 +35,8 @@
 // ═══════════════════════════════════════════════════════════
 
 // WiFi Credentials
-const char* WIFI_SSID = "westendmall";
-const char* WIFI_PASS = "8840458355";
+const char* WIFI_SSID = "Stuart";
+const char* WIFI_PASS = "123456789";
 
 // Network Settings
 const char* DEFAULT_PC_IP = "192.168.1.100";
@@ -81,6 +81,7 @@ const int UDP_PORT_TX = 8889;
 #define CLR_BORDER     0x2104   // subtle borders
 #define CLR_PRIMARY    0x05FF   // cyan accent (brand)
 #define CLR_SECONDARY  0xF800   // red (danger/Dr.Hack)
+#define CLR_DANGER     0xF800   // red (danger alert)
 #define CLR_SUCCESS    0x07E0   // green
 #define CLR_WARNING    0xFFE0   // yellow
 #define CLR_TEXT_HI    0xFFFF   // white (primary text)

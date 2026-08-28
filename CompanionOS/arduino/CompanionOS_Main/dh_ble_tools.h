@@ -229,19 +229,19 @@ static void dhRunBleInspector() {
   unsigned long holdStart = 0; bool holding = false;
   while (true) {
     extern void handleNetwork(); handleNetwork();
-    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
+    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
       dhBiiCursor = (dhBiiCursor + dhBiiCount - 1) % max(dhBiiCount, 1);
       if (dhBiiCursor < dhBiiScroll) dhBiiScroll = dhBiiCursor;
       if (dhBiiCursor >= dhBiiScroll + DH_BII_VIS) dhBiiScroll = dhBiiCursor - DH_BII_VIS + 1;
       dhBiiDrawList(); delay(180);
     }
-    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
+    if ((digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
       dhBiiCursor = (dhBiiCursor + 1) % max(dhBiiCount, 1);
       if (dhBiiCursor < dhBiiScroll) dhBiiScroll = dhBiiCursor;
       if (dhBiiCursor >= dhBiiScroll + DH_BII_VIS) dhBiiScroll = dhBiiCursor - DH_BII_VIS + 1;
       dhBiiDrawList(); delay(180);
     }
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else {
@@ -379,8 +379,8 @@ static void dhRunBleSpam() {
 
   while (true) {
     extern void handleNetwork(); handleNetwork();
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { delay(200); break; }
-    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { delay(200); return; }
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { delay(200); break; }
+    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { delay(200); return; }
     delay(20);
   }
 
@@ -407,9 +407,9 @@ static void dhRunBleSpam() {
   unsigned long holdStart = 0; bool holding = false;
   while (true) {
     extern void handleNetwork(); handleNetwork();
-    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { cursor = (cursor+4) % 5; drawMenu(); delay(180); }
-    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { cursor = (cursor+1) % 5; drawMenu(); delay(180); }
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { cursor = (cursor+4) % 5; drawMenu(); delay(180); }
+    if ((digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { cursor = (cursor+1) % 5; drawMenu(); delay(180); }
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) return;
     } else {
@@ -475,7 +475,7 @@ static void dhRunBleSpam() {
       lastDraw = millis();
     }
 
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 600) break;
     } else { holding = false; }
@@ -570,8 +570,8 @@ static void dhRunBtDisruptor() {
 
   while (true) {
     extern void handleNetwork(); handleNetwork();
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { delay(200); break; }
-    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { delay(200); return; }
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { delay(200); break; }
+    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { delay(200); return; }
     delay(20);
   }
 
@@ -642,19 +642,19 @@ static void dhRunBtDisruptor() {
   unsigned long holdStart = 0; bool holding = false;
   while (true) {
     extern void handleNetwork(); handleNetwork();
-    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
+    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
       sel = (sel + dhDtgCount - 1) % dhDtgCount;
       if (sel < scroll) scroll = sel;
       if (sel >= scroll + DH_DTG_VIS) scroll = sel - DH_DTG_VIS + 1;
       drawTgtList(); delay(180);
     }
-    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
+    if ((digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
       sel = (sel + 1) % dhDtgCount;
       if (sel < scroll) scroll = sel;
       if (sel >= scroll + DH_DTG_VIS) scroll = sel - DH_DTG_VIS + 1;
       drawTgtList(); delay(180);
     }
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) { /* BLEDevice::deinit(false); */ return; }
     } else {
@@ -693,9 +693,9 @@ static void dhRunBtDisruptor() {
   holdStart = 0; holding = false;
   while (true) {
     extern void handleNetwork(); handleNetwork();
-    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { atkSel = (atkSel+3) % 4; drawAtkMenu(); delay(180); }
-    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { atkSel = (atkSel+1) % 4; drawAtkMenu(); delay(180); }
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { atkSel = (atkSel+3) % 4; drawAtkMenu(); delay(180); }
+    if ((digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { atkSel = (atkSel+1) % 4; drawAtkMenu(); delay(180); }
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) { /* BLEDevice::deinit(false); */ return; }
     } else {
@@ -794,7 +794,7 @@ static void dhRunBtDisruptor() {
       lastDraw = millis();
     }
 
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 600) stopAtk = true;
     } else { holding = false; }
@@ -893,7 +893,7 @@ static void dhRunIphoneRemote() {
   while (true) {
     extern void handleNetwork(); handleNetwork();
     // LEFT = Volume Down (Usage 0xEA in Consumer, but we use keyboard key 0x81)
-    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
+    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
       uint8_t keys[8] = {0, 0, 0x81, 0, 0, 0, 0, 0};  // Volume Down
       input->setValue(keys, 8);
       input->notify();
@@ -905,7 +905,7 @@ static void dhRunIphoneRemote() {
     }
 
     // RIGHT = Volume Up
-    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
+    if ((digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
       uint8_t keys[8] = {0, 0, 0x80, 0, 0, 0, 0, 0};  // Volume Up
       input->setValue(keys, 8);
       input->notify();
@@ -916,7 +916,7 @@ static void dhRunIphoneRemote() {
       delay(200);
     }
 
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }
@@ -955,8 +955,8 @@ static void dhRunBtJammer() {
 
   while (true) {
     extern void handleNetwork(); handleNetwork();
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { delay(200); break; }
-    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { delay(200); return; }
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { delay(200); break; }
+    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { delay(200); return; }
     delay(20);
   }
 
@@ -1026,17 +1026,17 @@ static void dhRunBtJammer() {
 
   while (true) {
     extern void handleNetwork(); handleNetwork();
-    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
+    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
       // Manual selection is overridden by hopping when active, but leave UI capability for when inactive
       chIdx = (chIdx + 2) % 3;
       drawState(); delay(180);
     }
-    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
+    if ((digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
       chIdx = (chIdx + 1) % 3;
       drawState(); delay(180);
     }
 
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) {
         if (active) { if (jam1Ok) jam1.stopConstCarrier(); if (jam2Ok) jam2.stopConstCarrier(); }

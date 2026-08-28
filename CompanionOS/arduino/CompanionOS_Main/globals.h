@@ -288,6 +288,7 @@ bool virtualRightPressed = false;
 bool virtualHomePressed = false;
 bool virtualUpPressed = false;
 bool virtualDownPressed = false;
+unsigned long virtualSelectHoldUntil = 0;
 
 // ═══════════════════════════════════════════════════════════
 // GALLERY / SLIDESHOW

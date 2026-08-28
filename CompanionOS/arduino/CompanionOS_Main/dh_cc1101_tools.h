@@ -335,7 +335,7 @@ static void dhRunCcDiag() {
       lastDraw = millis();
     }
 
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) { dhCcStrobe(CC_SIDLE); return; }
     } else { holding = false; }
@@ -392,9 +392,9 @@ static void dhRunCcSpectrum() {
     unsigned long holdStart = 0; bool holding = false;
     bool stay = true;
     while (stay) {
-      if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { bandIdx = (bandIdx + DH_CC_BAND_COUNT - 1) % DH_CC_BAND_COUNT; stay = false; delay(200); }
-      if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { bandIdx = (bandIdx + 1) % DH_CC_BAND_COUNT; stay = false; delay(200); }
-      if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+      if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { bandIdx = (bandIdx + DH_CC_BAND_COUNT - 1) % DH_CC_BAND_COUNT; stay = false; delay(200); }
+      if ((digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { bandIdx = (bandIdx + 1) % DH_CC_BAND_COUNT; stay = false; delay(200); }
+      if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
         if (!holding) { holdStart = millis(); holding = true; }
         if (millis() - holdStart > 800) { dhCcStrobe(CC_SIDLE); return; }
       } else {
@@ -459,9 +459,9 @@ static void dhRunCcWaterfall() {
     tft.setTextColor(CLR_TEXT_LO);
     tft.drawString("</>:Band HOLD:Back", SCALE_X(2), SCR_H - SCALE_Y(10), 1);
 
-    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { bandIdx = (bandIdx+3) % 4; dhCcPrepareRx(DH_CC_BANDS[bandIdx].startKHz); memset(wf,-120,sizeof(wf)); wfRow=0; delay(200); }
-    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { bandIdx = (bandIdx+1) % 4; dhCcPrepareRx(DH_CC_BANDS[bandIdx].startKHz); memset(wf,-120,sizeof(wf)); wfRow=0; delay(200); }
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { bandIdx = (bandIdx+3) % 4; dhCcPrepareRx(DH_CC_BANDS[bandIdx].startKHz); memset(wf,-120,sizeof(wf)); wfRow=0; delay(200); }
+    if ((digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { bandIdx = (bandIdx+1) % 4; dhCcPrepareRx(DH_CC_BANDS[bandIdx].startKHz); memset(wf,-120,sizeof(wf)); wfRow=0; delay(200); }
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) { dhCcStrobe(CC_SIDLE); return; }
     } else { holding = false; }
@@ -526,9 +526,9 @@ static void dhRunCcFreqMon() {
         lastDraw = millis();
       }
 
-      if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { freqIdx = (freqIdx + DH_CC_MON_COUNT - 1) % DH_CC_MON_COUNT; retune = true; delay(200); }
-      if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { freqIdx = (freqIdx + 1) % DH_CC_MON_COUNT; retune = true; delay(200); }
-      if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+      if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { freqIdx = (freqIdx + DH_CC_MON_COUNT - 1) % DH_CC_MON_COUNT; retune = true; delay(200); }
+      if ((digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { freqIdx = (freqIdx + 1) % DH_CC_MON_COUNT; retune = true; delay(200); }
+      if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
         if (!holding) { holdStart = millis(); holding = true; }
         if (millis() - holdStart > 800) { dhCcStrobe(CC_SIDLE); return; }
       } else { holding = false; }
@@ -585,7 +585,7 @@ static void dhRunCcFinder() {
           bestFreq = band.startKHz + band.stepKHz * i;
         }
 
-        if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+        if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
           if (!holding) { holdStart = millis(); holding = true; }
           if (millis() - holdStart > 800) { dhCcStrobe(CC_SIDLE); return; }
         } else { holding = false; }
@@ -665,7 +665,7 @@ static void dhRunCcBrute() {
       tft.setTextColor(CLR_TEXT_MED); tft.drawCentreString(buf, SCR_CX, SCALE_Y(86), 1);
     }
 
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) { dhCcStrobe(CC_SIDLE); return; }
     } else { holding = false; }
@@ -731,7 +731,7 @@ static void dhRunCcCodeCheck() {
       int gdo = digitalRead(CC1101_GDO0_PIN);
       if (gdo != lastGdo) { edgeCount++; lastGdo = gdo; }
       if (edgeCount >= 10) break;
-      if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { dhCcStrobe(CC_SIDLE); return; }
+      if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { dhCcStrobe(CC_SIDLE); return; }
       delay(1);
     }
 
@@ -822,7 +822,7 @@ static void dhRunCcRfAnalyze() {
       }
       break;
     }
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { dhCcStrobe(CC_SIDLE); return; }
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { dhCcStrobe(CC_SIDLE); return; }
     delay(1);
   }
 
@@ -938,9 +938,9 @@ static void dhRunCcRawView() {
 
   while (true) {
     extern void handleNetwork(); handleNetwork();
-    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { page = (page + totalPages - 1) % totalPages; drawPage(); delay(200); }
-    if ((digitalRead(BTN_RIGHT) == LOW || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { page = (page + 1) % totalPages; drawPage(); delay(200); }
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { page = (page + totalPages - 1) % totalPages; drawPage(); delay(200); }
+    if ((digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) { page = (page + 1) % totalPages; drawPage(); delay(200); }
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) return;
     } else { holding = false; }
@@ -996,7 +996,7 @@ static void dhRunCcRfLive() {
       lastDraw = millis();
     }
 
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) { dhCcStrobe(CC_SIDLE); return; }
     } else { holding = false; }
@@ -1021,8 +1021,8 @@ static void dhRunCcLabReplay() {
 
   while (true) {
     extern void handleNetwork(); handleNetwork();
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { delay(200); break; }
-    if ((digitalRead(BTN_LEFT) == LOW || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { delay(200); return; }
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { delay(200); break; }
+    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) { delay(200); return; }
     delay(20);
   }
 
@@ -1050,7 +1050,7 @@ static void dhRunCcLabReplay() {
       }
       break;
     }
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { dhCcStrobe(CC_SIDLE); return; }
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) { dhCcStrobe(CC_SIDLE); return; }
     delay(1);
   }
 
@@ -1091,7 +1091,7 @@ static void dhRunCcLabReplay() {
 
   while (true) {
     extern void handleNetwork(); handleNetwork();
-    if ((digitalRead(BTN_SELECT) == LOW || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else {
