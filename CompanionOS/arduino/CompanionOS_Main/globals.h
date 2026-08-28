@@ -29,6 +29,7 @@ using fs::File;
 
 #include <WiFiUdp.h>
 #include <EEPROM.h>
+#include <vector>
 
 // ═══════════════════════════════════════════════════════════
 // RESOLUTION-AWARE LAYOUT HELPERS
@@ -75,8 +76,9 @@ enum AppState {
   STATE_SETTINGS,        // 11
   STATE_RUVIEW,          // 12 — RuView CSI Presence Detection
   STATE_CLOCK_DASHBOARD, // 13 — Screensaver / Clock Dashboard Tile
-  STATE_DR_HACK,         // 14 — ESP32 only (#ifdef ESP32 guard in page_dr_hack.h)
-  STATE_COUNT            // = 15 pages
+  STATE_RETRO_WATCH,     // 14 — Retro Watch Chronograph Face Tile
+  STATE_DR_HACK,         // 15 — ESP32 only (#ifdef ESP32 guard in page_dr_hack.h)
+  STATE_COUNT            // = 16 pages
 };
 
 extern AppState currentState;

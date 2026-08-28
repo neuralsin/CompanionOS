@@ -90,7 +90,7 @@ void drawStatusBar() {
       extern String currentTrack;
       extern String currentArtist;
       int maxSongW = iconX - SCALE_X(4); // all space left of icons
-      String songInfo = currentArtist + " - " + currentTrack;
+      String songInfo = (currentArtist.length() > 0) ? (currentTrack + " - " + currentArtist) : currentTrack;
       tft.setTextColor(CLR_TEXT_LO, CLR_BG);
       drawTruncatedText(SCALE_X(2), SCALE_Y(2), songInfo.c_str(), maxSongW, CLR_TEXT_LO, 1);
     }
@@ -126,10 +126,11 @@ void drawStatusBar() {
       tft.drawLine(iconX + 2, iconY, iconX - 2, iconY + 4, CLR_SECONDARY);
     }
 
-    // Song name in center on non-eyes pages
+    // Song name in center on non-eyes pages (Song - Artist)
     if (musicPlaying) {
       extern String currentTrack;
-      String songSnippet = currentTrack;
+      extern String currentArtist;
+      String songSnippet = (currentArtist.length() > 0) ? (currentTrack + " - " + currentArtist) : currentTrack;
       tft.setTextColor(CLR_TEXT_LO, CLR_BG);
       int songX = 36; // Clock is ~30px, so start song at 36px
       int maxSongW = iconX - SCALE_X(12) - songX;

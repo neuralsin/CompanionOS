@@ -9,7 +9,7 @@
 
 #include "globals.h"
 #include "pages.h"
-#include "network.h"
+#include "companion_net.h"
 
 // ═══════════════════════════════════════════════════════════
 // TOUCH & GESTURE INPUT V7

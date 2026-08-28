@@ -119,48 +119,76 @@ class SpotifyIntegration:
     def get_lyrics(
         self, track_name: str, artist_name: str, track_id: str | None = None
     ) -> list[dict]:
-        """Fetch lyrics dynamically from the public LRCLIB network."""
+        """Fetch lyrics dynamically from the public LRCLIB network with fuzzy search fallback."""
         import time
-        for attempt in range(3):
+        import re
+
+        def _parse_synced(synced: str) -> list[dict]:
+            parsed = []
+            for l in synced.split("\n"):
+                if l.startswith("[") and "]" in l:
+                    parts = l.split("]", 1)
+                    time_str = parts[0][1:]
+                    words = parts[1].strip()
+                    if words:
+                        try:
+                            m, s = time_str.split(":")
+                            sec, ms_val = s.split(".") if "." in s else (s, "0")
+                            time_ms = int(m)*60000 + int(sec)*1000 + int(str(ms_val).ljust(3, "0")[:3])
+                            parsed.append({"time": time_ms, "words": words})
+                        except Exception:
+                            pass
+            return parsed
+
+        # Clean track title: strip (feat. ...), - Remastered, etc.
+        clean_title = re.sub(r"\(feat\..*?\)", "", track_name, flags=re.IGNORECASE)
+        clean_title = re.sub(r"\(with.*?\)", "", clean_title, flags=re.IGNORECASE)
+        clean_title = re.sub(r"- \d{4} Remaster.*", "", clean_title, flags=re.IGNORECASE)
+        clean_title = re.sub(r"- Remaster.*", "", clean_title, flags=re.IGNORECASE)
+        clean_title = re.sub(r"- Radio Edit.*", "", clean_title, flags=re.IGNORECASE)
+        clean_title = re.sub(r"- Single Version.*", "", clean_title, flags=re.IGNORECASE)
+        clean_title = re.sub(r"\[.*?\]", "", clean_title)
+        clean_title = clean_title.strip()
+
+        for query_title in [track_name, clean_title] if clean_title != track_name else [track_name]:
             try:
                 url = "https://lrclib.net/api/get"
-                params = {"track_name": track_name, "artist_name": artist_name}
-                response = requests.get(url, params=params, timeout=15)
+                params = {"track_name": query_title, "artist_name": artist_name}
+                response = requests.get(url, params=params, timeout=10)
 
                 if response.status_code == 200:
                     data = response.json()
                     synced = data.get("syncedLyrics")
                     if synced:
-                        parsed = []
-                        lines = synced.split("\n")
-                        for l in lines:
-                            if l.startswith("[") and "]" in l:
-                                parts = l.split("]", 1)
-                                time_str = parts[0][1:]
-                                words = parts[1].strip()
-                                if words:
-                                    try:
-                                        m, s = time_str.split(":")
-                                        sec, ms_val = s.split(".") if "." in s else (s, "0")
-                                        time_ms = int(m)*60000 + int(sec)*1000 + int(str(ms_val).ljust(3, "0")[:3])  # type: ignore
-                                        parsed.append({"time": time_ms, "words": words})
-                                    except Exception:
-                                        pass
+                        parsed = _parse_synced(synced)
                         if parsed:
                             return parsed
                     elif data.get("plainLyrics"):
                         return [{"time": 0, "words": "♪ Unsynced lyrics available ♪"}]
-                return [{"time": 0, "words": "♪ Instrumental ♪"}]
-            except requests.exceptions.Timeout:
-                if attempt < 2:
-                    time.sleep(1)
-                    continue
-                print(f"Lyrics Engine (LRCLIB) Error: Request timed out after 3 attempts.")
-                return [{"time": 0, "words": "♪ Lyrics unavailable ♪"}]
-            except Exception as e:
-                print(f"Lyrics Engine (LRCLIB) Error: {e}")
-                return [{"time": 0, "words": "♪ Lyrics unavailable ♪"}]
-        return [{"time": 0, "words": "♪ Lyrics unavailable ♪"}]
+            except Exception:
+                pass
+
+        # Fallback to search query
+        try:
+            url = "https://lrclib.net/api/search"
+            params = {"q": f"{clean_title} {artist_name}"}
+            response = requests.get(url, params=params, timeout=10)
+            if response.status_code == 200:
+                results = response.json()
+                if isinstance(results, list):
+                    for item in results:
+                        synced = item.get("syncedLyrics")
+                        if synced:
+                            parsed = _parse_synced(synced)
+                            if parsed:
+                                return parsed
+                    for item in results:
+                        if item.get("plainLyrics"):
+                            return [{"time": 0, "words": "♪ Unsynced lyrics available ♪"}]
+        except Exception as e:
+            print(f"LRCLIB Search Fallback Error: {e}")
+
+        return [{"time": 0, "words": "♪ Instrumental ♪"}]
 
     def process_album_art(self, image_url: str, size: int = 96) -> list[int] | None:
         """Returns a list of RGB565 integer pixels."""

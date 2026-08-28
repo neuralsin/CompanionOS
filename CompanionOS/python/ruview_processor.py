@@ -612,7 +612,7 @@ class ZoneManager:
 zone_manager = ZoneManager()
 
 # Toggle: enable/disable CSI processing
-ruview_enabled = True
+ruview_enabled = False
 
 # Global stats for diagnostics
 ruview_stats = {

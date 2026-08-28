@@ -13,6 +13,7 @@
 #include "page_clock_dashboard.h"
 #include "theme2_eyes.h"
 #include "theme2_spotify.h"
+#include "page_retro_watch.h"
 #ifdef ESP32
 #include "page_dr_hack.h"
 #endif
@@ -183,31 +184,10 @@ void redrawSpotifyPartial() {
   int cardH = 64;
   
   if (!cardDrawn) {
-    tft.fillRoundRect(cardX + 2, cardY + 2, cardW, cardH, 4, 0x0821);
-    tft.fillRoundRect(cardX + 1, cardY + 1, cardW, cardH, 4, 0x1042);
+    tft.fillRoundRect(cardX, cardY, cardW, cardH, 4, 0x1082);
+    tft.drawRoundRect(cardX, cardY, cardW, cardH, 4, 0x2104);
     
-    uint16_t startColor = 0x2125;
-    uint16_t endColor = 0x0821;
-    uint16_t sr = (startColor >> 11) & 0x1F, sg = (startColor >> 5) & 0x3F, sb = startColor & 0x1F;
-    uint16_t er = (endColor >> 11) & 0x1F, eg = (endColor >> 5) & 0x3F, eb = endColor & 0x1F;
-    
-    for (int j = 0; j < cardH; j++) {
-      float t = (float)j / cardH;
-      uint16_t cr = sr + (er - sr) * t;
-      uint16_t cg = sg + (eg - sg) * t;
-      uint16_t cb = sb + (eb - sb) * t;
-      uint16_t color = (cr << 11) | (cg << 5) | cb;
-      
-      int r = 4;
-      if (j < r || j >= cardH - r) {
-        int offset = r - (int)sqrt(r*r - pow(r - (j < r ? j : cardH - 1 - j), 2));
-        tft.drawFastHLine(cardX + offset, cardY + j, cardW - 2*offset, color);
-      } else {
-        tft.drawFastHLine(cardX, cardY + j, cardW, color);
-      }
-    }
-    
-    tft.setTextColor(0x8410, startColor);
+    tft.setTextColor(0x07FF, 0x1082);
     tft.drawString("LYRICS", cardX + 4, cardY + 4, 1);
     cardDrawn = true;
   }
@@ -284,11 +264,11 @@ void resetSpotifyDrawState() {
 void completeAlbumArt() {
   receivingArt = false;
   albumArtReady = true;
-  artDrawn = false; // Force redraw in redrawSpotifyPartial
+  artDrawn = false; // Force redraw in Theme 1 / Classic
+  t2s_artDrawn = false; // Force redraw in Theme 2
   
   if (currentState == STATE_SPOTIFY) {
     if (activeTheme == 1) {
-      extern void t2_redrawSpotifyPartial();
       t2_redrawSpotifyPartial();
     } else {
       redrawSpotifyPartial(); // Redraw whole UI safely
@@ -296,6 +276,9 @@ void completeAlbumArt() {
   } else if (currentState == STATE_GAMING) {
     extern void redrawGamingPartial();
     redrawGamingPartial();
+  } else if (currentState == STATE_CLOCK_DASHBOARD) {
+    extern void redrawClockDashboardPartial();
+    redrawClockDashboardPartial();
   }
 }
 
@@ -897,6 +880,12 @@ void drawClockDashboardPageFull() {
   drawStatusBar();
 }
 
+void drawRetroWatchPageFull() {
+  resetRetroWatchDrawState();
+  drawRetroWatchPage();
+  drawStatusBar();
+}
+
 void renderCurrentPage() {
   switch(currentState) {
     case STATE_EYES: drawEyesPage(); break;
@@ -913,6 +902,7 @@ void renderCurrentPage() {
     case STATE_SETTINGS: drawSettingsPage(); break;
     case STATE_RUVIEW: drawRuviewPageFull(); break;
     case STATE_CLOCK_DASHBOARD: drawClockDashboardPageFull(); break;
+    case STATE_RETRO_WATCH: drawRetroWatchPageFull(); break;
     #ifdef ESP32
     case STATE_DR_HACK: initDrHack(); break;
     #endif
@@ -934,6 +924,7 @@ void changePage(int direction) {
   // HIGH-06 FIX: Reset all page draw states on page change to prevent stale partial redraws
   resetSpotifyDrawState();
   resetClockDashboardDrawState();
+  resetRetroWatchDrawState();
   extern void t2_resetSpotifyDrawState();
   t2_resetSpotifyDrawState();
   settingsScrollY = 0;
@@ -948,6 +939,29 @@ void changePage(int direction) {
   // Explicit full screen clear on page transition
   tft.fillScreen(COLOR_BG);
   
+  renderCurrentPage();
+}
+
+void setPage(int targetPage) {
+  int maxPage = STATE_COUNT;
+  #ifndef ESP32
+  maxPage = STATE_DR_HACK;
+  #endif
+  if (targetPage < 0 || targetPage >= maxPage) return;
+  currentState = (AppState)targetPage;
+  resetSpotifyDrawState();
+  resetClockDashboardDrawState();
+  resetRetroWatchDrawState();
+  extern void t2_resetSpotifyDrawState();
+  t2_resetSpotifyDrawState();
+  settingsScrollY = 0;
+  #ifdef ESP32
+  if (currentState != STATE_DR_HACK) {
+    extern DrHackSubState dhCurrentState;
+    dhCurrentState = DH_MENU;
+  }
+  #endif
+  tft.fillScreen(COLOR_BG);
   renderCurrentPage();
 }
 

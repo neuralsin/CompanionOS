@@ -38,6 +38,10 @@
 const char* WIFI_SSID = "Stuart";
 const char* WIFI_PASS = "123456789";
 
+// Priority 2 WiFi Network
+const char* WIFI_SSID2 = "Pierre Fauchard 2.4GHz";
+const char* WIFI_PASS2 = "Jenkins_Madarchod";
+
 // Network Settings
 const char* DEFAULT_PC_IP = "192.168.1.100";
 const int UDP_PORT_RX = 8888;
@@ -65,10 +69,13 @@ const int UDP_PORT_TX = 8889;
 #define ENABLE_MIC true
 
 // EEPROM addresses
-#define EEPROM_EXOTIC_ADDR 0       // 1 byte: legacy
-#define EEPROM_THEME_ADDR 1        // 1 byte: unused (themes removed)
-#define EEPROM_ACTIVE_THEME_ADDR 2 // 1 byte: 0 = Theme 1, 1 = Theme 2, 2 = Theme 3 (RoboEyes)
-#define EEPROM_SIZE 8              // Total EEPROM bytes used
+#define EEPROM_EXOTIC_ADDR 0        // 1 byte: legacy
+#define EEPROM_THEME_ADDR 1         // 1 byte: unused (themes removed)
+#define EEPROM_ACTIVE_THEME_ADDR 2  // 1 byte: 0 = Theme 1, 1 = Theme 2, 2 = Theme 3 (RoboEyes)
+#define EEPROM_WIFI_MAGIC_ADDR 10   // 2 bytes: 0xC0 0x55
+#define EEPROM_WIFI_SSID_ADDR  16   // 32 bytes (null terminated)
+#define EEPROM_WIFI_PASS_ADDR  48   // 64 bytes (null terminated)
+#define EEPROM_SIZE 512             // Total EEPROM bytes used (for up to 4 multi-wifi profiles)
 
 // ═══════════════════════════════════════════════════════════
 // V7 COLOR SYSTEM — Layered Design Tokens

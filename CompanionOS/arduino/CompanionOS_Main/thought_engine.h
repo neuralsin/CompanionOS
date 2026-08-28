@@ -240,38 +240,85 @@ void renderThoughtBubble(T* display, bool isSprite) {
   }
 
 
-  if (strlen(activeBubble.text) == 0) {
+  // Check for valid visible text
+  bool hasVisibleChar = false;
+  for (int i = 0; activeBubble.text[i] != '\0'; i++) {
+    if ((unsigned char)activeBubble.text[i] > 32) {
+      hasVisibleChar = true;
+      break;
+    }
+  }
+  if (!hasVisibleChar) {
     activeBubble.active = false;
     activeBubble.fadingOut = false;
-    return; // Prevent blank thought boxes from spinning infinitely
+    return;
   }
 
   // Alpha blend factor (simulated — controls color mixing, not real alpha)
   float alpha = activeBubble.fadeAlpha / 255.0f;
 
-
   // ── Position Calculation ──────────────────────────────
-  // 🔴 BUG-05 FIX: Bubble sits BETWEEN status bar (y=0..15)
-  // and eye canvas top (~y=80 on ESP32 landscape).
-  // Safe zone: y=18 to y=72 (54px available)
-  // Right side of screen, above the right eye.
-  //
-  // ESP8266 320×240: x=180, y=20 (just below 16px status bar)
-  // ESP32  160×128:  x=90,  y=18 (scaled)
-
-  int bubbleW = 50; // Shrunk width
-  int bubbleX = SCR_W - bubbleW - 2; // Pinned to top-right
+  int bubbleW = 80; // Wide enough for readable text
+  int bubbleX = SCR_W - bubbleW - 1; // Pinned to top-right
   int bubbleY = 16;  
-  int maxW = bubbleW;
   
-  int lineH = 8; // Slightly smaller line height
-  int maxChars = (maxW - 4) / 6; // Adjust char capacity based on width
+  int lineH = 8;
+  int maxChars = (bubbleW - 6) / 6; // ~12 chars per line at font size 1 (6px wide)
 
-  int numLines = countThoughtLines(activeBubble.text, maxChars);
-  if (numLines > 2) numLines = 2; // Clamp to 2 lines
-  int padding = 2; // Tighter padding
-  int bubbleH = numLines * lineH + padding * 2;
+  // ── Word-aware line wrapping ──────────────────────────
+  char wrappedLines[3][24]; // max 3 lines, 23 chars + null
+  int lineCount = 0;
+  int textLen = strlen(activeBubble.text);
+  int pos = 0;
 
+  while (pos < textLen && lineCount < 3) {
+    // Skip leading spaces
+    while (pos < textLen && activeBubble.text[pos] == ' ') pos++;
+    if (pos >= textLen) break;
+
+    int remaining = textLen - pos;
+    if (remaining <= maxChars) {
+      // Rest fits on one line
+      int copyLen = remaining > 23 ? 23 : remaining;
+      strncpy(wrappedLines[lineCount], activeBubble.text + pos, copyLen);
+      wrappedLines[lineCount][copyLen] = '\0';
+      lineCount++;
+      break;
+    }
+
+    // Find last space within maxChars
+    int breakAt = maxChars;
+    for (int j = maxChars; j > 0; j--) {
+      if (activeBubble.text[pos + j] == ' ') {
+        breakAt = j;
+        break;
+      }
+    }
+
+    int copyLen = breakAt > 23 ? 23 : breakAt;
+    strncpy(wrappedLines[lineCount], activeBubble.text + pos, copyLen);
+    wrappedLines[lineCount][copyLen] = '\0';
+    lineCount++;
+    pos += breakAt;
+  }
+
+  // Clamp to 2 lines, adding ".." to truncated second line
+  if (lineCount > 2) {
+    lineCount = 2;
+    int len2 = strlen(wrappedLines[1]);
+    if (len2 > maxChars - 2) len2 = maxChars - 2;
+    wrappedLines[1][len2] = '.';
+    wrappedLines[1][len2 + 1] = '.';
+    wrappedLines[1][len2 + 2] = '\0';
+  }
+
+  if (lineCount == 0) {
+    activeBubble.active = false;
+    return;
+  }
+
+  int padding = 3;
+  int bubbleH = lineCount * lineH + padding * 2;
   if (bubbleY + bubbleH > 58) bubbleH = 58 - bubbleY;
 
   uint16_t borderColor = blendColor(CLR_BG, CLR_PRIMARY, alpha);
@@ -280,7 +327,6 @@ void renderThoughtBubble(T* display, bool isSprite) {
 
   int drawY = bubbleY;
   if (isSprite) {
-    // If drawing into a sprite (Theme 2/3), the sprite is pushed at Y=16, so local Y is offset
     drawY = bubbleY - 16;
   }
 
@@ -306,21 +352,14 @@ void renderThoughtBubble(T* display, bool isSprite) {
 
   display->setTextColor(textColor);
   display->setTextSize(1); 
-  int textLen = strlen(activeBubble.text);
   int textX = bubbleX + padding;
   int textY = drawY + padding;
 
-  for (int line = 0; line < numLines; line++) {
-    int start = line * maxChars;
-    if (start >= textLen) break;
-    char lineStr[40];
-    int copyLen = min(maxChars, textLen - start);
-    if (copyLen > 39) copyLen = 39;
-    strncpy(lineStr, activeBubble.text + start, copyLen);
-    lineStr[copyLen] = '\0';
-    display->drawString(lineStr, textX, textY + line * lineH, 1);
+  for (int line = 0; line < lineCount; line++) {
+    display->drawString(wrappedLines[line], textX, textY + line * lineH, 1);
   }
 }
+
 
 template <typename T>
 void tickThoughtScheduler(T* display, bool isSprite) {

@@ -126,13 +126,13 @@ void handleButtons() {
     return;
   }
 
-  // ── Long press actions ──
+  // ── Long press actions (Hold > 800ms) ──
   if (consumeLong(btnLeft)) {
     if (currentState == STATE_SPOTIFY) {
       extern void sendCommand(String cmd);
       sendCommand("PREV");
     } else if (currentState != STATE_EYES) {
-      changePage(-(int)currentState);  // go to index 0
+      changePage(-(int)currentState);  // Jump to Home (Eyes)
     }
     lastInteractionTime = millis();
     return;
@@ -144,24 +144,35 @@ void handleButtons() {
       sendCommand("NEXT");
     } else if (currentState != STATE_SETTINGS) {
       int delta = STATE_SETTINGS - (int)currentState;
-      changePage(delta);
+      changePage(delta);               // Jump to Settings
     }
     lastInteractionTime = millis();
     return;
   }
 
   if (consumeLong(btnSelect)) {
-    // For Dr. Hack: exit sub-tool to menu, or menu to eyes
     if (currentState == STATE_DR_HACK) {
       extern DrHackSubState dhCurrentState;
       if (dhCurrentState != DH_MENU) {
         dhCurrentState = DH_MENU;
         renderCurrentPage();
       } else {
-        changePage(-(int)currentState);  // exit to eyes
+        changePage(-(int)currentState);  // Exit to eyes
       }
-      lastInteractionTime = millis();
-      return;
+    } else if (currentState == STATE_EYES) {
+      // Hold on eyes toggles emotion / interaction
+      Emotion next = (Emotion)((currentEmotion + 1) % EMO_COUNT);
+      if (activeTheme == 2) t3_setEmotion(next);
+      else if (activeTheme == 1) t2_setEmotion(next);
+      else setEmotion(next);
+    } else if (currentState == STATE_SPOTIFY) {
+      extern void sendCommand(String cmd);
+      sendCommand("SHUFFLE:TOGGLE");
+    } else if (currentState == STATE_POMODORO) {
+      extern void sendCommand(String cmd);
+      sendCommand("POMO:RESET");
+    } else {
+      changePage(-(int)currentState);  // Return to Eyes
     }
     lastInteractionTime = millis();
     return;

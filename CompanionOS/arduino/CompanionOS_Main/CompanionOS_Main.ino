@@ -265,9 +265,11 @@ void setup() {
   // Initialize thought engine
   initThoughtScheduler();
 
-  // V8: Start CSI collection for RuView (ESP32 self-sensing)
+  // V8: Start CSI collection for RuView (ESP32 self-sensing) or Offline Bluetooth
   #ifdef ESP32
-    if (wifiConnected) {
+    if (!wifiConnected) {
+      setupBluetooth();
+    } else {
       setupCSICollector();
     }
   #endif
@@ -364,6 +366,24 @@ void loop() {
     redrawClockDashboardPartial();
   }
 
+  // Spotify page live ticker (1s resolution)
+  static unsigned long lastSpotifyTick = 0;
+  if (currentState == STATE_SPOTIFY && millis() - lastSpotifyTick >= 1000) {
+    lastSpotifyTick = millis();
+    if (isPlaying && playDuration > 0 && playProgress < playDuration) {
+      playProgress += 1000;
+    }
+    extern void t2_redrawSpotifyPartial();
+    if (activeTheme == 1) t2_redrawSpotifyPartial();
+    else redrawSpotifyPartial();
+  }
+
+  // Retro Watch Chronograph tile page refresh
+  if (currentState == STATE_RETRO_WATCH) {
+    extern void redrawRetroWatchPartial();
+    redrawRetroWatchPartial();
+  }
+
   // V4: Pet mood decay (every 60 seconds of no interaction)
   if (millis() - lastMoodDecay > 60000) {
     lastMoodDecay = millis();
@@ -408,25 +428,19 @@ void loop() {
     #endif
   }
 
-  // WiFi auto-reconnect (check every 30s)
+  // WiFi auto-reconnect (non-blocking check every 20s)
   static unsigned long lastWifiCheck = 0;
-  if (!wifiConnected && millis() - lastWifiCheck > 30000) {
+  if (!wifiConnected && millis() - lastWifiCheck > 20000) {
     lastWifiCheck = millis();
-    Serial.println(F("WiFi disconnected, attempting reconnect..."));
-    WiFi.disconnect();
-    delay(100);
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-    int timeout = 0;
-    while (WiFi.status() != WL_CONNECTED && timeout < 20) {
-      delay(500);
-      timeout++;
-    }
     if (WiFi.status() == WL_CONNECTED) {
       wifiConnected = true;
       Serial.print(F("WiFi reconnected! IP: "));
       Serial.println(WiFi.localIP());
     } else {
-      Serial.println(F("WiFi reconnect failed, will retry in 30s"));
+      Serial.println(F("WiFi offline, attempting async reconnect..."));
+      extern String currentWiFiSSID;
+      extern String currentWiFiPASS;
+      WiFi.begin(currentWiFiSSID.c_str(), currentWiFiPASS.c_str());
     }
   }
 }

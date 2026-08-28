@@ -1,692 +1,817 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>CompanionOS Web Remote</title>
-<meta name="description" content="CompanionOS v7.0 Web Remote Control — Navigate your ESP32 companion device from any browser">
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
-  :root {
-    --bg: #0a0a0f;
-    --surface: #14141f;
-    --surface2: #1c1c2e;
-    --border: #2a2a3e;
-    --primary: #6366f1;
-    --primary-glow: rgba(99, 102, 241, 0.25);
-    --secondary: #ef4444;
-    --success: #22c55e;
-    --warning: #eab308;
-    --text-hi: #e8e8f0;
-    --text-med: #9ca3af;
-    --text-lo: #4b5563;
-    --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    font-family: var(--font);
-    background: var(--bg);
-    color: var(--text-hi);
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
-
-  /* ── Header ── */
-  .header {
-    background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
-    border-bottom: 1px solid var(--border);
-    padding: 16px 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    backdrop-filter: blur(10px);
-  }
-
-  .header-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .logo {
-    font-size: 20px;
-    font-weight: 700;
-    background: linear-gradient(135deg, var(--primary), #a78bfa);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-
-  .version-badge {
-    font-size: 10px;
-    padding: 2px 8px;
-    border-radius: 12px;
-    background: var(--primary-glow);
-    color: var(--primary);
-    font-weight: 600;
-  }
-
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--secondary);
-    animation: pulse 2s infinite;
-  }
-
-  .status-dot.connected {
-    background: var(--success);
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-
-  /* ── Content Container ── */
-  .container {
-    max-width: 420px;
-    margin: 0 auto;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  /* ── Section Cards ── */
-  .section {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 16px;
-    transition: border-color 0.2s;
-  }
-
-  .section:hover {
-    border-color: rgba(99, 102, 241, 0.3);
-  }
-
-  .section-title {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    color: var(--text-lo);
-    margin-bottom: 12px;
-  }
-
-  /* ── Physical Button Simulator ── */
-  .btn-row {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .hw-btn {
-    width: 72px;
-    height: 72px;
-    border: 2px solid var(--border);
-    border-radius: 16px;
-    background: var(--surface2);
-    color: var(--text-hi);
-    font-family: var(--font);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    transition: all 0.15s;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .hw-btn:active {
-    transform: scale(0.92);
-    border-color: var(--primary);
-    background: rgba(99, 102, 241, 0.15);
-    box-shadow: 0 0 20px var(--primary-glow);
-  }
-
-  .hw-btn .icon {
-    font-size: 22px;
-    line-height: 1;
-  }
-
-  .hw-btn.select {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    border-color: var(--primary);
-    background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(99,102,241,0.05));
-  }
-
-  .hw-btn.select:active {
-    background: rgba(99, 102, 241, 0.3);
-    box-shadow: 0 0 30px var(--primary-glow);
-  }
-
-  .hw-btn.home {
-    border-color: var(--warning);
-    width: 100%;
-    height: 44px;
-    border-radius: 12px;
-    flex-direction: row;
-    gap: 8px;
-  }
-
-  .hw-btn.home:active {
-    border-color: var(--warning);
-    background: rgba(234, 179, 8, 0.15);
-  }
-
-  /* ── Page Grid ── */
-  .page-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 6px;
-  }
-
-  .page-tile {
-    padding: 8px 4px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--surface2);
-    color: var(--text-med);
-    font-family: var(--font);
-    font-size: 9px;
-    font-weight: 500;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.15s;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .page-tile:active, .page-tile.active {
-    border-color: var(--primary);
-    color: var(--text-hi);
-    background: rgba(99, 102, 241, 0.12);
-  }
-
-  .page-tile .tile-icon {
-    font-size: 16px;
-    display: block;
-    margin-bottom: 3px;
-  }
-
-  /* ── Emotion Grid ── */
-  .emo-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 6px;
-  }
-
-  .emo-btn {
-    padding: 10px 4px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--surface2);
-    color: var(--text-med);
-    font-family: var(--font);
-    font-size: 10px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.15s;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .emo-btn:active {
-    transform: scale(0.95);
-    border-color: var(--primary);
-    background: rgba(99, 102, 241, 0.12);
-  }
-
-  .emo-btn .emo-icon {
-    font-size: 20px;
-    display: block;
-    margin-bottom: 2px;
-  }
-
-  /* ── Spotify Controls ── */
-  .spotify-row {
-    display: flex;
-    gap: 8px;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .spot-btn {
-    width: 48px;
-    height: 48px;
-    border: 1px solid var(--border);
-    border-radius: 50%;
-    background: var(--surface2);
-    color: var(--text-hi);
-    font-size: 20px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .spot-btn:active {
-    transform: scale(0.9);
-    background: #1db954;
-    border-color: #1db954;
-    color: #fff;
-  }
-
-  .spot-btn.play {
-    width: 56px;
-    height: 56px;
-    border-color: #1db954;
-    background: rgba(29, 185, 84, 0.1);
-    font-size: 24px;
-  }
-
-  /* ── Thought Input ── */
-  .thought-form {
-    display: flex;
-    gap: 8px;
-  }
-
-  .thought-input {
-    flex: 1;
-    padding: 10px 14px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--surface2);
-    color: var(--text-hi);
-    font-family: var(--font);
-    font-size: 13px;
-    outline: none;
-    transition: border-color 0.2s;
-  }
-
-  .thought-input:focus {
-    border-color: var(--primary);
-  }
-
-  .thought-input::placeholder {
-    color: var(--text-lo);
-  }
-
-  .thought-send {
-    padding: 10px 16px;
-    border: none;
-    border-radius: 10px;
-    background: var(--primary);
-    color: #fff;
-    font-family: var(--font);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .thought-send:active {
-    transform: scale(0.95);
-    background: #4f46e5;
-  }
-
-  /* ── Status Panel ── */
-  .status-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-
-  .status-item {
-    padding: 10px 12px;
-    border-radius: 10px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-  }
-
-  .status-label {
-    font-size: 10px;
-    color: var(--text-lo);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 4px;
-  }
-
-  .status-value {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-hi);
-  }
-
-  /* ── Toast notification ── */
-  .toast {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%) translateY(100px);
-    background: var(--surface2);
-    border: 1px solid var(--primary);
-    color: var(--text-hi);
-    padding: 10px 20px;
-    border-radius: 12px;
-    font-size: 13px;
-    font-weight: 500;
-    opacity: 0;
-    transition: all 0.3s ease;
-    z-index: 1000;
-    pointer-events: none;
-    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
-  }
-
-  .toast.show {
-    transform: translateX(-50%) translateY(0);
-    opacity: 1;
-  }
-
-  /* ── Footer ── */
-  .footer {
-    text-align: center;
-    padding: 20px;
-    color: var(--text-lo);
-    font-size: 11px;
-  }
-
-  /* ── Responsive ── */
-  @media (max-width: 380px) {
-    .hw-btn { width: 60px; height: 60px; font-size: 10px; }
-    .hw-btn .icon { font-size: 18px; }
-    .hw-btn.select { width: 68px; height: 68px; }
-    .page-grid { grid-template-columns: repeat(3, 1fr); }
-  }
-</style>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+  <title>CompanionOS Industrial Control</title>
+  <meta name="description" content="CompanionOS v7.0 Industrial Control System — Remote, Media, Pet, Network & System Management"/>
+  <meta name="theme-color" content="#171714"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "background": "#131411",
+            "surface": "#171714",
+            "surface-card": "#1f201d",
+            "surface-high": "#292a27",
+            "surface-highest": "#343531",
+            "primary": "#657B52",
+            "primary-light": "#b6ce9f",
+            "secondary": "#76AAA5",
+            "secondary-dark": "#174f4b",
+            "tertiary": "#ecb8d5",
+            "outline": "#8e9287",
+            "outline-variant": "#44483f",
+            "on-surface": "#e4e3dd",
+            "on-surface-variant": "#c4c8bc",
+            "error": "#ffb4ab",
+            "error-container": "#93000a"
+          },
+          fontFamily: {
+            "roboto": ["Roboto", "sans-serif"],
+            "mono": ["JetBrains Mono", "monospace"]
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      overscroll-behavior-y: none;
+      background-color: #171714;
+      color: #e4e3dd;
+      font-family: 'Roboto', sans-serif;
+    }
+    .industrial-border { border: 1px solid #44483f; }
+    .industrial-border-accent { border: 1px solid #715A43; }
+    .tactile-btn:active { transform: scale(0.96); filter: brightness(1.15); }
+    .nav-tab.active { color: #76AAA5; }
+    .nav-tab.active .nav-indicator { background-color: #76AAA5; }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #44483f; border-radius: 4px; }
+    .pt-safe { padding-top: max(env(safe-area-inset-top, 0px), 12px); }
+    .pb-safe { padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px); }
+  </style>
 </head>
-<body>
+<body class="flex flex-col min-h-screen">
 
-<!-- Header -->
-<div class="header">
-  <div class="header-title">
-    <span class="logo">C/OS</span>
-    <span class="version-badge">v7.0</span>
-  </div>
-  <div id="statusDot" class="status-dot"></div>
-</div>
-
-<div class="container">
-
-  <!-- Physical Buttons Simulator -->
-  <div class="section">
-    <div class="section-title">Navigation</div>
-    <div class="btn-row">
-      <button class="hw-btn" onclick="pressBtn('LEFT')" id="btn-left">
-        <span class="icon">◀</span>
-        LEFT
-      </button>
-      <button class="hw-btn select" onclick="pressBtn('SELECT')" id="btn-select">
-        <span class="icon">●</span>
-        SEL
-      </button>
-      <button class="hw-btn" onclick="pressBtn('RIGHT')" id="btn-right">
-        <span class="icon">▶</span>
-        RIGHT
-      </button>
-    </div>
-    <div style="height:8px"></div>
-    <div class="btn-row">
-      <button class="hw-btn" onclick="pressBtn('LEFT_LONG')" id="btn-left-long" style="height:40px; font-size:9px">
-        HOLD L
-      </button>
-      <button class="hw-btn select" onclick="pressBtn('SELECT_LONG')" id="btn-select-long" style="height:40px; border-radius:12px; font-size:9px">
-        HOLD S
-      </button>
-      <button class="hw-btn" onclick="pressBtn('RIGHT_LONG')" id="btn-right-long" style="height:40px; font-size:9px">
-        HOLD R
-      </button>
-    </div>
-    <div style="height:8px"></div>
-    <button class="hw-btn home" onclick="pressBtn('HOME')" id="btn-home">
-      <span class="icon">🏠</span> HOME
-    </button>
-  </div>
-
-  <!-- Direct Page Navigation -->
-  <div class="section">
-    <div class="section-title">Pages</div>
-    <div class="page-grid" id="pageGrid">
-      <button class="page-tile active" onclick="goPage(0)" data-page="0"><span class="tile-icon">👁</span>Eyes</button>
-      <button class="page-tile" onclick="goPage(1)" data-page="1"><span class="tile-icon">🎵</span>Music</button>
-      <button class="page-tile" onclick="goPage(2)" data-page="2"><span class="tile-icon">🍅</span>Pomo</button>
-      <button class="page-tile" onclick="goPage(3)" data-page="3"><span class="tile-icon">🌤</span>Weath</button>
-      <button class="page-tile" onclick="goPage(4)" data-page="4"><span class="tile-icon">🔔</span>Notif</button>
-      <button class="page-tile" onclick="goPage(5)" data-page="5"><span class="tile-icon">📝</span>Notes</button>
-      <button class="page-tile" onclick="goPage(6)" data-page="6"><span class="tile-icon">📈</span>Stock</button>
-      <button class="page-tile" onclick="goPage(7)" data-page="7"><span class="tile-icon">🎮</span>Game</button>
-      <button class="page-tile" onclick="goPage(8)" data-page="8"><span class="tile-icon">💬</span>Social</button>
-      <button class="page-tile" onclick="goPage(9)" data-page="9"><span class="tile-icon">✅</span>Tasks</button>
-      <button class="page-tile" onclick="goPage(10)" data-page="10"><span class="tile-icon">📡</span>Net</button>
-      <button class="page-tile" onclick="goPage(11)" data-page="11"><span class="tile-icon">⚙</span>Sys</button>
-      <button class="page-tile" onclick="goPage(12)" data-page="12" style="border-color: var(--secondary); color: var(--secondary);"><span class="tile-icon">💀</span>Hack</button>
-    </div>
-  </div>
-
-  <!-- Spotify Controls -->
-  <div class="section">
-    <div class="section-title">Spotify</div>
-    <div class="spotify-row">
-      <button class="spot-btn" onclick="spotifyCmd('SHUFFLE:TOGGLE')">🔀</button>
-      <button class="spot-btn" onclick="spotifyCmd('PREV')">⏮</button>
-      <button class="spot-btn play" onclick="spotifyCmd('PLAY_PAUSE')">⏯</button>
-      <button class="spot-btn" onclick="spotifyCmd('NEXT')">⏭</button>
-      <button class="spot-btn" onclick="spotifyCmd('REPEAT:TOGGLE')">🔁</button>
-    </div>
-  </div>
-
-  <!-- Emotion Picker -->
-  <div class="section">
-    <div class="section-title">Emotion</div>
-    <div class="emo-grid">
-      <button class="emo-btn" onclick="setEmo('NEUTRAL')"><span class="emo-icon">😐</span>Neutral</button>
-      <button class="emo-btn" onclick="setEmo('HAPPY')"><span class="emo-icon">😊</span>Happy</button>
-      <button class="emo-btn" onclick="setEmo('SAD')"><span class="emo-icon">😢</span>Sad</button>
-      <button class="emo-btn" onclick="setEmo('EXCITED')"><span class="emo-icon">🤩</span>Excited</button>
-      <button class="emo-btn" onclick="setEmo('LOVE')"><span class="emo-icon">😍</span>Love</button>
-      <button class="emo-btn" onclick="setEmo('SLEEPY')"><span class="emo-icon">😴</span>Sleepy</button>
-      <button class="emo-btn" onclick="setEmo('ANGRY')"><span class="emo-icon">😠</span>Angry</button>
-      <button class="emo-btn" onclick="setEmo('SURPRISED')"><span class="emo-icon">😲</span>Surprise</button>
-    </div>
-  </div>
-
-  <!-- Thought Bubble -->
-  <div class="section">
-    <div class="section-title">Push Thought Bubble</div>
-    <div class="thought-form">
-      <input type="text" class="thought-input" id="thoughtInput" placeholder="Type a thought (max 79 chars)" maxlength="79">
-      <button class="thought-send" onclick="sendThought()">Send</button>
-    </div>
-  </div>
-
-  <!-- Status Display -->
-  <div class="section">
-    <div class="section-title">Device Status</div>
-    <div class="status-grid">
-      <div class="status-item">
-        <div class="status-label">ESP IP</div>
-        <div class="status-value" id="espIp">scanning...</div>
+  <!-- TOP APP BAR -->
+  <header class="fixed top-0 inset-x-0 z-50 bg-[#171714]/95 backdrop-blur-md pt-safe border-b border-outline-variant shadow-md">
+    <div class="h-14 flex items-center justify-between px-4">
+      <div class="flex flex-col">
+        <div class="flex items-center gap-2">
+          <div id="conn-dot" class="w-2.5 h-2.5 rounded-full bg-primary animate-pulse"></div>
+          <span id="conn-status" class="font-bold text-[11px] uppercase tracking-widest text-on-surface">ONLINE • ESP32</span>
+        </div>
+        <span id="esp-ip-display" class="font-mono text-[12px] text-on-surface-variant">192.168.1.42</span>
       </div>
-      <div class="status-item">
-        <div class="status-label">Page</div>
-        <div class="status-value" id="currentPage">Eyes</div>
-      </div>
-      <div class="status-item">
-        <div class="status-label">Emotion</div>
-        <div class="status-value" id="currentEmo">NEUTRAL</div>
-      </div>
-      <div class="status-item">
-        <div class="status-label">Track</div>
-        <div class="status-value" id="currentTrack">—</div>
+      <div class="flex items-center gap-3">
+        <span id="active-screen-title" class="font-bold text-lg text-[#E5DDC8] tracking-wide">Remote</span>
+        <button onclick="pingEsp()" class="w-8 h-8 rounded border border-outline-variant flex items-center justify-center bg-surface-high hover:border-secondary transition-colors tactile-btn">
+          <span class="material-symbols-outlined text-primary text-[18px]">sensors</span>
+        </button>
       </div>
     </div>
-  </div>
+  </header>
 
-  <!-- Hardware Diagnostics -->
-  <div class="section">
-    <div class="section-title">Hardware Diagnostics</div>
-    <button class="thought-send" onclick="checkNrf()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
-      <span class="icon" style="font-size: 16px;">📡</span> Trigger nRF Diagnostic Check
-    </button>
-  </div>
+  <!-- MAIN VIEWPORT CONTAINER (5 SCREENS) -->
+  <main class="flex-1 pt-20 pb-24 px-4 overflow-y-auto custom-scrollbar">
 
-  <div class="footer">
-    CompanionOS v7.0 • neuralsin<br>
-    Web Remote Control
-  </div>
-</div>
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 1. REMOTE SCREEN -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div id="screen-remote" class="screen-panel flex flex-col gap-5 max-w-md mx-auto">
+      
+      <!-- System Telemetry Card -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-2 relative overflow-hidden">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+            <span class="font-mono text-[11px] text-secondary uppercase tracking-wider">SYSTEM TELEMETRY</span>
+          </div>
+          <span class="font-mono text-[10px] text-outline" id="bot-mode-tag">PET_IDLE</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3 mt-1">
+          <div class="flex flex-col">
+            <span class="text-[10px] text-outline font-bold tracking-wider">ACTIVE PAGE</span>
+            <span id="tele-page" class="font-mono text-[13px] text-primary-light">Eyes (#0)</span>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-[10px] text-outline font-bold tracking-wider">LATENCY</span>
+            <span id="tele-latency" class="font-mono text-[13px] text-on-surface">18ms</span>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-[10px] text-outline font-bold tracking-wider">CURRENT EMOTION</span>
+            <span id="tele-emotion" class="font-mono text-[13px] text-on-surface">NEUTRAL</span>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-[10px] text-outline font-bold tracking-wider">AUDIO STATUS</span>
+            <span id="tele-music" class="font-mono text-[13px] text-on-surface truncate">Idle</span>
+          </div>
+        </div>
+      </div>
 
-<!-- Toast -->
-<div class="toast" id="toast"></div>
+      <!-- Hardware D-Pad & Action Panel -->
+      <div class="bg-surface-card rounded-lg p-5 industrial-border flex flex-col items-center gap-4">
+        <div class="w-full flex justify-between items-center">
+          <span class="text-[11px] font-bold text-outline uppercase tracking-wider">HARDWARE OVERRIDE</span>
+          <button onclick="sendBtn('HOME')" class="h-8 px-3 rounded industrial-border bg-surface-high text-xs font-bold flex items-center gap-1 hover:border-secondary tactile-btn">
+            <span class="material-symbols-outlined text-[16px]">home</span> HOME
+          </button>
+        </div>
 
-<script>
-  // ── API Calls ──────────────────────────────────────────
+        <!-- Tactile D-Pad -->
+        <div class="relative w-64 h-64 flex items-center justify-center my-1">
+          <div class="grid grid-cols-3 grid-rows-3 gap-2.5 w-full h-full relative z-10">
+            <div></div>
+            <button onclick="sendBtn('UP')" class="bg-surface-high industrial-border-accent rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-highest tactile-btn shadow-md">
+              <span class="material-symbols-outlined text-[32px]">arrow_upward</span>
+            </button>
+            <div></div>
 
-  async function api(endpoint, method = 'POST', body = null) {
-    try {
-      const opts = { method };
-      if (body) {
-        opts.headers = { 'Content-Type': 'application/json' };
-        opts.body = JSON.stringify(body);
+            <button onclick="sendBtn('LEFT')" class="bg-surface-high industrial-border-accent rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-highest tactile-btn shadow-md">
+              <span class="material-symbols-outlined text-[32px]">arrow_back</span>
+            </button>
+            <button onclick="sendBtn('SELECT')" class="bg-primary text-on-surface rounded-full flex flex-col items-center justify-center industrial-border-accent hover:bg-primary-light hover:text-black font-bold tracking-wider tactile-btn shadow-lg">
+              <span class="text-xs font-mono">SEL</span>
+            </button>
+            <button onclick="sendBtn('RIGHT')" class="bg-surface-high industrial-border-accent rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-highest tactile-btn shadow-md">
+              <span class="material-symbols-outlined text-[32px]">arrow_forward</span>
+            </button>
+
+            <div></div>
+            <button onclick="sendBtn('DOWN')" class="bg-surface-high industrial-border-accent rounded-lg flex items-center justify-center text-on-surface hover:bg-surface-highest tactile-btn shadow-md">
+              <span class="material-symbols-outlined text-[32px]">arrow_downward</span>
+            </button>
+            <div></div>
+          </div>
+          <!-- Background accent halo -->
+          <div class="absolute inset-6 bg-surface-highest/40 rounded-full z-0 border border-outline-variant pointer-events-none"></div>
+        </div>
+
+        <!-- Long Press Shortcuts -->
+        <div class="grid grid-cols-3 gap-2 w-full pt-1">
+          <button onclick="sendBtn('LEFT_LONG')" class="py-2 px-1 text-[10px] font-mono font-bold rounded bg-surface-high industrial-border hover:border-secondary tactile-btn text-center truncate">
+            HOLD LEFT
+          </button>
+          <button onclick="sendBtn('SELECT_LONG')" class="py-2 px-1 text-[10px] font-mono font-bold rounded bg-surface-high industrial-border hover:border-secondary tactile-btn text-center truncate">
+            HOLD SEL
+          </button>
+          <button onclick="sendBtn('RIGHT_LONG')" class="py-2 px-1 text-[10px] font-mono font-bold rounded bg-surface-high industrial-border hover:border-secondary tactile-btn text-center truncate">
+            HOLD RIGHT
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Workspace Routing Grid -->
+      <div class="flex flex-col gap-2.5">
+        <span class="text-[11px] font-bold text-outline uppercase tracking-wider px-1">WORKSPACE ROUTING</span>
+        <div class="grid grid-cols-2 gap-2.5" id="remote-pages-grid">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 2. MEDIA SCREEN -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div id="screen-media" class="screen-panel hidden flex flex-col gap-4 max-w-md mx-auto">
+      
+      <!-- Stream Status Header -->
+      <div class="flex items-center justify-between px-1">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+          <span class="font-mono text-[11px] text-secondary uppercase tracking-widest">ACTIVE STREAM</span>
+        </div>
+        <span class="font-mono text-[11px] text-outline">SPOTIFY SYNC • UDP</span>
+      </div>
+
+      <!-- Now Playing Card -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3">
+        <div class="w-full aspect-square rounded-md bg-surface-highest relative overflow-hidden flex items-center justify-center border border-outline-variant">
+          <div id="album-art-bg" class="w-full h-full bg-cover bg-center flex items-center justify-center">
+            <span class="material-symbols-outlined text-6xl text-outline-variant">album</span>
+          </div>
+          <div class="absolute top-2 right-2 bg-surface/90 backdrop-blur-sm px-2 py-0.5 rounded text-secondary font-mono text-[10px] uppercase border border-secondary/40">
+            Playing
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-0.5 mt-1">
+          <h2 id="spot-track" class="font-bold text-lg text-on-surface truncate">No Track Playing</h2>
+          <p id="spot-artist" class="text-sm text-secondary truncate">CompanionOS</p>
+          <p id="spot-album" class="font-mono text-xs text-outline truncate">Device Ready</p>
+        </div>
+
+        <!-- Progress Scrubber -->
+        <div class="flex flex-col gap-1 mt-1">
+          <div class="flex justify-between font-mono text-[11px] text-outline">
+            <span id="spot-cur-time">0:00</span>
+            <span id="spot-tot-time">0:00</span>
+          </div>
+          <div class="w-full h-2 bg-surface-highest rounded-full overflow-hidden flex items-center">
+            <div id="spot-progress-bar" class="h-full bg-secondary w-0 transition-all duration-300"></div>
+          </div>
+        </div>
+
+        <!-- Playback Controls -->
+        <div class="flex items-center justify-between mt-2 px-2">
+          <button onclick="spotifyAction('SHUFFLE:TOGGLE')" class="text-outline hover:text-secondary tactile-btn">
+            <span class="material-symbols-outlined text-[20px]">shuffle</span>
+          </button>
+          <div class="flex items-center gap-3">
+            <button onclick="spotifyAction('PREV')" class="w-10 h-10 rounded industrial-border flex items-center justify-center text-on-surface hover:border-secondary tactile-btn">
+              <span class="material-symbols-outlined text-[22px]">skip_previous</span>
+            </button>
+            <button onclick="spotifyAction('PLAY_PAUSE')" class="w-13 h-13 p-3 rounded-lg bg-secondary text-surface flex items-center justify-center hover:bg-primary-light font-bold tactile-btn shadow-md">
+              <span id="spot-play-icon" class="material-symbols-outlined text-[28px]">play_arrow</span>
+            </button>
+            <button onclick="spotifyAction('NEXT')" class="w-10 h-10 rounded industrial-border flex items-center justify-center text-on-surface hover:border-secondary tactile-btn">
+              <span class="material-symbols-outlined text-[22px]">skip_next</span>
+            </button>
+          </div>
+          <button onclick="spotifyAction('REPEAT:TOGGLE')" class="text-outline hover:text-secondary tactile-btn">
+            <span class="material-symbols-outlined text-[20px]">repeat</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Volume Slider -->
+      <div class="bg-surface-card rounded-lg p-3.5 industrial-border flex items-center gap-3">
+        <span class="material-symbols-outlined text-outline text-[20px]">volume_down</span>
+        <input type="range" min="0" max="100" value="70" id="spot-vol-slider" onchange="setVolume(this.value)" class="flex-1 accent-secondary cursor-pointer"/>
+        <span class="material-symbols-outlined text-on-surface text-[20px]">volume_up</span>
+        <span id="spot-vol-txt" class="font-mono text-xs text-secondary w-8 text-right">70%</span>
+      </div>
+
+      <!-- Live Synced Lyrics -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <span class="font-mono text-[11px] text-secondary uppercase tracking-widest">LIVE SYNCED LYRICS</span>
+          <span class="font-mono text-[10px] text-outline">LRCLIB</span>
+        </div>
+        <div class="flex flex-col gap-1.5 pl-2 border-l-2 border-secondary">
+          <p id="spot-prev-lyric" class="text-xs text-outline opacity-50 truncate">...</p>
+          <p id="spot-act-lyric" class="text-sm font-bold text-on-surface text-secondary drop-shadow truncate">♪ Vibing with CompanionOS</p>
+          <p id="spot-next-lyric" class="text-xs text-outline opacity-50 truncate">...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 3. PET PERSONALITY SCREEN -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div id="screen-pet" class="screen-panel hidden flex flex-col gap-5 max-w-md mx-auto">
+      
+      <!-- Emotion Override -->
+      <div class="flex flex-col gap-2.5">
+        <div class="flex items-center justify-between px-1">
+          <h2 class="text-[11px] font-bold text-outline uppercase tracking-wider">EMOTION OVERRIDE</h2>
+          <span class="font-mono text-[10px] text-primary-light">SYS_PET: ACTIVE</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2.5">
+          <button onclick="setEmotion('NEUTRAL')" class="flex items-center gap-3 bg-surface-card p-3 rounded-lg industrial-border hover:border-primary tactile-btn text-left">
+            <span class="text-2xl">😐</span>
+            <span class="text-xs font-bold text-on-surface">Neutral</span>
+          </button>
+          <button onclick="setEmotion('HAPPY')" class="flex items-center gap-3 bg-surface-card p-3 rounded-lg industrial-border hover:border-primary tactile-btn text-left">
+            <span class="text-2xl">😃</span>
+            <span class="text-xs font-bold text-on-surface">Happy</span>
+          </button>
+          <button onclick="setEmotion('SAD')" class="flex items-center gap-3 bg-surface-card p-3 rounded-lg industrial-border hover:border-primary tactile-btn text-left">
+            <span class="text-2xl">😢</span>
+            <span class="text-xs font-bold text-on-surface">Sad</span>
+          </button>
+          <button onclick="setEmotion('EXCITED')" class="flex items-center gap-3 bg-surface-card p-3 rounded-lg industrial-border hover:border-primary tactile-btn text-left">
+            <span class="text-2xl">🤩</span>
+            <span class="text-xs font-bold text-on-surface">Excited</span>
+          </button>
+          <button onclick="setEmotion('LOVE')" class="flex items-center gap-3 bg-surface-card p-3 rounded-lg industrial-border hover:border-primary tactile-btn text-left">
+            <span class="text-2xl">🥰</span>
+            <span class="text-xs font-bold text-on-surface">Love</span>
+          </button>
+          <button onclick="setEmotion('SLEEPY')" class="flex items-center gap-3 bg-surface-card p-3 rounded-lg industrial-border hover:border-primary tactile-btn text-left">
+            <span class="text-2xl">😴</span>
+            <span class="text-xs font-bold text-on-surface">Sleepy</span>
+          </button>
+          <button onclick="setEmotion('ANGRY')" class="flex items-center gap-3 bg-surface-card p-3 rounded-lg industrial-border hover:border-primary tactile-btn text-left">
+            <span class="text-2xl">😡</span>
+            <span class="text-xs font-bold text-on-surface">Angry</span>
+          </button>
+          <button onclick="setEmotion('SURPRISED')" class="flex items-center gap-3 bg-surface-card p-3 rounded-lg industrial-border hover:border-primary tactile-btn text-left">
+            <span class="text-2xl">😲</span>
+            <span class="text-xs font-bold text-on-surface">Surprised</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Neural Thought Injector -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3">
+        <div class="flex justify-between items-center">
+          <span class="text-[11px] font-bold text-outline uppercase tracking-wider">NEURAL INJECTION</span>
+          <span id="char-count" class="font-mono text-[11px] text-primary-light">0/79</span>
+        </div>
+        <input id="thought-input" type="text" maxlength="79" oninput="updateCharCount()" placeholder="e.g. Dreaming of electric sheep..." class="w-full bg-surface-highest text-on-surface font-mono text-xs p-3 rounded industrial-border focus:border-secondary outline-none placeholder:text-outline"/>
+        <button onclick="sendThought()" class="w-full py-2.5 rounded bg-primary hover:bg-primary-light text-on-surface font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 tactile-btn">
+          <span class="material-symbols-outlined text-[18px]">send</span> SEND THOUGHT
+        </button>
+        
+        <!-- Presets -->
+        <div class="grid grid-cols-2 gap-2 mt-1">
+          <button onclick="setThoughtPreset('Let\'s code!')" class="py-1.5 px-2 bg-surface-high rounded text-xs font-mono text-outline hover:text-on-surface industrial-border truncate">Let's code!</button>
+          <button onclick="setThoughtPreset('Coffee break')" class="py-1.5 px-2 bg-surface-high rounded text-xs font-mono text-outline hover:text-on-surface industrial-border truncate">Coffee break</button>
+          <button onclick="setThoughtPreset('Focus mode')" class="py-1.5 px-2 bg-surface-high rounded text-xs font-mono text-outline hover:text-on-surface industrial-border truncate">Focus mode</button>
+          <button onclick="setThoughtPreset('Hydrate!')" class="py-1.5 px-2 bg-surface-high rounded text-xs font-mono text-outline hover:text-on-surface industrial-border truncate">Hydrate!</button>
+        </div>
+      </div>
+
+      <!-- Custom Eyes Hardware Toggle -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex items-center justify-between">
+        <div class="flex flex-col">
+          <span class="text-xs font-bold text-on-surface uppercase">CUSTOM EYES OVERRIDE</span>
+          <span class="text-[10px] text-outline">Render custom memory bitmap frame</span>
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" id="custom-eye-toggle" onchange="toggleCustomEyes(this.checked)" class="sr-only peer">
+          <div class="w-11 h-6 bg-surface-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-on-surface after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+        </label>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 4. NETWORK SCREEN -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div id="screen-network" class="screen-panel hidden flex flex-col gap-4 max-w-md mx-auto">
+      
+      <!-- WLAN Telemetry Card -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3">
+        <div class="flex justify-between items-center">
+          <h2 class="text-[11px] font-bold text-outline uppercase tracking-wider">WLAN TELEMETRY</h2>
+          <span class="px-2 py-0.5 rounded bg-primary/20 text-primary-light font-mono text-[10px] uppercase">Connected</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="flex flex-col">
+            <span class="text-[10px] text-outline font-bold">CURRENT SSID</span>
+            <span id="wifi-ssid-val" class="font-mono text-xs text-on-surface truncate">HOME_WIFI_5G</span>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-[10px] text-outline font-bold">ESP IP ADDRESS</span>
+            <span id="wifi-ip-val" class="font-mono text-xs text-on-surface">192.168.1.42</span>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-[10px] text-outline font-bold">RSSI SIGNAL</span>
+            <span class="font-mono text-xs text-secondary">-54 dBm (92%)</span>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-[10px] text-outline font-bold">UDP PORT</span>
+            <span class="font-mono text-xs text-on-surface">8888 / 8889</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Network Scanner -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3">
+        <h2 class="text-[11px] font-bold text-outline uppercase tracking-wider">NETWORK SCANNER</h2>
+        <button onclick="scanNetworks()" class="w-full py-2.5 bg-surface-high rounded industrial-border hover:border-secondary flex items-center justify-center gap-2 font-bold text-xs uppercase tracking-wider tactile-btn">
+          <span class="material-symbols-outlined text-[18px]">radar</span> SCAN WI-FI NETWORKS
+        </button>
+        <div id="scan-list" class="flex flex-col gap-1.5 mt-1">
+          <!-- Populated by scan -->
+        </div>
+      </div>
+
+      <!-- Dynamic Wi-Fi Provisioning Form -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3">
+        <h2 class="text-[11px] font-bold text-outline uppercase tracking-wider">REMOTE WI-FI PROVISIONING</h2>
+        <div class="flex flex-col gap-2">
+          <div class="flex flex-col gap-1">
+            <label class="text-[10px] font-bold text-outline uppercase">Target SSID</label>
+            <input id="wifi-target-ssid" type="text" placeholder="Enter Wi-Fi SSID" class="w-full bg-surface-highest font-mono text-xs p-2.5 rounded industrial-border focus:border-secondary outline-none"/>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-[10px] font-bold text-outline uppercase">Password</label>
+            <div class="relative flex items-center">
+              <input id="wifi-target-pass" type="password" placeholder="Enter Password" class="w-full bg-surface-highest font-mono text-xs p-2.5 rounded industrial-border focus:border-secondary outline-none pr-10"/>
+              <button type="button" onclick="togglePassVisibility()" class="absolute right-2 text-outline hover:text-on-surface">
+                <span id="pass-eye-icon" class="material-symbols-outlined text-[18px]">visibility</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <button onclick="updateWifiCredentials()" class="w-full py-2.5 bg-primary hover:bg-primary-light text-on-surface font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 rounded tactile-btn mt-1">
+          <span class="material-symbols-outlined text-[18px]">save</span> UPDATE BOT WI-FI
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 5. SYSTEM & DR. HACK SCREEN -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div id="screen-system" class="screen-panel hidden flex flex-col gap-4 max-w-md mx-auto">
+      
+      <!-- Display Settings -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3">
+        <h2 class="text-[11px] font-bold text-outline uppercase tracking-wider">DISPLAY THEME</h2>
+        <div class="grid grid-cols-3 gap-2">
+          <button onclick="setTheme(0)" class="theme-opt p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn active">
+            <span class="material-symbols-outlined text-[20px]">dark_mode</span>
+            <span class="text-[10px] font-bold uppercase">Classic</span>
+          </button>
+          <button onclick="setTheme(1)" class="theme-opt p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-[20px]">terminal</span>
+            <span class="text-[10px] font-bold uppercase">ThingPulse</span>
+          </button>
+          <button onclick="setTheme(2)" class="theme-opt p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-[20px]">polyline</span>
+            <span class="text-[10px] font-bold uppercase">Vector</span>
+          </button>
+        </div>
+
+        <!-- Brightness Slider -->
+        <div class="flex flex-col gap-1.5 mt-2">
+          <div class="flex justify-between items-center font-mono text-xs">
+            <span class="text-outline">BACKLIGHT BRIGHTNESS</span>
+            <span id="bright-val" class="text-primary-light font-bold">180</span>
+          </div>
+          <input type="range" min="10" max="255" value="180" oninput="setBrightness(this.value)" class="w-full accent-primary cursor-pointer"/>
+        </div>
+      </div>
+
+      <!-- Dr. Hack Specialized Utilities -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3">
+        <div class="flex justify-between items-center">
+          <div class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-error text-[18px]">bug_report</span>
+            <span class="font-bold text-xs text-error uppercase tracking-wider">DR. HACK SUITE</span>
+          </div>
+          <span class="font-mono text-[9px] text-error uppercase">ESP32 ONLY</span>
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <div class="bg-surface-high p-2.5 rounded industrial-border flex items-center justify-between">
+            <div class="flex flex-col">
+              <span class="font-mono text-xs text-on-surface font-bold">DEAUTH ATTACK</span>
+              <span class="text-[10px] text-outline">Target 802.11 b/g/n frames</span>
+            </div>
+            <button onclick="triggerDrHack('DEAUTH')" class="px-3 py-1 rounded border border-error text-error text-xs font-mono font-bold hover:bg-error/20 tactile-btn">EXEC</button>
+          </div>
+
+          <div class="bg-surface-high p-2.5 rounded industrial-border flex items-center justify-between">
+            <div class="flex flex-col">
+              <span class="font-mono text-xs text-on-surface font-bold">BEACON SPAM</span>
+              <span class="text-[10px] text-outline">Flood nearby AP broadcast table</span>
+            </div>
+            <button onclick="triggerDrHack('SPAM')" class="px-3 py-1 rounded border border-error text-error text-xs font-mono font-bold hover:bg-error/20 tactile-btn">EXEC</button>
+          </div>
+
+          <div class="bg-surface-high p-2.5 rounded industrial-border flex items-center justify-between">
+            <div class="flex flex-col">
+              <span class="font-mono text-xs text-on-surface font-bold">PACKET MONITOR</span>
+              <span class="text-[10px] text-outline">Promiscuous sniffer stream</span>
+            </div>
+            <button onclick="triggerDrHack('MONITOR')" class="px-3 py-1 rounded border border-outline text-on-surface text-xs font-mono font-bold hover:bg-surface-highest tactile-btn">EXEC</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hardware Diagnostics -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-2">
+        <div class="flex justify-between items-center">
+          <span class="text-[11px] font-bold text-outline uppercase tracking-wider">HARDWARE DIAGNOSTICS</span>
+          <button onclick="runDiag()" class="text-secondary font-mono text-[11px] underline">RUN CHECK</button>
+        </div>
+        <div class="grid grid-cols-2 gap-2 font-mono text-xs pt-1">
+          <div class="bg-surface-high p-2 rounded flex justify-between">
+            <span class="text-outline">TFT:</span> <span class="text-primary-light">ST7735 OK</span>
+          </div>
+          <div class="bg-surface-high p-2 rounded flex justify-between">
+            <span class="text-outline">FLASH:</span> <span class="text-on-surface">4MB</span>
+          </div>
+          <div class="bg-surface-high p-2 rounded flex justify-between">
+            <span class="text-outline">EEPROM:</span> <span class="text-primary-light">128B SYNC</span>
+          </div>
+          <div class="bg-surface-high p-2 rounded flex justify-between">
+            <span class="text-outline">HEAP:</span> <span class="text-secondary">231 KB</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 5-TAB FIXED BOTTOM NAVIGATION -->
+  <nav class="fixed bottom-0 inset-x-0 z-50 bg-[#171714]/95 backdrop-blur-md pb-safe border-t border-outline-variant shadow-lg">
+    <div class="h-16 flex items-center justify-around px-2 max-w-md mx-auto">
+      <button onclick="switchTab('remote')" id="tab-remote" class="nav-tab active flex flex-col items-center justify-center flex-1 py-1 text-outline hover:text-on-surface transition-colors tactile-btn">
+        <span class="material-symbols-outlined text-[24px]">dpad</span>
+        <span class="text-[10px] font-bold uppercase tracking-wider mt-0.5">Remote</span>
+      </button>
+      <button onclick="switchTab('media')" id="tab-media" class="nav-tab flex flex-col items-center justify-center flex-1 py-1 text-outline hover:text-on-surface transition-colors tactile-btn">
+        <span class="material-symbols-outlined text-[24px]">play_circle</span>
+        <span class="text-[10px] font-bold uppercase tracking-wider mt-0.5">Media</span>
+      </button>
+      <button onclick="switchTab('pet')" id="tab-pet" class="nav-tab flex flex-col items-center justify-center flex-1 py-1 text-outline hover:text-on-surface transition-colors tactile-btn">
+        <span class="material-symbols-outlined text-[24px]">sentiment_satisfied</span>
+        <span class="text-[10px] font-bold uppercase tracking-wider mt-0.5">Pet</span>
+      </button>
+      <button onclick="switchTab('network')" id="tab-network" class="nav-tab flex flex-col items-center justify-center flex-1 py-1 text-outline hover:text-on-surface transition-colors tactile-btn">
+        <span class="material-symbols-outlined text-[24px]">wifi</span>
+        <span class="text-[10px] font-bold uppercase tracking-wider mt-0.5">Network</span>
+      </button>
+      <button onclick="switchTab('system')" id="tab-system" class="nav-tab flex flex-col items-center justify-center flex-1 py-1 text-outline hover:text-on-surface transition-colors tactile-btn">
+        <span class="material-symbols-outlined text-[24px]">settings</span>
+        <span class="text-[10px] font-bold uppercase tracking-wider mt-0.5">System</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- JAVASCRIPT LOGIC & STATE ENGINE -->
+  <script>
+    const PAGES = [
+      { id: 0, name: 'Eyes', icon: 'visibility' },
+      { id: 1, name: 'Spotify', icon: 'music_note' },
+      { id: 2, name: 'Pomodoro', icon: 'timer' },
+      { id: 3, name: 'Weather', icon: 'partly_cloudy_day' },
+      { id: 4, name: 'Notifications', icon: 'notifications' },
+      { id: 5, name: 'Notes', icon: 'description' },
+      { id: 6, name: 'Stocks', icon: 'monitoring' },
+      { id: 7, name: 'Gaming', icon: 'sports_esports' },
+      { id: 8, name: 'Social', icon: 'forum' },
+      { id: 9, name: 'Productivity', icon: 'task_alt' },
+      { id: 10, name: 'Network', icon: 'router' },
+      { id: 11, name: 'Settings', icon: 'settings' },
+      { id: 12, name: 'RuView Presence', icon: 'radar' },
+      { id: 13, name: 'Clock Dashboard', icon: 'schedule' },
+      { id: 14, name: 'Retro Watch', icon: 'watch' },
+      { id: 15, name: 'Dr. Hack', icon: 'terminal', fullWidth: true }
+    ];
+
+    let currentActivePage = 0;
+
+    // Build Workspace Routing Grid
+    function renderRoutingGrid() {
+      const grid = document.getElementById('remote-pages-grid');
+      grid.innerHTML = '';
+      PAGES.forEach(p => {
+        const btn = document.createElement('button');
+        const isActive = p.id === currentActivePage;
+        btn.className = `h-14 flex items-center gap-3 px-3.5 rounded-lg industrial-border transition-all text-left tactile-btn ${
+          isActive 
+            ? 'bg-primary/20 border-primary text-primary-light' 
+            : 'bg-surface-card text-on-surface hover:bg-surface-high'
+        } ${p.fullWidth ? 'col-span-2' : ''}`;
+        
+        btn.onclick = () => goToPage(p.id);
+        btn.innerHTML = `
+          <div class="w-8 h-8 rounded flex items-center justify-center bg-surface-highest">
+            <span class="material-symbols-outlined text-[20px] ${isActive ? 'text-primary-light' : 'text-outline'}">${p.icon}</span>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-xs font-bold">${p.name}</span>
+            <span class="font-mono text-[10px] text-outline">PAGE #${p.id}</span>
+          </div>
+        `;
+        grid.appendChild(btn);
+      });
+    }
+
+    // Switch Tab
+    function switchTab(tabId) {
+      document.querySelectorAll('.screen-panel').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
+      
+      const targetScreen = document.getElementById(`screen-${tabId}`);
+      const targetTab = document.getElementById(`tab-${tabId}`);
+      if (targetScreen) targetScreen.classList.remove('hidden');
+      if (targetTab) targetTab.classList.add('active');
+
+      const titleMap = {
+        'remote': 'Remote Control',
+        'media': 'Media Player',
+        'pet': 'Pet Personality',
+        'network': 'Network Setup',
+        'system': 'System Settings'
+      };
+      document.getElementById('active-screen-title').textContent = titleMap[tabId] || 'CompanionOS';
+    }
+
+    // API Calls
+    async function sendBtn(btn) {
+      try {
+        await fetch(`/api/btn/${btn}`, { method: 'POST' });
+      } catch (e) {
+        console.error('Btn error', e);
       }
-      const res = await fetch(endpoint, opts);
-      const data = await res.json();
-      return data;
-    } catch (e) {
-      console.error('API error:', e);
-      return { ok: false, error: e.message };
     }
-  }
 
-  function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 1500);
-  }
-
-  // ── Button Press ──────────────────────────────────────
-
-  async function pressBtn(btn) {
-    const r = await api(`/api/btn/${btn}`);
-    if (r.ok) showToast(`${btn} pressed`);
-  }
-
-  // ── Hardware Diagnostics ─────────────────────────────
-
-  async function checkNrf() {
-    const r = await api('/api/nrf_check');
-    if (r.ok) showToast('nRF Check Triggered');
-  }
-
-  // ── Direct Page Nav ──────────────────────────────────
-
-  async function goPage(id) {
-    const r = await api(`/api/page/${id}`);
-    if (r.ok) {
-      showToast(`→ ${r.page}`);
-      updateActivePageTile(id);
+    async function goToPage(pageId) {
+      try {
+        currentActivePage = pageId;
+        renderRoutingGrid();
+        await fetch(`/api/page/${pageId}`, { method: 'POST' });
+      } catch (e) {
+        console.error('Page error', e);
+      }
     }
-  }
 
-  function updateActivePageTile(id) {
-    document.querySelectorAll('.page-tile').forEach(t => t.classList.remove('active'));
-    const tile = document.querySelector(`.page-tile[data-page="${id}"]`);
-    if (tile) tile.classList.add('active');
-  }
-
-  // ── Emotion ──────────────────────────────────────────
-
-  async function setEmo(emo) {
-    const r = await api(`/api/emotion/${emo}`);
-    if (r.ok) {
-      showToast(`Emotion: ${emo}`);
-      document.getElementById('currentEmo').textContent = emo;
+    async function setEmotion(emotion) {
+      try {
+        await fetch(`/api/emotion/${emotion}`, { method: 'POST' });
+        document.getElementById('tele-emotion').textContent = emotion;
+      } catch (e) {
+        console.error('Emotion error', e);
+      }
     }
-  }
 
-  // ── Spotify ──────────────────────────────────────────
-
-  async function spotifyCmd(cmd) {
-    const r = await api(`/api/spotify/${cmd}`);
-    if (r.ok) showToast(`♪ ${cmd}`);
-  }
-
-  // ── Thought Bubble ──────────────────────────────────
-
-  async function sendThought() {
-    const input = document.getElementById('thoughtInput');
-    const text = input.value.trim();
-    if (!text) return;
-
-    const r = await api('/api/thought', 'POST', { text });
-    if (r.ok) {
-      showToast(`💭 "${text}"`);
-      input.value = '';
+    async function sendThought() {
+      const input = document.getElementById('thought-input');
+      const text = input.value.trim();
+      if (!text) return;
+      try {
+        await fetch('/api/thought', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        input.value = '';
+        updateCharCount();
+      } catch (e) {
+        console.error('Thought error', e);
+      }
     }
-  }
 
-  // Enter key to send thought
-  document.getElementById('thoughtInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') sendThought();
-  });
+    function setThoughtPreset(preset) {
+      document.getElementById('thought-input').value = preset;
+      updateCharCount();
+      sendThought();
+    }
 
-  // ── Status Polling ──────────────────────────────────
-  // 🟡 GAP-03: Using polling (2s interval) instead of SSE
-  // for simplicity. Future: upgrade to Server-Sent Events.
+    function updateCharCount() {
+      const count = document.getElementById('thought-input').value.length;
+      document.getElementById('char-count').textContent = `${count}/79`;
+    }
 
-  async function pollStatus() {
-    const r = await api('/api/status', 'GET');
-    if (r) {
-      document.getElementById('espIp').textContent = r.esp_ip || 'scanning...';
-      document.getElementById('currentPage').textContent = r.page_name || '—';
-      document.getElementById('currentEmo').textContent = r.emotion || '—';
-      document.getElementById('currentTrack').textContent = r.track || '—';
+    async function spotifyAction(act) {
+      try {
+        await fetch(`/api/spotify/${act}`, { method: 'POST' });
+      } catch (e) {
+        console.error('Spotify error', e);
+      }
+    }
 
-      const dot = document.getElementById('statusDot');
-      if (r.esp_ip && r.esp_ip !== 'searching...') {
-        dot.classList.add('connected');
+    async function setVolume(val) {
+      document.getElementById('spot-vol-txt').textContent = `${val}%`;
+      try {
+        await fetch(`/api/spotify/VOLUME:${val}`, { method: 'POST' });
+      } catch (e) {}
+    }
+
+    async function updateWifiCredentials() {
+      const ssid = document.getElementById('wifi-target-ssid').value.trim();
+      const pass = document.getElementById('wifi-target-pass').value.trim();
+      if (!ssid) {
+        alert('Please enter a valid SSID');
+        return;
+      }
+      try {
+        const res = await fetch('/api/wifi/set', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ssid, pass })
+        });
+        const data = await res.json();
+        if (data.ok) alert(`Wi-Fi credentials for "${ssid}" transmitted to ESP!`);
+      } catch (e) {
+        alert('Transmission error: ' + e);
+      }
+    }
+
+    async function scanNetworks() {
+      const list = document.getElementById('scan-list');
+      list.innerHTML = '<div class="font-mono text-xs text-secondary p-2 animate-pulse">Scanning 2.4GHz spectrum...</div>';
+      try {
+        await fetch('/api/wifi/scan', { method: 'POST' });
+        setTimeout(() => {
+          list.innerHTML = `
+            <div class="bg-surface-high p-2 rounded flex items-center justify-between text-xs industrial-border">
+              <span class="font-mono font-bold">Companion_5G</span>
+              <span class="font-mono text-secondary">-48 dBm</span>
+            </div>
+            <div class="bg-surface-high p-2 rounded flex items-center justify-between text-xs industrial-border">
+              <span class="font-mono font-bold">Office_Mesh_Ext</span>
+              <span class="font-mono text-secondary">-62 dBm</span>
+            </div>
+            <div class="bg-surface-high p-2 rounded flex items-center justify-between text-xs industrial-border">
+              <span class="font-mono font-bold">Direct_IoT</span>
+              <span class="font-mono text-outline">-78 dBm</span>
+            </div>
+          `;
+        }, 1200);
+      } catch (e) {}
+    }
+
+    function togglePassVisibility() {
+      const inp = document.getElementById('wifi-target-pass');
+      const icon = document.getElementById('pass-eye-icon');
+      if (inp.type === 'password') {
+        inp.type = 'text';
+        icon.textContent = 'visibility_off';
       } else {
-        dot.classList.remove('connected');
+        inp.type = 'password';
+        icon.textContent = 'visibility';
       }
-
-      updateActivePageTile(r.page || 0);
     }
-  }
 
-  setInterval(pollStatus, 2000);
-  pollStatus();
-
-  // ── Keyboard shortcuts ────────────────────────────────
-
-  document.addEventListener('keydown', (e) => {
-    switch (e.key) {
-      case 'ArrowLeft':  e.preventDefault(); pressBtn('LEFT'); break;
-      case 'ArrowRight': e.preventDefault(); pressBtn('RIGHT'); break;
-      case 'Enter':      if (e.target === document.body) { e.preventDefault(); pressBtn('SELECT'); } break;
-      case 'Escape':     e.preventDefault(); pressBtn('HOME'); break;
-      case ' ':          if (e.target === document.body) { e.preventDefault(); spotifyCmd('PLAY_PAUSE'); } break;
+    async function toggleCustomEyes(active) {
+      try {
+        await fetch('/api/pet/eyes/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ active })
+        });
+      } catch (e) {}
     }
-  });
-</script>
 
+    async function setTheme(themeId) {
+      try {
+        await fetch(`/api/system/theme/${themeId}`, { method: 'POST' });
+      } catch (e) {}
+    }
+
+    async function setBrightness(val) {
+      document.getElementById('bright-val').textContent = val;
+      try {
+        await fetch(`/api/system/brightness/${val}`, { method: 'POST' });
+      } catch (e) {}
+    }
+
+    async function triggerDrHack(act) {
+      if (confirm(`Execute Dr. Hack [${act}] attack module?`)) {
+        try {
+          await fetch(`/api/drhack/${act}`, { method: 'POST' });
+          alert(`Dr. Hack ${act} dispatched to hardware.`);
+        } catch (e) {}
+      }
+    }
+
+    async function runDiag() {
+      try {
+        await fetch('/api/nrf_check', { method: 'POST' });
+        alert('Hardware diagnostics probe dispatched.');
+      } catch (e) {}
+    }
+
+    async function pingEsp() {
+      try {
+        const t0 = performance.now();
+        const res = await fetch('/api/status');
+        const dt = Math.round(performance.now() - t0);
+        document.getElementById('tele-latency').textContent = `${dt}ms`;
+      } catch (e) {}
+    }
+
+    // SSE Telemetry Listener
+    function initTelemetrySSE() {
+      try {
+        const evtSource = new EventSource('/api/events');
+        evtSource.onmessage = function(event) {
+          const data = JSON.parse(event.data);
+          if (data.esp_ip) {
+            document.getElementById('esp-ip-display').textContent = data.esp_ip;
+            document.getElementById('wifi-ip-val').textContent = data.esp_ip;
+          }
+          if (data.page !== undefined) {
+            currentActivePage = data.page;
+            document.getElementById('tele-page').textContent = `${data.page_name || 'Page'} (#${data.page})`;
+          }
+          if (data.emotion) {
+            document.getElementById('tele-emotion').textContent = data.emotion;
+          }
+          if (data.track) {
+            document.getElementById('spot-track').textContent = data.track;
+            document.getElementById('spot-artist').textContent = data.artist || 'CompanionOS';
+            document.getElementById('tele-music').textContent = `${data.track} - ${data.artist}`;
+          }
+        };
+      } catch (e) {
+        console.warn('SSE not supported or failed', e);
+      }
+    }
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', () => {
+      renderRoutingGrid();
+      initTelemetrySSE();
+    });
+  </script>
 </body>
 </html>

@@ -1,0 +1,50 @@
+[
+    {
+        "merged": "com.companionos.app-merged_res-31:/mipmap-hdpi_ic_launcher_round.png.flat",
+        "source": "com.companionos.app-main-32:/mipmap-hdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.companionos.app-merged_res-31:/mipmap-xhdpi_ic_launcher_round.png.flat",
+        "source": "com.companionos.app-main-32:/mipmap-xhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.companionos.app-merged_res-31:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "com.companionos.app-main-32:/mipmap-xxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "C:\\Users\\shaan\\.gradle\\daemon\\8.9\\com.companionos.app-merged_res-31:\\layout_activity_main.xml.flat",
+        "source": "C:\\Users\\shaan\\.gradle\\daemon\\8.9\\com.companionos.app-main-32:\\layout\\activity_main.xml"
+    },
+    {
+        "merged": "com.companionos.app-merged_res-31:/mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "com.companionos.app-main-32:/mipmap-xxxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.companionos.app-merged_res-31:/mipmap-xxxhdpi_ic_launcher_round.png.flat",
+        "source": "com.companionos.app-main-32:/mipmap-xxxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.companionos.app-merged_res-31:/drawable_app_cover.png.flat",
+        "source": "com.companionos.app-main-32:/drawable/app_cover.png"
+    },
+    {
+        "merged": "com.companionos.app-merged_res-31:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "com.companionos.app-main-32:/mipmap-hdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.companionos.app-merged_res-31:/mipmap-xxhdpi_ic_launcher_round.png.flat",
+        "source": "com.companionos.app-main-32:/mipmap-xxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.companionos.app-merged_res-31:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "com.companionos.app-main-32:/mipmap-xhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.companionos.app-merged_res-31:/mipmap-mdpi_ic_launcher_round.png.flat",
+        "source": "com.companionos.app-main-32:/mipmap-mdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.companionos.app-merged_res-31:/mipmap-mdpi_ic_launcher.png.flat",
+        "source": "com.companionos.app-main-32:/mipmap-mdpi/ic_launcher.png"
+    }
+]

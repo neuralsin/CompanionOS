@@ -14,11 +14,19 @@
 #define DH_BTN_TIMEOUT_MS 30000
 static inline void dhWaitSelectPress() {
   unsigned long _t = millis();
+  #ifdef ESP32
   while (digitalRead(BTN_SELECT) == BTN_UNPRESSED_LEVEL && !virtualSelectPressed && (millis() - _t < DH_BTN_TIMEOUT_MS)) {
     extern void handleNetwork(); handleNetwork();
     delay(20);
     yield();
   }
+  #else
+  while (!virtualSelectPressed && (millis() - _t < DH_BTN_TIMEOUT_MS)) {
+    extern void handleNetwork(); handleNetwork();
+    delay(20);
+    yield();
+  }
+  #endif
   if (virtualSelectPressed) virtualSelectPressed = false;
   delay(200); // debounce after press/timeout
 }

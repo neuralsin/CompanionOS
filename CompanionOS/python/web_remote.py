@@ -47,7 +47,7 @@ PAGE_NAMES = [
     "Eyes", "Spotify", "Pomodoro", "Weather",
     "Notifications", "Notes", "Stocks", "Gaming",
     "Social", "Productivity", "Network", "Settings",
-    "Dr.Hack"
+    "RuView", "Clock Dashboard", "Retro Watch", "Dr.Hack"
 ]
 
 # ═══════════════════════════════════════════════════════════
@@ -98,6 +98,26 @@ def discover_esp():
             time.sleep(1)
 
 
+# Spotify integration helper for direct playback controls
+import os
+spotify_service = None
+try:
+    CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, 'r') as f:
+            cfg = json.load(f)
+        from spotify_integration import SpotifyIntegration
+        spotify_service = SpotifyIntegration(
+            client_id=cfg['spotify']['client_id'],
+            client_secret=cfg['spotify']['client_secret'],
+            redirect_uri=cfg['spotify']['redirect_uri'],
+            scope=cfg['spotify']['scope'],
+            lyrics_enabled=False
+        )
+except Exception as e:
+    print(f"[Spotify] Remote helper setup note: {e}")
+
+
 # ═══════════════════════════════════════════════════════════
 # FLASK ROUTES
 # ═══════════════════════════════════════════════════════════
@@ -110,11 +130,12 @@ def index():
 @app.route("/api/btn/<button>", methods=["POST"])
 def press_button(button):
     """Simulate a physical button press."""
-    valid = ["LEFT", "RIGHT", "SELECT", "HOME"]
-    if button.upper() in valid:
-        send_to_esp(f"BTN:{button.upper()}")
-        return jsonify({"ok": True, "action": button.upper()})
-    return jsonify({"ok": False, "error": "invalid button"}), 400
+    valid = ["LEFT", "RIGHT", "SELECT", "HOME", "LEFT_LONG", "RIGHT_LONG", "SELECT_LONG", "UP", "DOWN"]
+    button_clean = button.strip().upper()
+    if button_clean in valid:
+        send_to_esp(f"BTN:{button_clean}")
+        return jsonify({"ok": True, "action": button_clean})
+    return jsonify({"ok": False, "error": f"invalid button: {button}"}), 400
 
 
 @app.route("/api/page/<int:page_id>", methods=["POST"])
@@ -178,10 +199,69 @@ def get_status():
 @app.route("/api/spotify/<action>", methods=["POST"])
 def spotify_control(action):
     """Spotify media controls."""
-    valid = ["PLAY_PAUSE", "NEXT", "PREV", "SHUFFLE:TOGGLE", "REPEAT:TOGGLE"]
-    if action.upper() in valid:
-        send_to_esp(action.upper())
-        return jsonify({"ok": True, "action": action.upper()})
+    valid = ["PLAY_PAUSE", "PLAY", "PAUSE", "NEXT", "PREV", "SHUFFLE:TOGGLE", "REPEAT:TOGGLE"]
+    action_up = action.strip().upper()
+    if action_up in valid or action_up.startswith("VOLUME:") or action_up.startswith("SEEK:"):
+        handled = False
+        if spotify_service and spotify_service.enabled:
+            handled = spotify_service.control_playback(action_up)
+        send_to_esp(f"SPOTIFY:{action_up}")
+        return jsonify({"ok": True, "action": action_up, "spotify_direct": handled})
+    return jsonify({"ok": False, "error": "invalid action"}), 400
+
+
+@app.route("/api/wifi/set", methods=["POST"])
+def set_wifi_credentials():
+    """Set dynamic Wi-Fi credentials on ESP."""
+    data = request.get_json(silent=True) or {}
+    ssid = data.get("ssid", "").strip()
+    password = data.get("pass", "").strip()
+    if ssid:
+        payload = json.dumps({"ssid": ssid, "pass": password})
+        send_to_esp(f"WIFI:SET:{payload}")
+        return jsonify({"ok": True, "ssid": ssid})
+    return jsonify({"ok": False, "error": "ssid required"}), 400
+
+
+@app.route("/api/wifi/scan", methods=["POST", "GET"])
+def scan_wifi():
+    """Trigger Wi-Fi scan on ESP."""
+    send_to_esp("WIFI:SCAN")
+    return jsonify({"ok": True, "action": "WIFI:SCAN"})
+
+
+@app.route("/api/pet/eyes/toggle", methods=["POST"])
+def toggle_custom_eyes():
+    """Toggle custom eyes on/off."""
+    data = request.get_json(silent=True) or {}
+    active = 1 if data.get("active", True) else 0
+    send_to_esp(f"CUSTEYE:TOGGLE:{active}")
+    return jsonify({"ok": True, "active": bool(active)})
+
+
+@app.route("/api/system/theme/<int:theme_id>", methods=["POST"])
+def set_system_theme(theme_id):
+    """Change CompanionOS visual theme (0=Classic, 1=ThingPulse, 2=Vector)."""
+    send_to_esp(f"THEME:{theme_id}")
+    return jsonify({"ok": True, "theme": theme_id})
+
+
+@app.route("/api/system/brightness/<int:val>", methods=["POST"])
+def set_brightness(val):
+    """Set backlight brightness (0-255)."""
+    val = max(0, min(255, val))
+    send_to_esp(f"BRIGHTNESS:{val}")
+    return jsonify({"ok": True, "brightness": val})
+
+
+@app.route("/api/drhack/<action>", methods=["POST"])
+def trigger_drhack(action):
+    """Trigger Dr. Hack penetration testing action."""
+    valid = ["DEAUTH", "SPAM", "MONITOR", "BLE_SPAM"]
+    act_up = action.strip().upper()
+    if act_up in valid:
+        send_to_esp(f"DRHACK:{act_up}")
+        return jsonify({"ok": True, "action": act_up})
     return jsonify({"ok": False, "error": "invalid action"}), 400
 
 

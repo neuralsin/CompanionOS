@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+  <title>CompanionOS Master Control</title>
+  <meta name="description" content="CompanionOS v7.0 Full Control Center — Remote, Media, Multi-WiFi, Cloud APIs & System Management"/>
+  <meta name="theme-color" content="#171714"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "background": "#131411",
+            "surface": "#171714",
+            "surface-card": "#1f201d",
+            "surface-high": "#292a27",
+            "surface-highest": "#343531",
+            "primary": "#657B52",
+            "primary-light": "#b6ce9f",
+            "secondary": "#76AAA5",
+            "secondary-dark": "#174f4b",
+            "tertiary": "#ecb8d5",
+            "outline": "#8e9287",
+            "outline-variant": "#44483f",
+            "on-surface": "#e4e3dd",
+            "on-surface-variant": "#c4c8bc",
+            "error": "#ffb4ab",
+            "error-container": "#93000a"
+          },
+          fontFamily: {
+            "roboto": ["Roboto", "sans-serif"],
+            "mono": ["JetBrains Mono", "monospace"]
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      overscroll-behavior-y: none;
+      background-color: #171714;
+      color: #e4e3dd;
+      font-family: 'Roboto', sans-serif;
+    }
+    .industrial-border { border: 1px solid #44483f; }
+    .industrial-border-accent { border: 1px solid #715A43; }
+    .tactile-btn:active { transform: scale(0.96); filter: brightness(1.15); }
+    .nav-tab.active { color: #76AAA5; }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #44483f; border-radius: 4px; }
+    .pt-safe { padding-top: max(env(safe-area-inset-top, 0px), 12px); }
+    .pb-safe { padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px); }
+  </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+  <!-- TOP APP BAR -->
+  <header class="fixed top-0 inset-x-0 z-50 bg-[#171714]/95 backdrop-blur-md pt-safe border-b border-outline-variant shadow-md">
+    <div class="h-14 flex items-center justify-between px-4">
+      <div class="flex flex-col">
+        <div class="flex items-center gap-2">
+          <div id="conn-dot" class="w-2.5 h-2.5 rounded-full bg-primary animate-pulse"></div>
+          <span id="conn-status" class="font-bold text-[11px] uppercase tracking-widest text-on-surface">COMPANION OS v7.0</span>
+        </div>
+        <div class="flex items-center gap-1.5 font-mono text-[11px] text-on-surface-variant">
+          <span id="esp-ip-display">Searching Bot...</span>
+          <button onclick="promptManualIp()" class="text-secondary underline text-[10px]">EDIT IP</button>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="active-screen-title" class="font-bold text-base text-[#E5DDC8] tracking-wide">Remote</span>
+        <button onclick="confirmExitApp()" title="Exit / Kill App" class="w-9 h-9 rounded border border-error/40 flex items-center justify-center bg-error/10 hover:bg-error/30 text-error transition-colors tactile-btn">
+          <span class="material-symbols-outlined text-[20px]">power_settings_new</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN VIEWPORT CONTAINER (5 SCREENS) -->
+  <main class="flex-1 pt-20 pb-24 px-4 overflow-y-auto custom-scrollbar">
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 1. REMOTE SCREEN -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div id="screen-remote" class="screen-panel flex flex-col gap-4 max-w-md mx-auto">
+      
+      <!-- Hero Cover Card -->
+      <div class="relative rounded-xl overflow-hidden industrial-border bg-surface-card shadow-xl group">
+        <img src="assets/cover.png" alt="CompanionOS Optimus Cover" class="w-full h-32 object-cover object-center transform group-hover:scale-105 transition-transform duration-500 brightness-90"/>
+        <div class="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent"></div>
+        <div class="absolute bottom-2.5 left-3 right-3 flex items-center justify-between">
+          <div class="flex flex-col">
+            <span class="text-sm font-black text-white tracking-widest uppercase drop-shadow-md">COMPANION PRIME</span>
+            <span class="text-[10px] font-mono text-secondary drop-shadow">AUTONOMOUS CYBERTRONIC OS</span>
+          </div>
+          <span class="px-2 py-0.5 rounded bg-primary/80 backdrop-blur-sm text-on-surface font-mono text-[9px] font-bold tracking-wider border border-primary-light/30">ONLINE</span>
+        </div>
+      </div>
+
+      <!-- Target Bot Connection Card -->
+      <div class="bg-surface-card rounded-lg p-3.5 industrial-border flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-secondary text-[18px]">router</span>
+            <span class="font-bold text-xs text-on-surface uppercase tracking-wider">TARGET DESKBOT IP</span>
+          </div>
+          <span id="bot-mode-tag" class="px-2 py-0.5 rounded bg-primary/20 text-primary-light font-mono text-[10px]">READY</span>
+        </div>
+        <div class="flex gap-2">
+          <input id="quick-bot-ip" type="text" placeholder="e.g. 192.168.1.45" class="flex-1 bg-surface-highest font-mono text-xs px-3 py-2 rounded industrial-border focus:border-secondary outline-none"/>
+          <button onclick="applyQuickBotIp()" class="px-4 py-2 bg-secondary text-surface font-bold text-xs uppercase rounded industrial-border hover:brightness-110 tactile-btn">CONNECT</button>
+        </div>
+      </div>
+
+      <!-- Hardware D-Pad & Controls -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col items-center gap-3">
+        <div class="w-full flex justify-between items-center">
+          <span class="text-[11px] font-bold text-outline uppercase tracking-wider">VIRTUAL D-PAD</span>
+          <button onclick="sendBtn('HOME')" class="h-7 px-2.5 rounded industrial-border bg-surface-high text-xs font-bold flex items-center gap-1 hover:border-secondary tactile-btn">
+            <span class="material-symbols-outlined text-[15px]">home</span> HOME
+          </button>
+        </div>
+
+        <div class="relative w-48 h-48 my-1">
+          <!-- Up -->
+          <button onclick="sendBtn('UP')" class="absolute top-0 left-16 w-16 h-14 bg-surface-high hover:bg-surface-highest rounded-t-lg industrial-border flex items-center justify-center tactile-btn shadow-md">
+            <span class="material-symbols-outlined text-[28px] text-on-surface">keyboard_arrow_up</span>
+          </button>
+          <!-- Down -->
+          <button onclick="sendBtn('DOWN')" class="absolute bottom-0 left-16 w-16 h-14 bg-surface-high hover:bg-surface-highest rounded-b-lg industrial-border flex items-center justify-center tactile-btn shadow-md">
+            <span class="material-symbols-outlined text-[28px] text-on-surface">keyboard_arrow_down</span>
+          </button>
+          <!-- Left -->
+          <button onclick="sendBtn('LEFT')" class="absolute top-16 left-0 w-14 h-16 bg-surface-high hover:bg-surface-highest rounded-l-lg industrial-border flex items-center justify-center tactile-btn shadow-md">
+            <span class="material-symbols-outlined text-[28px] text-on-surface">keyboard_arrow_left</span>
+          </button>
+          <!-- Right -->
+          <button onclick="sendBtn('RIGHT')" class="absolute top-16 right-0 w-14 h-16 bg-surface-high hover:bg-surface-highest rounded-r-lg industrial-border flex items-center justify-center tactile-btn shadow-md">
+            <span class="material-symbols-outlined text-[28px] text-on-surface">keyboard_arrow_right</span>
+          </button>
+          <!-- Center / Select -->
+          <button onclick="sendBtn('SELECT')" class="absolute top-16 left-16 w-16 h-16 bg-primary hover:bg-primary-light text-on-surface flex flex-col items-center justify-center rounded industrial-border tactile-btn shadow-lg">
+            <span class="font-bold text-xs uppercase tracking-wider">OK</span>
+          </button>
+        </div>
+
+        <div class="w-full grid grid-cols-2 gap-2 mt-1">
+          <button onclick="sendBtn('LEFT_LONG')" class="py-2 px-3 rounded industrial-border bg-surface-high text-[11px] font-bold flex items-center justify-center gap-1 hover:border-secondary tactile-btn">
+            <span class="material-symbols-outlined text-[16px]">skip_previous</span> PREV TRACK
+          </button>
+          <button onclick="sendBtn('RIGHT_LONG')" class="py-2 px-3 rounded industrial-border bg-surface-high text-[11px] font-bold flex items-center justify-center gap-1 hover:border-secondary tactile-btn">
+            NEXT TRACK <span class="material-symbols-outlined text-[16px]">skip_next</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 16-Tile Page Grid -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-bold text-outline uppercase tracking-wider">DIRECT TILE SELECTOR</span>
+          <span class="font-mono text-[10px] text-primary-light">16 TILES ACTIVE</span>
+        </div>
+        <div id="remote-pages-grid" class="grid grid-cols-2 gap-2">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 2. MEDIA SCREEN -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div id="screen-media" class="screen-panel hidden flex flex-col gap-4 max-w-md mx-auto">
+      
+      <!-- Spotify Playing State -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-bold text-outline uppercase tracking-wider">NOW PLAYING</span>
+          <span class="px-2 py-0.5 rounded bg-primary/20 text-primary-light font-mono text-[10px]">SYNC ACTIVE</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <div class="w-16 h-16 rounded bg-surface-highest flex items-center justify-center industrial-border">
+            <span class="material-symbols-outlined text-primary text-[32px]">album</span>
+          </div>
+          <div class="flex flex-col flex-1 min-w-0">
+            <span id="media-trk-title" class="font-bold text-sm text-on-surface truncate">Auto-Synced from Android</span>
+            <span id="media-trk-artist" class="text-xs text-outline truncate">Spotify / Apple Music / YT Music</span>
+            <span class="font-mono text-[10px] text-secondary mt-1">Real-time RGB565 streaming</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Spotify Control Buttons -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3">
+        <h2 class="text-[11px] font-bold text-outline uppercase tracking-wider">PLAYBACK CONTROLS</h2>
+        <div class="grid grid-cols-3 gap-2">
+          <button onclick="spotifyAction('PREV')" class="py-3 bg-surface-high rounded industrial-border hover:border-secondary flex items-center justify-center tactile-btn">
+            <span class="material-symbols-outlined text-[24px]">skip_previous</span>
+          </button>
+          <button onclick="spotifyAction('TOGGLE')" class="py-3 bg-primary hover:bg-primary-light text-on-surface rounded industrial-border flex items-center justify-center tactile-btn">
+            <span class="material-symbols-outlined text-[28px]">play_arrow</span>
+          </button>
+          <button onclick="spotifyAction('NEXT')" class="py-3 bg-surface-high rounded industrial-border hover:border-secondary flex items-center justify-center tactile-btn">
+            <span class="material-symbols-outlined text-[24px]">skip_next</span>
+          </button>
+        </div>
+
+        <div class="flex flex-col gap-1 mt-2">
+          <div class="flex justify-between items-center font-mono text-xs">
+            <span class="text-outline">VOLUME</span>
+            <span id="spot-vol-txt" class="text-secondary font-bold">75%</span>
+          </div>
+          <input type="range" min="0" max="100" value="75" oninput="setVolume(this.value)" class="w-full accent-secondary cursor-pointer"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 3. PET & THOUGHT INJECTION SCREEN -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div id="screen-pet" class="screen-panel hidden flex flex-col gap-4 max-w-md mx-auto">
+      
+      <!-- Emotion Palette -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3">
+        <h2 class="text-[11px] font-bold text-outline uppercase tracking-wider">SET EYE EMOTION</h2>
+        <div class="grid grid-cols-3 gap-2">
+          <button onclick="setEmotion('HAPPY')" class="p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-primary-light text-[22px]">mood</span>
+            <span class="text-[10px] font-bold uppercase">Happy</span>
+          </button>
+          <button onclick="setEmotion('NEUTRAL')" class="p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-outline text-[22px]">sentiment_neutral</span>
+            <span class="text-[10px] font-bold uppercase">Neutral</span>
+          </button>
+          <button onclick="setEmotion('SAD')" class="p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-secondary text-[22px]">sentiment_dissatisfied</span>
+            <span class="text-[10px] font-bold uppercase">Sad</span>
+          </button>
+          <button onclick="setEmotion('ANGRY')" class="p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-error text-[22px]">mood_bad</span>
+            <span class="text-[10px] font-bold uppercase">Angry</span>
+          </button>
+          <button onclick="setEmotion('SLEEPY')" class="p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-tertiary text-[22px]">bedtime</span>
+            <span class="text-[10px] font-bold uppercase">Sleepy</span>
+          </button>
+          <button onclick="setEmotion('LOVE')" class="p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-error text-[22px]">favorite</span>
+            <span class="text-[10px] font-bold uppercase">Love</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Thought Transmitter -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3">
+        <h2 class="text-[11px] font-bold text-outline uppercase tracking-wider">TRANSMIT THOUGHT</h2>
+        <div class="relative">
+          <textarea id="thought-input" maxlength="79" rows="3" oninput="updateCharCount()" placeholder="Type a thought bubble message..." class="w-full bg-surface-highest font-mono text-xs p-3 rounded industrial-border focus:border-secondary outline-none resize-none"></textarea>
+          <span id="char-count" class="absolute bottom-2 right-2 font-mono text-[10px] text-outline">0/79</span>
+        </div>
+        <button onclick="sendThought()" class="w-full py-2.5 bg-secondary text-surface font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 rounded tactile-btn">
+          <span class="material-symbols-outlined text-[18px]">send</span> TRANSMIT THOUGHT
+        </button>
+      </div>
+
+      <!-- Custom Photo Upload -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3">
+        <h2 class="text-[11px] font-bold text-outline uppercase tracking-wider">CUSTOM EYE PHOTO FRAME</h2>
+        <button onclick="uploadMemoryPhoto()" class="w-full py-2.5 bg-surface-high rounded industrial-border hover:border-secondary flex items-center justify-center gap-2 font-bold text-xs uppercase tracking-wider tactile-btn">
+          <span class="material-symbols-outlined text-[18px]">photo_camera</span> PICK PHOTO FROM GALLERY & UPLOAD
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 4. NETWORK & MULTI-WIFI PRIORITY SCREEN -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div id="screen-network" class="screen-panel hidden flex flex-col gap-4 max-w-md mx-auto">
+      
+      <!-- Telemetry Status Card -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-2">
+        <div class="flex justify-between items-center">
+          <h2 class="text-[11px] font-bold text-outline uppercase tracking-wider">LINK STATUS</h2>
+          <span class="px-2 py-0.5 rounded bg-primary/20 text-primary-light font-mono text-[10px]">Active</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+          <div class="bg-surface-high p-2 rounded flex flex-col">
+            <span class="text-outline text-[10px]">BOT IP:</span>
+            <span id="wifi-ip-val" class="text-on-surface truncate">Searching...</span>
+          </div>
+          <div class="bg-surface-high p-2 rounded flex flex-col">
+            <span class="text-outline text-[10px]">BLUETOOTH:</span>
+            <span id="bt-status-val" class="text-primary-light truncate">Scanning...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Multi-Network Priority Manager -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3">
+        <div class="flex justify-between items-center">
+          <div class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-secondary text-[18px]">wifi_tethering</span>
+            <span class="font-bold text-xs text-on-surface uppercase tracking-wider">MULTI-WIFI PRIORITY</span>
+          </div>
+          <button onclick="addNetworkModal()" class="px-2 py-1 bg-surface-high hover:bg-surface-highest rounded industrial-border font-bold text-[10px] uppercase text-secondary tactile-btn">+ ADD</button>
+        </div>
+        <p class="text-[11px] text-outline">Reorder networks by priority. If Priority #1 fails, Bot automatically connects to #2, #3, etc.</p>
+        
+        <div id="multi-wifi-list" class="flex flex-col gap-2">
+          <!-- Populated by JS -->
+        </div>
+
+        <button onclick="saveAndSyncMultiWifi()" class="w-full py-2.5 bg-primary hover:bg-primary-light text-on-surface font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 rounded tactile-btn mt-1">
+          <span class="material-symbols-outlined text-[18px]">cloud_upload</span> SYNC MULTI-WIFI TO BOT
+        </button>
+      </div>
+
+      <!-- Add Wi-Fi Modal / Card -->
+      <div id="add-wifi-card" class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3 hidden">
+        <h3 class="text-xs font-bold text-secondary uppercase">ADD WI-FI PROFILE</h3>
+        <input id="new-wifi-ssid" type="text" placeholder="SSID (Network Name)" class="w-full bg-surface-highest font-mono text-xs p-2.5 rounded industrial-border focus:border-secondary outline-none"/>
+        <input id="new-wifi-pass" type="password" placeholder="Password" class="w-full bg-surface-highest font-mono text-xs p-2.5 rounded industrial-border focus:border-secondary outline-none"/>
+        <div class="flex gap-2">
+          <button onclick="confirmAddNetwork()" class="flex-1 py-2 bg-secondary text-surface font-bold text-xs uppercase rounded tactile-btn">SAVE PROFILE</button>
+          <button onclick="document.getElementById('add-wifi-card').classList.add('hidden')" class="px-4 py-2 bg-surface-high rounded text-xs font-bold uppercase tactile-btn">CANCEL</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- 5. SYSTEM & CLOUD APIS SCREEN -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div id="screen-system" class="screen-panel hidden flex flex-col gap-4 max-w-md mx-auto">
+      
+      <!-- Cloud & API Credentials Card -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-secondary text-[18px]">key</span>
+            <span class="font-bold text-xs text-on-surface uppercase tracking-wider">CLOUD & API CREDENTIALS</span>
+          </div>
+          <span class="font-mono text-[10px] text-outline">PERSISTENT</span>
+        </div>
+
+        <div class="flex flex-col gap-2 text-xs">
+          <div class="flex flex-col gap-1">
+            <label class="text-[10px] font-bold text-outline uppercase">Spotify Client ID</label>
+            <input id="api-spot-id" type="text" placeholder="Paste Spotify Client ID" class="bg-surface-highest font-mono text-xs p-2 rounded industrial-border outline-none"/>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-[10px] font-bold text-outline uppercase">Spotify Client Secret</label>
+            <input id="api-spot-secret" type="password" placeholder="Paste Spotify Client Secret" class="bg-surface-highest font-mono text-xs p-2 rounded industrial-border outline-none"/>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-[10px] font-bold text-outline uppercase">GitHub Username</label>
+            <input id="api-github-user" type="text" placeholder="e.g. neuralsin" class="bg-surface-highest font-mono text-xs p-2 rounded industrial-border outline-none"/>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-[10px] font-bold text-outline uppercase">GitHub Personal Token</label>
+            <input id="api-github-token" type="password" placeholder="github_pat_..." class="bg-surface-highest font-mono text-xs p-2 rounded industrial-border outline-none"/>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-[10px] font-bold text-outline uppercase">Weather City</label>
+            <input id="api-weather-city" type="text" placeholder="e.g. Delhi or New York" class="bg-surface-highest font-mono text-xs p-2 rounded industrial-border outline-none"/>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-[10px] font-bold text-outline uppercase">OpenWeather API Key (Optional)</label>
+            <input id="api-weather-key" type="password" placeholder="Leave empty for Open-Meteo" class="bg-surface-highest font-mono text-xs p-2 rounded industrial-border outline-none"/>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-[10px] font-bold text-outline uppercase">Stock Watchlist (Comma-Separated)</label>
+            <input id="api-stocks-list" type="text" placeholder="BTC,ETH,NVDA,AAPL,TSLA" class="bg-surface-highest font-mono text-xs p-2 rounded industrial-border outline-none"/>
+          </div>
+        </div>
+
+        <button onclick="saveApiCredentials()" class="w-full py-2.5 bg-secondary text-surface font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 rounded tactile-btn mt-1">
+          <span class="material-symbols-outlined text-[18px]">save</span> SAVE ALL API CREDENTIALS
+        </button>
+      </div>
+
+      <!-- Display Themes & Brightness -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3">
+        <h2 class="text-[11px] font-bold text-outline uppercase tracking-wider">THEMES & BRIGHTNESS</h2>
+        <div class="grid grid-cols-3 gap-2">
+          <button onclick="setTheme(0)" class="p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-[20px]">dark_mode</span>
+            <span class="text-[10px] font-bold uppercase">Classic</span>
+          </button>
+          <button onclick="setTheme(1)" class="p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-[20px]">terminal</span>
+            <span class="text-[10px] font-bold uppercase">ThingPulse</span>
+          </button>
+          <button onclick="setTheme(2)" class="p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-[20px]">polyline</span>
+            <span class="text-[10px] font-bold uppercase">Vector</span>
+          </button>
+        </div>
+
+        <div class="flex flex-col gap-1.5 mt-2">
+          <div class="flex justify-between items-center font-mono text-xs">
+            <span class="text-outline">BACKLIGHT BRIGHTNESS</span>
+            <span id="bright-val" class="text-primary-light font-bold">180</span>
+          </div>
+          <input type="range" min="10" max="255" value="180" oninput="setBrightness(this.value)" class="w-full accent-primary cursor-pointer"/>
+        </div>
+      </div>
+
+      <!-- Clean Exit & Shutdown Card -->
+      <div class="bg-surface-card rounded-lg p-4 industrial-border border-error/30 flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-bold text-error uppercase tracking-wider">APP POWER MANAGEMENT</span>
+          <span class="material-symbols-outlined text-error text-[18px]">power_settings_new</span>
+        </div>
+        <p class="text-[11px] text-outline">Cleanly terminates the 24/7 background foreground service, releases all locks, and frees Android memory.</p>
+        <button onclick="confirmExitApp()" class="w-full py-2.5 bg-error/20 hover:bg-error/30 text-error border border-error/40 rounded font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 tactile-btn mt-1">
+          <span class="material-symbols-outlined text-[18px]">exit_to_app</span> EXIT & SHUTDOWN COMPANION
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 5-TAB FIXED BOTTOM NAVIGATION -->
+  <nav class="fixed bottom-0 inset-x-0 z-50 bg-[#171714]/95 backdrop-blur-md pb-safe border-t border-outline-variant shadow-lg">
+    <div class="h-16 flex items-center justify-around px-2 max-w-md mx-auto">
+      <button onclick="switchTab('remote')" id="tab-remote" class="nav-tab active flex flex-col items-center justify-center flex-1 py-1 text-outline hover:text-on-surface transition-colors tactile-btn">
+        <span class="material-symbols-outlined text-[24px]">dpad</span>
+        <span class="text-[10px] font-bold uppercase tracking-wider mt-0.5">Remote</span>
+      </button>
+      <button onclick="switchTab('media')" id="tab-media" class="nav-tab flex flex-col items-center justify-center flex-1 py-1 text-outline hover:text-on-surface transition-colors tactile-btn">
+        <span class="material-symbols-outlined text-[24px]">play_circle</span>
+        <span class="text-[10px] font-bold uppercase tracking-wider mt-0.5">Media</span>
+      </button>
+      <button onclick="switchTab('pet')" id="tab-pet" class="nav-tab flex flex-col items-center justify-center flex-1 py-1 text-outline hover:text-on-surface transition-colors tactile-btn">
+        <span class="material-symbols-outlined text-[24px]">sentiment_satisfied</span>
+        <span class="text-[10px] font-bold uppercase tracking-wider mt-0.5">Pet</span>
+      </button>
+      <button onclick="switchTab('network')" id="tab-network" class="nav-tab flex flex-col items-center justify-center flex-1 py-1 text-outline hover:text-on-surface transition-colors tactile-btn">
+        <span class="material-symbols-outlined text-[24px]">wifi</span>
+        <span class="text-[10px] font-bold uppercase tracking-wider mt-0.5">Network</span>
+      </button>
+      <button onclick="switchTab('system')" id="tab-system" class="nav-tab flex flex-col items-center justify-center flex-1 py-1 text-outline hover:text-on-surface transition-colors tactile-btn">
+        <span class="material-symbols-outlined text-[24px]">settings</span>
+        <span class="text-[10px] font-bold uppercase tracking-wider mt-0.5">System</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- JAVASCRIPT MASTER LOGIC -->
+  <script>
+    const PAGES = [
+      { id: 0, name: 'Eyes & Pet', icon: 'visibility' },
+      { id: 1, name: 'Spotify Music', icon: 'graphic_eq' },
+      { id: 2, name: 'Weather Forecast', icon: 'wb_sunny' },
+      { id: 3, name: 'Pomodoro Focus', icon: 'timer' },
+      { id: 4, name: 'Notifications', icon: 'notifications' },
+      { id: 5, name: 'Notes', icon: 'description' },
+      { id: 6, name: 'Stocks & Crypto', icon: 'monitoring' },
+      { id: 7, name: 'Gaming Dashboard', icon: 'sports_esports' },
+      { id: 8, name: 'Social Pulse', icon: 'forum' },
+      { id: 9, name: 'Productivity', icon: 'task_alt' },
+      { id: 10, name: 'Network Monitor', icon: 'router' },
+      { id: 11, name: 'Settings', icon: 'settings' },
+      { id: 12, name: 'RuView CSI Presence', icon: 'radar' },
+      { id: 13, name: 'Clock Dashboard', icon: 'schedule' },
+      { id: 14, name: 'Retro Watch (Round Dial)', icon: 'watch', badge: 'NEW' },
+      { id: 15, name: 'Dr. Hack Suite', icon: 'terminal', fullWidth: true }
+    ];
+
+    let currentActivePage = 0;
+    let configuredNetworks = [
+      { ssid: 'Home_WiFi', pass: 'password123' },
+      { ssid: 'Phone_Hotspot', pass: 'hotspot99' }
+    ];
+
+    function transmitCommand(cmd) {
+      if (window.AndroidBridge && window.AndroidBridge.sendUdp) {
+        window.AndroidBridge.sendUdp(cmd);
+      }
+    }
+
+    function renderRoutingGrid() {
+      const grid = document.getElementById('remote-pages-grid');
+      if (!grid) return;
+      grid.innerHTML = '';
+      PAGES.forEach(p => {
+        const btn = document.createElement('button');
+        const isActive = p.id === currentActivePage;
+        btn.className = `h-14 flex items-center gap-3 px-3.5 rounded-lg industrial-border transition-all text-left tactile-btn ${
+          isActive 
+            ? 'bg-primary/25 border-primary text-primary-light' 
+            : 'bg-surface-card text-on-surface hover:bg-surface-high'
+        } ${p.fullWidth ? 'col-span-2' : ''}`;
+        
+        btn.onclick = () => goToPage(p.id);
+        btn.innerHTML = `
+          <div class="w-8 h-8 rounded flex items-center justify-center bg-surface-highest">
+            <span class="material-symbols-outlined text-[20px] ${isActive ? 'text-primary-light' : 'text-outline'}">${p.icon}</span>
+          </div>
+          <div class="flex flex-col flex-1 min-w-0">
+            <span class="text-xs font-bold truncate">${p.name}</span>
+            <span class="font-mono text-[10px] text-outline">PAGE #${p.id}</span>
+          </div>
+          ${p.badge ? `<span class="px-1.5 py-0.5 rounded bg-secondary/20 text-secondary font-mono text-[9px] font-bold">${p.badge}</span>` : ''}
+        `;
+        grid.appendChild(btn);
+      });
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.screen-panel').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
+      
+      const targetScreen = document.getElementById(`screen-${tabId}`);
+      const targetTab = document.getElementById(`tab-${tabId}`);
+      if (targetScreen) targetScreen.classList.remove('hidden');
+      if (targetTab) targetTab.classList.add('active');
+
+      const titleMap = {
+        'remote': 'Remote Control',
+        'media': 'Media Player',
+        'pet': 'Pet Personality',
+        'network': 'Network Setup',
+        'system': 'System Settings'
+      };
+      document.getElementById('active-screen-title').textContent = titleMap[tabId] || 'CompanionOS';
+    }
+
+    function sendBtn(btn) {
+      transmitCommand(`BTN:${btn}`);
+      if (window.AndroidBridge && window.AndroidBridge.showToast) {
+        window.AndroidBridge.showToast(`Button: ${btn}`);
+      }
+    }
+
+    function goToPage(pageId) {
+      currentActivePage = pageId;
+      renderRoutingGrid();
+      transmitCommand(`PAGE:${pageId}`);
+      if (window.AndroidBridge && window.AndroidBridge.showToast) {
+        window.AndroidBridge.showToast(`Switched to Page #${pageId}`);
+      }
+    }
+
+    function setEmotion(emotion) {
+      transmitCommand(`EMOTION:${emotion}`);
+      if (window.AndroidBridge && window.AndroidBridge.showToast) {
+        window.AndroidBridge.showToast(`Emotion: ${emotion}`);
+      }
+    }
+
+    function sendThought() {
+      const input = document.getElementById('thought-input');
+      const text = input.value.trim();
+      if (!text) return;
+      transmitCommand(`THOUGHT:${text}`);
+      input.value = '';
+      updateCharCount();
+      if (window.AndroidBridge && window.AndroidBridge.showToast) {
+        window.AndroidBridge.showToast(`Thought sent: "${text}"`);
+      }
+    }
+
+    function updateCharCount() {
+      const count = document.getElementById('thought-input').value.length;
+      document.getElementById('char-count').textContent = `${count}/79`;
+    }
+
+    function spotifyAction(act) {
+      transmitCommand(`SPOTIFY:${act}`);
+    }
+
+    function setVolume(val) {
+      document.getElementById('spot-vol-txt').textContent = `${val}%`;
+      transmitCommand(`SPOTIFY:VOLUME:${val}`);
+    }
+
+    function setTheme(themeId) {
+      transmitCommand(`THEME:${themeId}`);
+    }
+
+    function setBrightness(val) {
+      document.getElementById('bright-val').textContent = val;
+      transmitCommand(`BRIGHTNESS:${val}`);
+    }
+
+    function uploadMemoryPhoto() {
+      if (window.AndroidBridge && window.AndroidBridge.pickAndUploadImage) {
+        window.AndroidBridge.pickAndUploadImage();
+      }
+    }
+
+    function promptManualIp() {
+      const cur = window.AndroidBridge ? window.AndroidBridge.getManualBotIp() : '';
+      const ip = prompt('Enter Target Deskbot IP Address:', cur || '192.168.1.');
+      if (ip) {
+        applyBotIp(ip);
+      }
+    }
+
+    function applyQuickBotIp() {
+      const ip = document.getElementById('quick-bot-ip').value.trim();
+      if (ip) applyBotIp(ip);
+    }
+
+    function applyBotIp(ip) {
+      if (window.AndroidBridge && window.AndroidBridge.setManualBotIp) {
+        window.AndroidBridge.setManualBotIp(ip);
+      }
+      document.getElementById('esp-ip-display').textContent = ip;
+      document.getElementById('wifi-ip-val').textContent = ip;
+      document.getElementById('quick-bot-ip').value = ip;
+    }
+
+    // ── Multi-Network Priority Manager ──
+    function renderMultiWifiList() {
+      const list = document.getElementById('multi-wifi-list');
+      if (!list) return;
+      list.innerHTML = '';
+
+      configuredNetworks.forEach((net, idx) => {
+        const item = document.createElement('div');
+        item.className = 'bg-surface-high p-2.5 rounded industrial-border flex items-center justify-between';
+        item.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="px-1.5 py-0.5 rounded bg-primary/20 text-primary-light font-mono text-[10px] font-bold">#${idx + 1}</span>
+            <div class="flex flex-col">
+              <span class="font-bold text-xs text-on-surface">${net.ssid}</span>
+              <span class="font-mono text-[10px] text-outline">${'•'.repeat(Math.min(8, net.pass.length))}</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-1">
+            <button onclick="moveNetworkUp(${idx})" ${idx === 0 ? 'disabled class="opacity-30 p-1"' : 'class="p-1 hover:text-secondary tactile-btn"'}>
+              <span class="material-symbols-outlined text-[18px]">arrow_upward</span>
+            </button>
+            <button onclick="moveNetworkDown(${idx})" ${idx === configuredNetworks.length - 1 ? 'disabled class="opacity-30 p-1"' : 'class="p-1 hover:text-secondary tactile-btn"'}>
+              <span class="material-symbols-outlined text-[18px]">arrow_downward</span>
+            </button>
+            <button onclick="deleteNetwork(${idx})" ${configuredNetworks.length <= 1 ? 'disabled class="opacity-30 p-1"' : 'class="p-1 hover:text-error tactile-btn"'}>
+              <span class="material-symbols-outlined text-[18px]">delete</span>
+            </button>
+          </div>
+        `;
+        list.appendChild(item);
+      });
+    }
+
+    function moveNetworkUp(idx) {
+      if (idx > 0) {
+        const temp = configuredNetworks[idx];
+        configuredNetworks[idx] = configuredNetworks[idx - 1];
+        configuredNetworks[idx - 1] = temp;
+        renderMultiWifiList();
+      }
+    }
+
+    function moveNetworkDown(idx) {
+      if (idx < configuredNetworks.length - 1) {
+        const temp = configuredNetworks[idx];
+        configuredNetworks[idx] = configuredNetworks[idx + 1];
+        configuredNetworks[idx + 1] = temp;
+        renderMultiWifiList();
+      }
+    }
+
+    function deleteNetwork(idx) {
+      if (configuredNetworks.length > 1) {
+        configuredNetworks.splice(idx, 1);
+        renderMultiWifiList();
+      }
+    }
+
+    function addNetworkModal() {
+      document.getElementById('add-wifi-card').classList.remove('hidden');
+      document.getElementById('new-wifi-ssid').focus();
+    }
+
+    function confirmAddNetwork() {
+      const ssid = document.getElementById('new-wifi-ssid').value.trim();
+      const pass = document.getElementById('new-wifi-pass').value.trim();
+      if (!ssid) {
+        alert('Please enter a valid SSID');
+        return;
+      }
+      configuredNetworks.push({ ssid, pass });
+      document.getElementById('new-wifi-ssid').value = '';
+      document.getElementById('new-wifi-pass').value = '';
+      document.getElementById('add-wifi-card').classList.add('hidden');
+      renderMultiWifiList();
+    }
+
+    function saveAndSyncMultiWifi() {
+      const payload = JSON.stringify({ networks: configuredNetworks });
+      if (window.AndroidBridge && window.AndroidBridge.saveMultiWifi) {
+        window.AndroidBridge.saveMultiWifi(payload);
+      }
+    }
+
+    // ── Cloud & API Credentials ──
+    function saveApiCredentials() {
+      const spotId = document.getElementById('api-spot-id').value;
+      const spotSec = document.getElementById('api-spot-secret').value;
+      const githubUser = document.getElementById('api-github-user').value;
+      const githubToken = document.getElementById('api-github-token').value;
+      const city = document.getElementById('api-weather-city').value;
+      const key = document.getElementById('api-weather-key').value;
+      const stocks = document.getElementById('api-stocks-list').value;
+
+      if (window.AndroidBridge && window.AndroidBridge.saveApiCredentials) {
+        window.AndroidBridge.saveApiCredentials(spotId, spotSec, githubUser, githubToken, city, key, stocks);
+      }
+    }
+
+    function loadSavedApis() {
+      if (window.AndroidBridge && window.AndroidBridge.loadApiCredentials) {
+        try {
+          const data = JSON.parse(window.AndroidBridge.loadApiCredentials());
+          if (data.spotify_id) document.getElementById('api-spot-id').value = data.spotify_id;
+          if (data.spotify_secret) document.getElementById('api-spot-secret').value = data.spotify_secret;
+          if (data.github_user) document.getElementById('api-github-user').value = data.github_user;
+          if (data.github_token) document.getElementById('api-github-token').value = data.github_token;
+          if (data.weather_city) document.getElementById('api-weather-city').value = data.weather_city;
+          if (data.weather_key) document.getElementById('api-weather-key').value = data.weather_key;
+          if (data.stocks_list) document.getElementById('api-stocks-list').value = data.stocks_list;
+        } catch (e) {}
+      }
+
+      if (window.AndroidBridge && window.AndroidBridge.loadMultiWifi) {
+        try {
+          const raw = window.AndroidBridge.loadMultiWifi();
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed.networks && parsed.networks.length > 0) {
+              configuredNetworks = parsed.networks;
+            }
+          }
+        } catch (e) {}
+      }
+      renderMultiWifiList();
+
+      if (window.AndroidBridge && window.AndroidBridge.getManualBotIp) {
+        const savedIp = window.AndroidBridge.getManualBotIp();
+        if (savedIp) {
+          document.getElementById('esp-ip-display').textContent = savedIp;
+          document.getElementById('wifi-ip-val').textContent = savedIp;
+          document.getElementById('quick-bot-ip').value = savedIp;
+        }
+      }
+    }
+
+    function confirmExitApp() {
+      if (confirm('Are you sure you want to stop background relays and exit CompanionOS?')) {
+        if (window.AndroidBridge && window.AndroidBridge.exitApp) {
+          window.AndroidBridge.exitApp();
+        }
+      }
+    }
+
+    function updateTelemetryStatus() {
+      if (window.AndroidBridge && window.AndroidBridge.getBluetoothStatus) {
+        const btEl = document.getElementById('bt-status-val');
+        if (btEl) btEl.textContent = window.AndroidBridge.getBluetoothStatus();
+      }
+      if (window.AndroidBridge && window.AndroidBridge.getDiscoveredIp) {
+        const ip = window.AndroidBridge.getDiscoveredIp();
+        if (ip && ip !== 'Searching...') {
+          const ipEl = document.getElementById('wifi-ip-val');
+          if (ipEl) ipEl.textContent = ip;
+          const topIp = document.getElementById('esp-ip-display');
+          if (topIp) topIp.textContent = ip;
+        }
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      renderRoutingGrid();
+      loadSavedApis();
+      setInterval(updateTelemetryStatus, 2500);
+    });
+  </script>
+</body>
+</html>

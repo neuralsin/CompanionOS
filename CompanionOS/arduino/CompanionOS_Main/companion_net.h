@@ -19,7 +19,11 @@
 #include "globals.h"
 #include <WiFiUdp.h>
 #include <NTPClient.h>
-#include <WebServer.h>
+#ifdef ESP32
+  #include <WebServer.h>
+#else
+  #include <ESP8266WebServer.h>
+#endif
 #include <ArduinoJson.h>
 
 #include "eyes.h"
@@ -31,8 +35,12 @@
 extern char udpBuffer[2048];
 String pcIPStr = DEFAULT_PC_IP;
 
-// ESP32 System Web Server for Direct Memory Uploads
-static WebServer sysWebServer(8080);
+// System Web Server for Direct Memory Uploads
+#ifdef ESP32
+  static WebServer sysWebServer(8080);
+#else
+  static ESP8266WebServer sysWebServer(8080);
+#endif
 static const char MEMORIES_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html><head><title>CompanionOS Memories</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -125,6 +133,7 @@ extern void redrawGamingPartial();
 extern void redrawSocialPartial();
 extern void redrawProductivityPartial();
 extern void redrawClockDashboardPartial();
+extern void redrawRetroWatchPartial();
 extern void drawStatusBar();
 extern void processArtChunk(int chunkIdx, String hexData);
 extern void completeAlbumArt();
@@ -237,6 +246,7 @@ void handleVirtualButton(String btn) {
   }
 
   if (btn == "SELECT_LONG") {
+#ifdef ESP32
     if (currentState == STATE_DR_HACK) {
       extern void dhSelect();
       extern DrHackSubState dhCurrentState;
@@ -248,6 +258,7 @@ void handleVirtualButton(String btn) {
         virtualSelectHoldUntil = millis() + 850;
       }
     }
+#endif
     lastInteractionTime = millis();
     return;
   }
@@ -312,25 +323,148 @@ void handleVirtualButton(String btn) {
   }
 }
 
+struct WiFiProfile {
+  String ssid;
+  String pass;
+};
+
+#define MAX_WIFI_PROFILES 4
+WiFiProfile wifiProfiles[MAX_WIFI_PROFILES];
+int wifiProfileCount = 0;
+String currentWiFiSSID = WIFI_SSID;
+String currentWiFiPASS = WIFI_PASS;
+
+void loadWiFiCredentials() {
+  wifiProfileCount = 0;
+  EEPROM.begin(EEPROM_SIZE);
+  if (EEPROM.read(EEPROM_WIFI_MAGIC_ADDR) == 0xC0 && EEPROM.read(EEPROM_WIFI_MAGIC_ADDR + 1) == 0x56) {
+    int count = EEPROM.read(EEPROM_WIFI_MAGIC_ADDR + 2);
+    if (count > MAX_WIFI_PROFILES) count = MAX_WIFI_PROFILES;
+    int addr = EEPROM_WIFI_SSID_ADDR;
+    for (int p = 0; p < count; p++) {
+      char s[33]; char passBuf[65];
+      for (int i = 0; i < 32; i++) s[i] = (char)EEPROM.read(addr++);
+      s[32] = 0;
+      for (int i = 0; i < 64; i++) passBuf[i] = (char)EEPROM.read(addr++);
+      passBuf[64] = 0;
+      bool valid = true;
+      for (int i = 0; s[i] != 0; i++) {
+        if ((unsigned char)s[i] < 32 || (unsigned char)s[i] > 126) {
+          valid = false;
+          break;
+        }
+      }
+      if (valid && strlen(s) > 0) {
+        wifiProfiles[wifiProfileCount].ssid = String(s);
+        wifiProfiles[wifiProfileCount].pass = String(passBuf);
+        wifiProfileCount++;
+      }
+    }
+  } else if (EEPROM.read(EEPROM_WIFI_MAGIC_ADDR) == 0xC0 && EEPROM.read(EEPROM_WIFI_MAGIC_ADDR + 1) == 0x55) {
+    char s[33]; char passBuf[65];
+    for (int i = 0; i < 32; i++) s[i] = (char)EEPROM.read(EEPROM_WIFI_SSID_ADDR + i);
+    s[32] = 0;
+    for (int i = 0; i < 64; i++) passBuf[i] = (char)EEPROM.read(EEPROM_WIFI_PASS_ADDR + i);
+    passBuf[64] = 0;
+    bool valid = true;
+    for (int i = 0; s[i] != 0; i++) {
+      if ((unsigned char)s[i] < 32 || (unsigned char)s[i] > 126) {
+        valid = false;
+        break;
+      }
+    }
+    if (valid && strlen(s) > 0) {
+      wifiProfiles[0].ssid = String(s);
+      wifiProfiles[0].pass = String(passBuf);
+      wifiProfileCount = 1;
+    }
+  }
+  EEPROM.end();
+
+  if (wifiProfileCount == 0) {
+    wifiProfiles[0].ssid = WIFI_SSID;
+    wifiProfiles[0].pass = WIFI_PASS;
+    wifiProfiles[1].ssid = WIFI_SSID2;
+    wifiProfiles[1].pass = WIFI_PASS2;
+    wifiProfileCount = 2;
+  } else if (wifiProfileCount == 1 && wifiProfiles[0].ssid != WIFI_SSID2) {
+    wifiProfiles[1].ssid = WIFI_SSID2;
+    wifiProfiles[1].pass = WIFI_PASS2;
+    wifiProfileCount = 2;
+  }
+  currentWiFiSSID = wifiProfiles[0].ssid;
+  currentWiFiPASS = wifiProfiles[0].pass;
+}
+
+void saveMultiWiFiCredentials(const std::vector<std::pair<String, String>>& nets) {
+  EEPROM.begin(EEPROM_SIZE);
+  EEPROM.write(EEPROM_WIFI_MAGIC_ADDR, 0xC0);
+  EEPROM.write(EEPROM_WIFI_MAGIC_ADDR + 1, 0x56);
+  int count = min((int)nets.size(), MAX_WIFI_PROFILES);
+  EEPROM.write(EEPROM_WIFI_MAGIC_ADDR + 2, count);
+  int addr = EEPROM_WIFI_SSID_ADDR;
+  for (int p = 0; p < count; p++) {
+    String s = nets[p].first;
+    String pw = nets[p].second;
+    for (int i = 0; i < 32; i++) EEPROM.write(addr++, (i < s.length()) ? s[i] : 0);
+    for (int i = 0; i < 64; i++) EEPROM.write(addr++, (i < pw.length()) ? pw[i] : 0);
+  }
+  EEPROM.commit();
+  EEPROM.end();
+  loadWiFiCredentials();
+}
+
+void saveWiFiCredentials(String newSSID, String newPASS) {
+  std::vector<std::pair<String, String>> singleNet;
+  singleNet.push_back({newSSID, newPASS});
+  saveMultiWiFiCredentials(singleNet);
+}
+
 void setupWiFi() {
+  loadWiFiCredentials();
   Serial.print(F("WiFi setup..."));
-  tft.fillScreen(COLOR_BG);
-  tft.setTextColor(TFT_WHITE);
-  tft.drawCentreString("Connecting WiFi...", SCR_CX, SCR_CY, 2);
 
-  // Match legacy: simple WiFi.begin — no disconnect, no setSleep, no setTxPower
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  #if defined(ESP8266)
+  WiFi.persistent(true);
+  #endif
 
-  int timeout = 0;
-  // Legacy used 60 (30 seconds). Keep the same generous timeout.
-  while (WiFi.status() != WL_CONNECTED && timeout < 60) {
-    delay(500);
-    Serial.print(".");
-    timeout++;
+  wifiConnected = false;
+
+  for (int p = 0; p < wifiProfileCount; p++) {
+    if (wifiProfiles[p].ssid.length() == 0) continue;
+
+    tft.fillScreen(COLOR_BG);
+    tft.setTextColor(TFT_CYAN);
+    tft.drawCentreString("WiFi Priority #" + String(p + 1), SCR_CX, SCR_CY - SCALE_Y(30), 2);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawCentreString(wifiProfiles[p].ssid, SCR_CX, SCR_CY - SCALE_Y(8), 2);
+    tft.setTextColor(TFT_DARKGREY);
+    tft.drawCentreString("Connecting...", SCR_CX, SCR_CY + SCALE_Y(16), 1);
+
+    WiFi.disconnect();
+    delay(100);
+    WiFi.begin(wifiProfiles[p].ssid.c_str(), wifiProfiles[p].pass.c_str());
+
+    int timeout = 0;
+    while (WiFi.status() != WL_CONNECTED && timeout < 20) { // ~5 seconds per network
+      delay(250);
+      yield();
+      Serial.print(".");
+      timeout++;
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+      wifiConnected = true;
+      currentWiFiSSID = wifiProfiles[p].ssid;
+      currentWiFiPASS = wifiProfiles[p].pass;
+      Serial.printf(" Connected to Priority #%d: %s\n", p + 1, currentWiFiSSID.c_str());
+      break;
+    }
   }
 
-  if (WiFi.status() == WL_CONNECTED) {
-    wifiConnected = true;
+  if (wifiConnected) {
     Serial.println(F(" OK"));
     Serial.print(F("IP: "));
     Serial.println(WiFi.localIP());
@@ -366,13 +500,12 @@ void setupWiFi() {
     sysWebServer.begin();
     Serial.println(F("SysWebServer started on port 8080"));
 
-
     tft.fillScreen(COLOR_BG);
     tft.setTextColor(TFT_GREEN);
     tft.drawCentreString("WiFi Connected!", SCR_CX, SCR_CY - SCALE_Y(20), 2);
     tft.drawCentreString(WiFi.localIP().toString(), SCR_CX, SCR_CY + SCALE_Y(10), 2);
 
-    // NTP Time Sync — match legacy: non-blocking update(), NOT forceUpdate()
+    // NTP Time Sync
     timeClient.begin();
     if (timeClient.update()) {
       displayHour = timeClient.getHours();
@@ -386,15 +519,23 @@ void setupWiFi() {
       Serial.println(F("NTP initial sync failed, will retry"));
     }
   } else {
-    Serial.println(F(" FAILED"));
-    tft.setTextColor(TFT_RED);
-    tft.drawCentreString("WiFi Failed!", SCR_CX, SCR_CY - SCALE_Y(20), 2);
+    Serial.println(F(" OFFLINE (Disabling WiFi radio before Bluetooth)"));
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
+    wifiConnected = false;
+    delay(100);
+    yield();
+    tft.fillScreen(COLOR_BG);
+    tft.setTextColor(TFT_YELLOW);
+    tft.drawCentreString("WiFi Offline", SCR_CX, SCR_CY - SCALE_Y(20), 2);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawCentreString("Bluetooth Ready", SCR_CX, SCR_CY + SCALE_Y(10), 1);
   }
 
   udp.begin(UDP_PORT_RX);
-  delay(1500);
+  delay(500);
 
-  // Auto-discovery handshake — match legacy: use string "255.255.255.255"
+  // Auto-discovery handshake
   if (wifiConnected) {
     udp.beginPacket("255.255.255.255", UDP_PORT_TX);
     const char* hello = "HELLO_COMPANION";
@@ -410,24 +551,56 @@ void setupWiFi() {
 #ifdef ESP32
 void setupBluetooth() {
   if (!btInitialized) {
+    // 1. Completely disconnect and power down WiFi radio to prevent coexistence panic
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
+    wifiConnected = false;
+    delay(100);
+    yield();
+
+    // 2. Prevent crash if memory is too fragmented
+    if (ESP.getFreeHeap() < 40000) {
+      Serial.printf("Low RAM (%u bytes), skipping BT to prevent crash\n", ESP.getFreeHeap());
+      return;
+    }
+
+    // 3. Start Bluetooth Classic SPP
     btSerial.begin("CompanionOS");
     btInitialized = true;
-    Serial.println(F("BT Serial started as 'CompanionOS'"));
+    Serial.println(F("BT Serial started safely in Offline Mode as 'CompanionOS'"));
   }
 }
+
+void startBluetoothExplicit() {
+  setupBluetooth();
+}
+
+static char btLineBuf[256];
+static int btLineIdx = 0;
 
 void handleBluetoothData() {
   if (!btInitialized) return;
 
-  if (btSerial.hasClient()) {
-    btConnected = true;
-  }
-
-  if (btSerial.available()) {
-    String msg = btSerial.readStringUntil('\n');
-    msg.trim();
-    if (msg.length() > 0) {
-      handleCommand(msg);
+  while (btSerial.available() > 0) {
+    int c = btSerial.read();
+    if (c < 0) break;
+    
+    if (c == '\n' || c == '\r') {
+      if (btLineIdx > 0) {
+        btLineBuf[btLineIdx] = '\0';
+        String msg = String(btLineBuf);
+        msg.trim();
+        btLineIdx = 0;
+        if (msg.length() > 0) {
+          handleCommand(msg);
+        }
+      }
+    } else {
+      if (btLineIdx < (int)sizeof(btLineBuf) - 1) {
+        btLineBuf[btLineIdx++] = (char)c;
+      } else {
+        btLineIdx = 0; // Prevent buffer overrun
+      }
     }
   }
 }
@@ -541,7 +714,16 @@ void handleNetwork() {
     if (len > 3 && (unsigned char)udpBuffer[0] == 0xFE) {
       int chunkIdx = ((unsigned char)udpBuffer[1] << 8) | ((unsigned char)udpBuffer[2]);
       int pixelsInChunk = (len - 3) / 2;
-      if (!receivingArt) return;
+
+      // Auto-initialize on first chunk if ART_START: was missed over UDP
+      if (chunkIdx == 0) {
+        receivingArt = true;
+        albumArtReady = false;
+        artDrawn = false;
+        albumArtRowsComplete = 0;
+        memset(albumArtRowsReceived, 0, sizeof(albumArtRowsReceived));
+      }
+      if (!receivingArt) receivingArt = true;
 
       int imgWidth = ALBUM_ART_W;
       int imgHeight = ALBUM_ART_H;
@@ -569,28 +751,9 @@ void handleNetwork() {
           }
         }
 
-        // Progressive rendering
-        int imgX = SCALE_X(10);
-        int imgY = SCALE_Y(25);
-        if (currentState == STATE_SPOTIFY && activeTheme == 0) {
-          imgX = 4;
-          imgY = 18;
-        } else if (currentState == STATE_SPOTIFY && activeTheme == 1) {
-          imgX = 4;
-          imgY = 20;
-        }
-
-        int yStart = startPixel / imgWidth;
-        int maxRows = safePixels / imgWidth;
-
-        bool enableProgressive = true;
-        if (currentState == STATE_SPOTIFY && activeTheme != 0) {
-          enableProgressive = false;
-        }
-        if (currentState == STATE_SPOTIFY && enableProgressive) {
-          if (maxRows > 0) {
-            tft.pushImage(imgX, imgY + yStart, imgWidth, maxRows, dest);
-          }
+        // Auto-complete if majority of rows arrived or on last chunk
+        if (albumArtRowsComplete >= (ALBUM_ART_H * 3 / 4) || chunkIdx >= (ALBUM_ART_H - 4)) {
+          completeAlbumArt();
         }
       }
       return;
@@ -693,6 +856,7 @@ void handleCommand(String msg) {
     if (currentState == STATE_EYES) {
       renderCurrentPage();
     }
+#ifdef ESP32
   } else if (msg.startsWith("DRHACK:")) {
     String action = msg.substring(7);
     currentState = STATE_DR_HACK;
@@ -719,6 +883,7 @@ void handleCommand(String msg) {
       dhCurrentState = DH_MENU;
       renderCurrentPage();
     }
+#endif
   }
   // V4: Antigravity Agent Status
   else if (msg.startsWith("AGENT:")) {
@@ -747,17 +912,67 @@ void handleCommand(String msg) {
         else setEmotion(EMO_SAD);
       }
     }
+  }
+  // ── SPOTIFY / MEDIA DATA PACKETS ──
+  else if (msg.startsWith("SPOTIFY:")) {
+    String json = msg.substring(8);
+    DynamicJsonDocument doc(1024);
+    if (!deserializeJson(doc, json)) {
+      if (doc.containsKey("track")) currentTrack = doc["track"].as<String>();
+      if (doc.containsKey("artist")) currentArtist = doc["artist"].as<String>();
+      if (doc.containsKey("duration")) {
+        int dur = doc["duration"].as<int>();
+        playDuration = (dur < 1000) ? (dur * 1000) : dur;
+      }
+      if (doc.containsKey("progress")) {
+        int prg = doc["progress"].as<int>();
+        playProgress = (prg < 1000) ? (prg * 1000) : prg;
+      }
+      if (doc.containsKey("playing")) {
+        isPlaying = doc["playing"].as<bool>();
+        musicPlaying = isPlaying;
+      }
+      extern void t2_redrawSpotifyPartial();
+      if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
+      else if (currentState == STATE_SPOTIFY) redrawSpotifyPartial();
+      else if (currentState == STATE_CLOCK_DASHBOARD) redrawClockDashboardPartial();
+      else if (currentState == STATE_RETRO_WATCH) redrawRetroWatchPartial();
+    }
+  } else if (msg.startsWith("PROGRESS:")) {
+    String json = msg.substring(9);
+    DynamicJsonDocument doc(512);
+    if (!deserializeJson(doc, json)) {
+      if (doc.containsKey("progress")) {
+        int prg = doc["progress"].as<int>();
+        playProgress = (prg < 1000) ? (prg * 1000) : prg;
+      }
+      if (doc.containsKey("duration")) {
+        int dur = doc["duration"].as<int>();
+        playDuration = (dur < 1000) ? (dur * 1000) : dur;
+      }
+      extern void t2_redrawSpotifyPartial();
+      if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
+      else if (currentState == STATE_SPOTIFY) redrawSpotifyPartial();
+      else if (currentState == STATE_CLOCK_DASHBOARD) redrawClockDashboardPartial();
+      else if (currentState == STATE_RETRO_WATCH) redrawRetroWatchPartial();
+    }
   } else if (msg.startsWith("TRACK:")) {
     String json = msg.substring(6);
     DynamicJsonDocument doc(1024);
     if (!deserializeJson(doc, json)) {
       currentTrack = doc["track"].as<String>();
       currentArtist = doc["artist"].as<String>();
-      playDuration = doc["duration"].as<int>();
+      if (doc.containsKey("duration")) {
+        int dur = doc["duration"].as<int>();
+        playDuration = (dur < 1000) ? (dur * 1000) : dur;
+      }
       musicPlaying = true;
+      isPlaying = true;
       extern void t2_redrawSpotifyPartial();
-      if (activeTheme == 1) t2_redrawSpotifyPartial();
-      else redrawSpotifyPartial();
+      if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
+      else if (currentState == STATE_SPOTIFY) redrawSpotifyPartial();
+      else if (currentState == STATE_CLOCK_DASHBOARD) redrawClockDashboardPartial();
+      else if (currentState == STATE_RETRO_WATCH) redrawRetroWatchPartial();
     }
   } else if (msg.startsWith("ART_START:")) {
     receivingArt = true;
@@ -767,12 +982,11 @@ void handleCommand(String msg) {
     memset(albumArtRowsReceived, 0, sizeof(albumArtRowsReceived));
     memset(albumArt, 0, sizeof(albumArt));
   } else if (msg.startsWith("ART_COMPLETE:")) {
-    if (albumArtRowsComplete >= ALBUM_ART_H) {
+    if (albumArtRowsComplete >= 32 || albumArtRowsComplete >= (ALBUM_ART_H * 3 / 4)) {
       completeAlbumArt();
     } else {
       receivingArt = false;
       albumArtReady = false;
-      Serial.printf("Album art incomplete: %u/%u rows\n", albumArtRowsComplete, ALBUM_ART_H);
     }
   } else if (msg.startsWith("SPOTIFY_RESET:")) {
     currentLyrics = "";
@@ -786,56 +1000,59 @@ void handleCommand(String msg) {
     extern void t2_redrawSpotifyPartial();
     if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
     else if (currentState == STATE_SPOTIFY) redrawSpotifyPartial();
-  } else if (msg.startsWith("GAME_ART_START:")) {
-    receivingArt = true;
-    albumArtReady = false;
-    artDrawn = false;
-    albumArtRowsComplete = 0;
-    memset(albumArtRowsReceived, 0, sizeof(albumArtRowsReceived));
-    memset(albumArt, 0, sizeof(albumArt));
-  } else if (msg.startsWith("GAME_ART_END:")) {
-    if (albumArtRowsComplete >= ALBUM_ART_H) {
-      albumArtReady = true;
-      if (currentState == STATE_GAMING) {
-        extern void redrawGamingPartial();
-        redrawGamingPartial();
-      }
-    } else {
-      receivingArt = false;
-      albumArtReady = false;
-    }
   } else if (msg.startsWith("STATE:")) {
     String json = msg.substring(6);
     DynamicJsonDocument doc(512);
     if (!deserializeJson(doc, json)) {
-      playProgress = doc["progress"].as<int>();
-      isPlaying = doc["playing"].as<bool>();
-      musicPlaying = isPlaying;
+      if (doc.containsKey("track") && doc["track"].as<String>().length() > 0) {
+        currentTrack = doc["track"].as<String>();
+      }
+      if (doc.containsKey("artist") && doc["artist"].as<String>().length() > 0) {
+        currentArtist = doc["artist"].as<String>();
+      }
+      if (doc.containsKey("progress")) {
+        int prg = doc["progress"].as<int>();
+        playProgress = (prg < 1000) ? (prg * 1000) : prg;
+      }
+      if (doc.containsKey("duration")) {
+        int dur = doc["duration"].as<int>();
+        playDuration = (dur < 1000) ? (dur * 1000) : dur;
+      }
+      if (doc.containsKey("playing")) {
+        isPlaying = doc["playing"].as<bool>();
+        musicPlaying = isPlaying;
+      }
       extern void t2_redrawSpotifyPartial();
-      if (activeTheme == 1) t2_redrawSpotifyPartial();
-      else redrawSpotifyPartial();
+      if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
+      else if (currentState == STATE_SPOTIFY) redrawSpotifyPartial();
+      else if (currentState == STATE_CLOCK_DASHBOARD) redrawClockDashboardPartial();
+      else if (currentState == STATE_RETRO_WATCH) redrawRetroWatchPartial();
     }
   } else if (msg.startsWith("LYRICS:")) {
     String json = msg.substring(7);
     DynamicJsonDocument doc(1024);
     if (!deserializeJson(doc, json)) {
-      JsonArray array = doc.as<JsonArray>();
-      if (array.size() >= 3) {
-        prevLyricsLine = array[0].as<String>();
-        currentLyrics = array[1].as<String>();
-        currentLyricsLine2 = array[2].as<String>();
-      } else if (array.size() > 0) {
-        currentLyrics = array[0].as<String>();
-        currentLyricsLine2 = (array.size() > 1) ? array[1].as<String>() : "";
-        prevLyricsLine = "";
-      } else {
-        currentLyrics = "Instrumental";
-        currentLyricsLine2 = "";
-        prevLyricsLine = "";
+      if (doc.is<JsonObject>()) {
+        if (doc.containsKey("line1")) currentLyrics = doc["line1"].as<String>();
+        if (doc.containsKey("line2")) currentLyricsLine2 = doc["line2"].as<String>();
+        if (doc.containsKey("prev")) prevLyricsLine = doc["prev"].as<String>();
+      } else if (doc.is<JsonArray>()) {
+        JsonArray array = doc.as<JsonArray>();
+        if (array.size() >= 3) {
+          prevLyricsLine = array[0].as<String>();
+          currentLyrics = array[1].as<String>();
+          currentLyricsLine2 = array[2].as<String>();
+        } else if (array.size() > 0) {
+          currentLyrics = array[0].as<String>();
+          currentLyricsLine2 = (array.size() > 1) ? array[1].as<String>() : "";
+          prevLyricsLine = "";
+        }
       }
       extern void t2_redrawSpotifyPartial();
-      if (activeTheme == 1) t2_redrawSpotifyPartial();
-      else redrawSpotifyPartial();
+      if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
+      else if (currentState == STATE_SPOTIFY) redrawSpotifyPartial();
+      else if (currentState == STATE_CLOCK_DASHBOARD) redrawClockDashboardPartial();
+      else if (currentState == STATE_RETRO_WATCH) redrawRetroWatchPartial();
     }
   } else if (msg.startsWith("WEATHER:")) {
     String json = msg.substring(8);
@@ -1015,6 +1232,15 @@ void handleCommand(String msg) {
     }
   }
 
+  // COMPANION_PROBE / PING — Auto-discovery instant response
+  else if (msg == "COMPANION_PROBE" || msg == "PING" || msg == "HELLO_BOT") {
+    pcFound = true;
+    udp.beginPacket(udp.remoteIP(), UDP_PORT_TX);
+    const char* hello = "HELLO_COMPANION";
+    udp.write((const uint8_t*)hello, strlen(hello));
+    udp.endPacket();
+  }
+
   // BTN: — Web remote virtual button press
   else if (msg.startsWith("BTN:")) {
     String btn = msg.substring(4);
@@ -1032,13 +1258,59 @@ void handleCommand(String msg) {
     }
   }
 
-  // PAGE: — Direct page navigation from web remote
+  // PAGE: — Direct page navigation from web remote / Android App
   else if (msg.startsWith("PAGE:")) {
     int page = msg.substring(5).toInt();
-    if (page >= 0 && page < STATE_COUNT) {
-      extern void changePage(int delta);
-      int delta = page - (int)currentState;
-      if (delta != 0) changePage(delta);
+    extern void setPage(int targetPage);
+    setPage(page);
+  }
+
+  // WIFI:MULTI_SET: — Save prioritized multi-network array
+  else if (msg.startsWith("WIFI:MULTI_SET:")) {
+    int braceIdx = msg.indexOf('{');
+    if (braceIdx >= 0) {
+      String json = msg.substring(braceIdx);
+      DynamicJsonDocument doc(1024);
+      if (!deserializeJson(doc, json)) {
+        JsonArray arr = doc["networks"].as<JsonArray>();
+        std::vector<std::pair<String, String>> nets;
+        for (JsonObject obj : arr) {
+          String s = obj["ssid"].as<String>();
+          String p = obj["pass"].as<String>();
+          if (s.length() > 0) {
+            nets.push_back({s, p});
+          }
+        }
+        if (nets.size() > 0) {
+          saveMultiWiFiCredentials(nets);
+          showFlashNotification("Saved Networks!");
+          delay(800);
+          #ifdef ESP32
+          ESP.restart();
+          #else
+          ESP.reset();
+          #endif
+        }
+      }
+    }
+  }
+
+  // WIFI:SET: / WIFI:CONFIG: — Dynamic remote single Wi-Fi configuration
+  else if (msg.startsWith("WIFI:SET:") || msg.startsWith("WIFI:CONFIG:")) {
+    int braceIdx = msg.indexOf('{');
+    if (braceIdx >= 0) {
+      String json = msg.substring(braceIdx);
+      DynamicJsonDocument doc(512);
+      if (!deserializeJson(doc, json)) {
+        String newSSID = doc["ssid"].as<String>();
+        String newPASS = doc["pass"].as<String>();
+        if (newSSID.length() > 0) {
+          saveWiFiCredentials(newSSID, newPASS);
+          showFlashNotification("WiFi Updating...");
+          WiFi.disconnect();
+          WiFi.begin(currentWiFiSSID.c_str(), currentWiFiPASS.c_str());
+        }
+      }
     }
   }
 
