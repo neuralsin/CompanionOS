@@ -1,6 +1,20 @@
 # 🎯 SPOTIFY DESK COMPANION - COMPLETE DOCUMENTATION
 ## Build Your Own Intelligent Desk Bot - Zero to Hero Guide
 
+## About
+
+CompanionOS provides complete, step‑by‑step documentation and code to build a low‑cost intelligent desk companion powered by an ESP8266 and a 240×320 ILI9341 touchscreen. This repository includes:
+
+- Complete hardware build guide and wiring diagrams
+- Arduino firmware for the device (eyes, touch, sensors, WiFi/UDP)
+- A Python controller for Spotify integration, lyrics, album art processing, and PC-side features
+- Example configuration files, troubleshooting guides, and extension points
+
+Designed for makers of all skill levels, CompanionOS aims to make the entire build reproducible — from parts procurement to a fully working system. Primary languages used across the project include Python, C, C++, and PHP.
+
+**Highlights:** low cost (~$40 in parts), full source + 7,200+ lines of documentation, zero placeholders — everything needed to build and customize your desk companion.
+
+
 **THE ULTIMATE BUILD GUIDE WITH ZERO PLACEHOLDERS**
 
 Everything you need to build a complete desk companion from scratch. Every wire connection. Every line of code explained. Every API key obtained. No steps skipped.
@@ -259,7 +273,7 @@ CompanionOS/
 5. ✓ All components working
 ```
 
-### **Phase 2: Arduino (1-2 hours)**
+### **Phase 2: Arduino (1-2 hours)**n
 ```
 1. Install Arduino IDE (ARDUINO_COMPLETE_GUIDE.md 3.1)
 2. Install ESP8266 support (3.2)
