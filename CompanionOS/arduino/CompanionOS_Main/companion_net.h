@@ -688,7 +688,7 @@ void handleNetwork() {
 
     // V4 OPTIMIZATION: BARE-METAL BINARY PACKET SNIFFING
     if (len > 3 && (unsigned char)udpBuffer[0] == 0xFD) {
-      // CUSTOM EYE IMAGE CHUNKS
+      // CUSTOM EYE IMAGE CHUNKS (160x128 RGB565)
       if (customEyeImg == nullptr) {
         customEyeImg = (uint16_t*)malloc(160 * 128 * 2);
       }
@@ -706,6 +706,9 @@ void handleNetwork() {
         for (int i = 0; i < safePixels; i++) {
           int offset = 3 + (i * 2);
           dest[i] = ((uint16_t)(unsigned char)udpBuffer[offset] << 8) | (unsigned char)udpBuffer[offset + 1];
+        }
+        if (chunkIdx >= 0 && chunkIdx < 128) {
+          customEyeRowsReceived[chunkIdx] = 1;
         }
       }
       return;
@@ -751,8 +754,8 @@ void handleNetwork() {
           }
         }
 
-        // Auto-complete if majority of rows arrived or on last chunk
-        if (albumArtRowsComplete >= (ALBUM_ART_H * 3 / 4) || chunkIdx >= (ALBUM_ART_H - 4)) {
+        // Auto-complete if all rows arrived or on last chunk
+        if (albumArtRowsComplete >= ALBUM_ART_H) {
           completeAlbumArt();
         }
       }
@@ -843,16 +846,40 @@ void handleCommand(String msg) {
     else setEmotion(e);
   } else if (msg.startsWith("CUSTEYE:START")) {
     customEyeReady = false;
+    customEyeActive = false;
+    memset(customEyeRowsReceived, 0, sizeof(customEyeRowsReceived));
     if (customEyeImg == nullptr) {
       customEyeImg = (uint16_t*)malloc(160 * 128 * 2);
     }
-  } else if (msg.startsWith("CUSTEYE:DONE")) {
-    customEyeReady = true;
-    if (customEyeActive && currentState == STATE_EYES) {
-      renderCurrentPage();
+    if (customEyeImg) memset(customEyeImg, 0, 160 * 128 * 2);
+  } else if (msg.startsWith("CUSTEYE:VERIFY") || msg.startsWith("CUSTEYE:DONE")) {
+    // Exact byte-by-byte check — ZERO interpolation!
+    String missingRows = "";
+    int missingCount = 0;
+    for (int r = 0; r < 128; r++) {
+      if (!customEyeRowsReceived[r]) {
+        if (missingCount > 0) missingRows += ",";
+        missingRows += String(r);
+        missingCount++;
+        if (missingCount >= 25) break; // Request in batches of up to 25 rows per packet
+      }
+    }
+    if (missingCount > 0) {
+      sendCommand("CUSTEYE_REQ:" + missingRows);
+    } else {
+      customEyeReady = true;
+      customEyeActive = true;
+      if (currentState == STATE_EYES) {
+        renderCurrentPage();
+      }
     }
   } else if (msg.startsWith("CUSTEYE:TOGGLE:")) {
     customEyeActive = (msg.substring(15).toInt() == 1);
+    if (currentState == STATE_EYES) {
+      renderCurrentPage();
+    }
+  } else if (msg == "CUSTEYE:OFF" || msg == "CUSTEYE:DISMISS" || msg == "CUSTEYE:CLEAR" || msg == "PHOTODROP:OFF" || msg == "PHOTODROP:DISMISS") {
+    customEyeActive = false;
     if (currentState == STATE_EYES) {
       renderCurrentPage();
     }
@@ -884,6 +911,14 @@ void handleCommand(String msg) {
       renderCurrentPage();
     }
 #endif
+  } else if (msg.startsWith("EYE_THEME:")) {
+    int theme = msg.substring(10).toInt();
+    if (theme >= 0 && theme < THEME_COUNT) {
+      activeTheme = theme;
+      if (currentState == STATE_EYES) {
+        renderCurrentPage();
+      }
+    }
   }
   // V4: Antigravity Agent Status
   else if (msg.startsWith("AGENT:")) {
@@ -918,7 +953,15 @@ void handleCommand(String msg) {
     String json = msg.substring(8);
     DynamicJsonDocument doc(1024);
     if (!deserializeJson(doc, json)) {
-      if (doc.containsKey("track")) currentTrack = doc["track"].as<String>();
+      if (doc.containsKey("track")) {
+        String newTrack = doc["track"].as<String>();
+        if (newTrack != currentTrack) {
+          currentTrack = newTrack;
+          currentLyrics = "";
+          currentLyricsLine2 = "";
+          prevLyricsLine = "";
+        }
+      }
       if (doc.containsKey("artist")) currentArtist = doc["artist"].as<String>();
       if (doc.containsKey("duration")) {
         int dur = doc["duration"].as<int>();
@@ -960,8 +1003,15 @@ void handleCommand(String msg) {
     String json = msg.substring(6);
     DynamicJsonDocument doc(1024);
     if (!deserializeJson(doc, json)) {
-      currentTrack = doc["track"].as<String>();
-      currentArtist = doc["artist"].as<String>();
+      String newTrack = doc["track"].as<String>();
+      String newArtist = doc["artist"].as<String>();
+      if (newTrack != currentTrack || newArtist != currentArtist) {
+        currentTrack = newTrack;
+        currentArtist = newArtist;
+        currentLyrics = "";
+        currentLyricsLine2 = "";
+        prevLyricsLine = "";
+      }
       if (doc.containsKey("duration")) {
         int dur = doc["duration"].as<int>();
         playDuration = (dur < 1000) ? (dur * 1000) : dur;
@@ -982,7 +1032,27 @@ void handleCommand(String msg) {
     memset(albumArtRowsReceived, 0, sizeof(albumArtRowsReceived));
     memset(albumArt, 0, sizeof(albumArt));
   } else if (msg.startsWith("ART_COMPLETE:")) {
-    if (albumArtRowsComplete >= 32 || albumArtRowsComplete >= (ALBUM_ART_H * 3 / 4)) {
+    int missingRows = ALBUM_ART_H - albumArtRowsComplete;
+    if (missingRows > 4) {
+      // More than 4 rows missing (>6%) -> Request missing 4-row chunk packets from host!
+      String missingChunks = "";
+      int count = 0;
+      for (int c = 0; c < ALBUM_ART_H; c += 4) {
+        bool chunkMissing = false;
+        for (int r = c; r < c + 4; r++) {
+          if (!albumArtRowsReceived[r]) { chunkMissing = true; break; }
+        }
+        if (chunkMissing) {
+          if (count > 0) missingChunks += ",";
+          missingChunks += String(c);
+          count++;
+        }
+      }
+      if (count > 0) {
+        sendCommand("ART_REQ:" + missingChunks);
+      }
+    } else if (albumArtRowsComplete >= (ALBUM_ART_H - 4)) {
+      // Within 4-row max interpolation threshold -> complete and render!
       completeAlbumArt();
     } else {
       receivingArt = false;
@@ -1004,24 +1074,24 @@ void handleCommand(String msg) {
     String json = msg.substring(6);
     DynamicJsonDocument doc(512);
     if (!deserializeJson(doc, json)) {
-      if (doc.containsKey("track") && doc["track"].as<String>().length() > 0) {
-        currentTrack = doc["track"].as<String>();
-      }
-      if (doc.containsKey("artist") && doc["artist"].as<String>().length() > 0) {
-        currentArtist = doc["artist"].as<String>();
+      if (doc.containsKey("playing")) {
+        isPlaying = doc["playing"].as<bool>();
+        musicPlaying = isPlaying;
       }
       if (doc.containsKey("progress")) {
         int prg = doc["progress"].as<int>();
         playProgress = (prg < 1000) ? (prg * 1000) : prg;
       }
-      if (doc.containsKey("duration")) {
-        int dur = doc["duration"].as<int>();
-        playDuration = (dur < 1000) ? (dur * 1000) : dur;
+      if (doc.containsKey("track")) {
+        String newTrack = doc["track"].as<String>();
+        if (newTrack != currentTrack) {
+          currentTrack = newTrack;
+          currentLyrics = "";
+          currentLyricsLine2 = "";
+          prevLyricsLine = "";
+        }
       }
-      if (doc.containsKey("playing")) {
-        isPlaying = doc["playing"].as<bool>();
-        musicPlaying = isPlaying;
-      }
+      if (doc.containsKey("artist")) currentArtist = doc["artist"].as<String>();
       extern void t2_redrawSpotifyPartial();
       if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
       else if (currentState == STATE_SPOTIFY) redrawSpotifyPartial();
@@ -1032,22 +1102,9 @@ void handleCommand(String msg) {
     String json = msg.substring(7);
     DynamicJsonDocument doc(1024);
     if (!deserializeJson(doc, json)) {
-      if (doc.is<JsonObject>()) {
-        if (doc.containsKey("line1")) currentLyrics = doc["line1"].as<String>();
-        if (doc.containsKey("line2")) currentLyricsLine2 = doc["line2"].as<String>();
-        if (doc.containsKey("prev")) prevLyricsLine = doc["prev"].as<String>();
-      } else if (doc.is<JsonArray>()) {
-        JsonArray array = doc.as<JsonArray>();
-        if (array.size() >= 3) {
-          prevLyricsLine = array[0].as<String>();
-          currentLyrics = array[1].as<String>();
-          currentLyricsLine2 = array[2].as<String>();
-        } else if (array.size() > 0) {
-          currentLyrics = array[0].as<String>();
-          currentLyricsLine2 = (array.size() > 1) ? array[1].as<String>() : "";
-          prevLyricsLine = "";
-        }
-      }
+      if (doc.containsKey("line1")) currentLyrics = doc["line1"].as<String>();
+      if (doc.containsKey("line2")) currentLyricsLine2 = doc["line2"].as<String>();
+      if (doc.containsKey("prev"))  prevLyricsLine = doc["prev"].as<String>();
       extern void t2_redrawSpotifyPartial();
       if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
       else if (currentState == STATE_SPOTIFY) redrawSpotifyPartial();
@@ -1058,28 +1115,25 @@ void handleCommand(String msg) {
     String json = msg.substring(8);
     DynamicJsonDocument doc(1024);
     if (!deserializeJson(doc, json)) {
-      weatherTemp = doc["temp"].as<int>();
-      weatherFeels = doc["feels"].as<int>();
-      weatherHumidity = doc["humidity"].as<int>();
-      weatherCondition = doc["condition"].as<String>();
-      weatherCode = doc["code"].as<int>();
-      weatherWind = doc["wind"].as<int>();
-      weatherSunrise = doc["sunrise"].as<String>();
-      weatherSunset = doc["sunset"].as<String>();
-      weatherHigh = doc["high"].as<int>();
-      weatherLow = doc["low"].as<int>();
-      weatherCity = doc["city"].as<String>();
+      if (doc.containsKey("temp")) weatherTemp = doc["temp"].as<int>();
+      if (doc.containsKey("condition")) weatherCondition = doc["condition"].as<String>();
+      if (doc.containsKey("humidity")) weatherHumidity = doc["humidity"].as<int>();
+      if (doc.containsKey("city")) weatherCity = doc["city"].as<String>();
+      if (doc.containsKey("wind")) weatherWind = doc["wind"].as<int>();
+      if (doc.containsKey("code")) weatherCode = doc["code"].as<int>();
+      if (doc.containsKey("high")) weatherHigh = doc["high"].as<int>();
+      if (doc.containsKey("low")) weatherLow = doc["low"].as<int>();
       redrawWeatherPartial();
     }
   } else if (msg.startsWith("POMO:")) {
     String json = msg.substring(5);
     DynamicJsonDocument doc(512);
     if (!deserializeJson(doc, json)) {
-      pomoRemaining = doc["remaining"].as<int>();
-      pomoTotal = doc["total"].as<int>();
-      pomoIsBreak = doc["is_break"].as<bool>();
-      pomoSessions = doc["sessions"].as<int>();
-      pomoActive = doc["active"].as<bool>();
+      if (doc.containsKey("remaining")) pomoRemaining = doc["remaining"].as<int>();
+      if (doc.containsKey("total")) pomoTotal = doc["total"].as<int>();
+      if (doc.containsKey("active")) pomoActive = doc["active"].as<bool>();
+      if (doc.containsKey("is_break")) pomoIsBreak = doc["is_break"].as<bool>();
+      if (doc.containsKey("sessions")) pomoSessions = doc["sessions"].as<int>();
       redrawPomodoroPartial();
     }
   } else if (msg.startsWith("NOTIF:")) {

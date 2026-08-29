@@ -135,81 +135,90 @@ bool forceSpotifyRedraw = false;
 void redrawSpotifyPartial() {
   if (currentState != STATE_SPOTIFY) return;
   
-  // 1:1 Spotify Replication Layout for 160x128
-  int alb_x = 4, alb_y = 18, alb_s = 64; // Use full 64x64 to prevent array corruption
-  int infoY = alb_y + alb_s + 4; // Y = 86
-  String title = currentTrack.substring(0, 24);
-  String artist = currentArtist.substring(0, 20);
+  // ── ALBUM ART & LYRICS: Y = 15 to 79 (Height 64px, Native 1:1 64x64 Image) ──
+  int alb_x = 4, alb_y = 15, alb_s = 64;
+  int cardX = 72, cardY = 15, cardW = 84, cardH = 64;
+
+  String title = currentTrack.length() > 0 ? currentTrack : "No Active Media";
+  String artist = currentArtist.length() > 0 ? currentArtist : "CompanionOS";
 
   if (title != lastTrackTitle) {
-    tft.fillRect(alb_x, alb_y, alb_s + 3, alb_s + 3, COLOR_BG);
+    tft.fillRect(alb_x, alb_y, alb_s, alb_s, COLOR_BG);
     artDrawn = false;
-    albumArtReady = false;
+    // Do NOT wipe albumArtReady so background cached art remains valid!
   }
   
   if (!artDrawn && albumArtReady) {
     tft.setSwapBytes(true);
-    tft.pushImage(alb_x, alb_y, alb_s, alb_s, albumArt);
+    // Draw 64x64 buffer pixel-perfect 1:1 natively
+    tft.pushImage(alb_x, alb_y, 64, 64, albumArt);
     tft.setSwapBytes(false);
     
-    // Repaint shadow
-    int blurRadius = 2;
-    for (int i = 1; i <= blurRadius; i++) {
-      uint16_t shadeColor = (i == 1) ? 0x1042 : 0x0821;
-      tft.drawFastHLine(alb_x + i, alb_y + alb_s + i - 1, alb_s, shadeColor);
-      tft.drawFastVLine(alb_x + alb_s + i - 1, alb_y + i, alb_s, shadeColor);
-    }
+    // Clean outer border around album cover
+    tft.drawRect(alb_x - 1, alb_y - 1, alb_s + 2, alb_s + 2, 0x2104);
     artDrawn = true;
-  }
-  
-  if (forceSpotifyRedraw || title != lastTrackTitle) {
-    tft.fillRect(alb_x, infoY, 150, 10, COLOR_BG); 
-    tft.setTextColor(TFT_WHITE, COLOR_BG);
-    tft.drawString(title, alb_x, infoY, 1);
-    
-    lastTrackTitle = title;
-  }
-  if (forceSpotifyRedraw || artist != lastArtist) {
-    tft.fillRect(alb_x, infoY + 10, 150, 10, COLOR_BG); 
-    tft.setTextColor(0x8410, COLOR_BG);
-    tft.drawString(artist, alb_x, infoY + 10, 1);
-    drawIconHeart(alb_x + tft.textWidth(artist, 1) + 4, infoY + 12, TFT_WHITE);
-    lastArtist = artist;
+  } else if (!albumArtReady && !artDrawn) {
+    tft.fillRoundRect(alb_x, alb_y, alb_s, alb_s, 4, 0x1082);
+    tft.drawRoundRect(alb_x, alb_y, alb_s, alb_s, 4, 0x2104);
+    tft.setTextColor(0x4208, 0x1082);
+    tft.drawCentreString("NO ART", alb_x + alb_s / 2, alb_y + alb_s / 2 - 4, 1);
   }
 
-  // ── RIGHT COLUMN: Lyrics Card (Scaled for 160x128) ──
-  int cardX = 72;
-  int cardY = 18;
-  int cardW = 84;
-  int cardH = 64;
-  
+  // ── RIGHT COLUMN: Dynamic Word-Wrapped Lyrics Card ──
   if (!cardDrawn) {
     tft.fillRoundRect(cardX, cardY, cardW, cardH, 4, 0x1082);
     tft.drawRoundRect(cardX, cardY, cardW, cardH, 4, 0x2104);
     
     tft.setTextColor(0x07FF, 0x1082);
-    tft.drawString("LYRICS", cardX + 4, cardY + 4, 1);
+    tft.drawString("LYRICS", cardX + 4, cardY + 3, 1);
     cardDrawn = true;
   }
   
-  if (currentLyrics != lastLyric1 || currentLyricsLine2 != lastLyric2 || prevLyricsLine != lastPrevLyric) {
-    tft.fillRect(cardX + 2, cardY + 16, cardW - 4, cardH - 18, 0x0821);
-    int yC = cardY + 16;
-    
-    if (prevLyricsLine.length() > 0) {
+  if (currentLyrics != lastLyric1 || currentLyricsLine2 != lastLyric2 || prevLyricsLine != lastPrevLyric || forceSpotifyRedraw) {
+    tft.fillRect(cardX + 2, cardY + 13, cardW - 4, cardH - 15, 0x0821);
+    int yC = cardY + 14;
+    int maxCharsPerLine = (cardW - 8) / 6; // ~12-13 chars per line at 6px font
+    if (maxCharsPerLine < 8) maxCharsPerLine = 8;
+    if (maxCharsPerLine > 13) maxCharsPerLine = 13;
+
+    // Helper lambda to wrap text into lines
+    auto drawWrapped = [&](String text, uint16_t color, int maxLines) {
+      if (text.length() == 0) return;
+      tft.setTextColor(color, 0x0821);
+      int p = 0;
+      int linesDrawn = 0;
+      while (p < text.length() && linesDrawn < maxLines && yC <= cardY + cardH - 9) {
+        while (p < text.length() && text[p] == ' ') p++;
+        if (p >= text.length()) break;
+        int rem = text.length() - p;
+        if (rem <= maxCharsPerLine) {
+          tft.drawString(text.substring(p), cardX + 4, yC, 1);
+          yC += 9;
+          linesDrawn++;
+          break;
+        }
+        int breakIdx = maxCharsPerLine;
+        for (int b = maxCharsPerLine; b > 0; b--) {
+          if (text[p + b] == ' ') { breakIdx = b; break; }
+        }
+        tft.drawString(text.substring(p, p + breakIdx), cardX + 4, yC, 1);
+        yC += 9;
+        linesDrawn++;
+        p += breakIdx;
+      }
+    };
+
+    if (currentLyrics.length() > 0) {
+      // Current active line in bright white
+      drawWrapped(currentLyrics, TFT_WHITE, 2);
+      // Next line in dim cyan/grey
+      if (currentLyricsLine2.length() > 0 && yC <= cardY + cardH - 9) {
+        drawWrapped(currentLyricsLine2, 0x4208, 2);
+      }
+    } else {
       tft.setTextColor(0x4208, 0x0821);
-      tft.drawString(prevLyricsLine.substring(0, 14), cardX + 4, yC, 1); yC += 14;
-    }
-    
-    tft.setTextColor(TFT_WHITE, 0x0821);
-    tft.drawString(currentLyrics.substring(0, 14), cardX + 4, yC, 1); yC += 14;
-    if (currentLyrics.length() > 14) {
-      tft.drawString(currentLyrics.substring(14, 28), cardX + 4, yC, 1); yC += 14;
-    }
-    
-    if (currentLyricsLine2.length() > 0 && yC < cardY + cardH - 10) {
-      tft.setTextColor(0x4208, 0x0821);
-      tft.drawString(currentLyricsLine2.substring(0, 14), cardX + 4, yC, 1);
+      tft.drawString("♪ Playing", cardX + 4, cardY + 22, 1);
+      tft.drawString("with CompanionOS", cardX + 4, cardY + 32, 1);
     }
     
     lastLyric1 = currentLyrics;
@@ -217,31 +226,47 @@ void redrawSpotifyPartial() {
     lastPrevLyric = prevLyricsLine;
   }
 
-  // ── BOTTOM: Playback Controls ──
-  int ctrlY = 106;
-  if (!controlsDrawn) {
-    tft.fillRect(0, ctrlY - 8, 160, 16, COLOR_BG); 
-    drawIconPrev(45, ctrlY, TFT_WHITE);
-    drawIconNext(115, ctrlY, TFT_WHITE);
+  // ── TRACK INFO: Y = 81 to 99 ──
+  int infoY = 81;
+  if (forceSpotifyRedraw || title != lastTrackTitle) {
+    tft.fillRect(4, infoY, 152, 9, COLOR_BG); 
+    tft.setTextColor(TFT_WHITE, COLOR_BG);
+    drawTruncatedText(4, infoY, title.c_str(), 152, TFT_WHITE, 1);
+    lastTrackTitle = title;
+  }
+  if (forceSpotifyRedraw || artist != lastArtist) {
+    tft.fillRect(4, infoY + 10, 152, 9, COLOR_BG); 
+    tft.setTextColor(0x8410, COLOR_BG);
+    drawTruncatedText(4, infoY + 10, artist.c_str(), 135, 0x8410, 1);
+    int artW = min(130, (int)tft.textWidth(artist, 1));
+    drawIconHeart(4 + artW + 4, infoY + 11, 0x8410);
+    lastArtist = artist;
+  }
+
+  // ── CONTROLS: Y = 100 to 113 (Center Y = 106) ──
+  int ctrlY = 105;
+  if (!controlsDrawn || forceSpotifyRedraw) {
+    tft.fillRect(0, 99, 160, 14, COLOR_BG); 
+    drawIconPrev(48, ctrlY, TFT_WHITE);
+    drawIconNext(112, ctrlY, TFT_WHITE);
     controlsDrawn = true;
   }
 
-  if (isPlaying != lastPlaying || !controlsDrawn) {
-    tft.fillCircle(80, ctrlY, 9, TFT_WHITE);
+  if (isPlaying != lastPlaying || !controlsDrawn || forceSpotifyRedraw) {
+    tft.fillCircle(80, ctrlY, 7, TFT_WHITE);
     if (isPlaying) drawIconPause(80, ctrlY, COLOR_BG);
-    else drawIconPlay(82, ctrlY, COLOR_BG);
+    else drawIconPlay(81, ctrlY, COLOR_BG);
     lastPlaying = isPlaying;
   }
 
-  // ── BOTTOM: Progress Bar ──
-  int barX = 10, barY = 120, barW = 140;
-  
-  tft.fillRect(barX, barY - 2, barW + 10, 6, COLOR_BG);
+  // ── PROGRESS BAR: Y = 117 to 123 ──
+  int barX = 10, barY = 118, barW = 140;
+  tft.fillRect(barX, barY - 2, barW, 6, COLOR_BG);
   tft.fillRect(barX, barY, barW, 2, 0x4208);
   if (playDuration > 0) {
     int w = map(playProgress, 0, playDuration, 0, barW);
     w = constrain(w, 0, barW);
-    tft.fillRect(barX, barY, w, 2, TFT_WHITE);
+    tft.fillRect(barX, barY, w, 2, 0x07E0); // Spotify Green
     tft.fillCircle(barX + w, barY + 1, 2, TFT_WHITE);
   }
   forceSpotifyRedraw = false;
@@ -263,6 +288,25 @@ void resetSpotifyDrawState() {
 
 void completeAlbumArt() {
   receivingArt = false;
+
+  // Interpolate any missed rows from neighboring valid rows to eliminate black lines
+  int lastValidRow = -1;
+  for (int r = 0; r < ALBUM_ART_H; r++) {
+    if (albumArtRowsReceived[r]) {
+      lastValidRow = r;
+    } else if (lastValidRow >= 0) {
+      memcpy(albumArt + (r * ALBUM_ART_W), albumArt + (lastValidRow * ALBUM_ART_W), ALBUM_ART_W * sizeof(uint16_t));
+    }
+  }
+  lastValidRow = -1;
+  for (int r = ALBUM_ART_H - 1; r >= 0; r--) {
+    if (albumArtRowsReceived[r]) {
+      lastValidRow = r;
+    } else if (lastValidRow >= 0) {
+      memcpy(albumArt + (r * ALBUM_ART_W), albumArt + (lastValidRow * ALBUM_ART_W), ALBUM_ART_W * sizeof(uint16_t));
+    }
+  }
+
   albumArtReady = true;
   artDrawn = false; // Force redraw in Theme 1 / Classic
   t2s_artDrawn = false; // Force redraw in Theme 2
@@ -877,13 +921,11 @@ void drawNetworkPageFull() {
 void drawClockDashboardPageFull() {
   resetClockDashboardDrawState();
   drawClockDashboardPage();
-  drawStatusBar();
 }
 
 void drawRetroWatchPageFull() {
   resetRetroWatchDrawState();
   drawRetroWatchPage();
-  drawStatusBar();
 }
 
 void renderCurrentPage() {
@@ -920,7 +962,9 @@ void changePage(int direction) {
   #endif
   if (next >= maxPage) next = 0;
   if (next < 0) next = maxPage - 1;
-  currentState = (AppState)next;
+  if (currentState != STATE_EYES) {
+    customEyeActive = false;
+  }
   // HIGH-06 FIX: Reset all page draw states on page change to prevent stale partial redraws
   resetSpotifyDrawState();
   resetClockDashboardDrawState();
@@ -948,6 +992,9 @@ void setPage(int targetPage) {
   maxPage = STATE_DR_HACK;
   #endif
   if (targetPage < 0 || targetPage >= maxPage) return;
+  if (targetPage != (int)STATE_EYES) {
+    customEyeActive = false;
+  }
   currentState = (AppState)targetPage;
   resetSpotifyDrawState();
   resetClockDashboardDrawState();

@@ -150,6 +150,7 @@ extern unsigned long nextThoughtTime;
 extern uint16_t* customEyeImg;
 extern bool customEyeActive;
 extern bool customEyeReady;
+extern uint8_t customEyeRowsReceived[128];
 extern uint16_t spotifyArtCache[4096]; // 64x64 cache for Spotify persistence
 
 struct ThoughtBubble {

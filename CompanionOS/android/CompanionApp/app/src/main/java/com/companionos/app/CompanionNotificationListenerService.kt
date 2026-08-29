@@ -1,8 +1,11 @@
 package com.companionos.app
 
 import android.app.Notification
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Icon
@@ -11,6 +14,7 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Build
+import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import kotlinx.coroutines.CoroutineScope
@@ -26,6 +30,10 @@ import java.util.Locale
 
 class CompanionNotificationListenerService : NotificationListenerService() {
 
+    companion object {
+        var instance: CompanionNotificationListenerService? = null
+    }
+
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
 
@@ -34,6 +42,7 @@ class CompanionNotificationListenerService : NotificationListenerService() {
     private var lastArtist = ""
     private var lastAlbumArt: Bitmap? = null
     private var currentLyricsList: List<LrcLibLyricsService.LyricLine> = emptyList()
+    private var isSpotifyReceiverRegistered = false
 
     private val mediaCallback = object : MediaController.Callback() {
         override fun onMetadataChanged(metadata: MediaMetadata?) {
@@ -49,19 +58,179 @@ class CompanionNotificationListenerService : NotificationListenerService() {
 
     private var sessionListener: MediaSessionManager.OnActiveSessionsChangedListener? = null
 
+    // Native Spotify Broadcast Receiver for instant zero-latency tracking
+    private val spotifyBroadcastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent == null) return
+            try {
+                val action = intent.action ?: ""
+                val isPlaying = intent.getBooleanExtra("playing", false)
+                val track = intent.getStringExtra("track") ?: ""
+                val artist = intent.getStringExtra("artist") ?: ""
+                val album = intent.getStringExtra("album") ?: ""
+                val duration = intent.getIntExtra("length", 0).toLong()
+                val position = intent.getIntExtra("playbackPosition", 0).toLong()
+
+                if (track.isNotEmpty()) {
+                    handleDirectTrackUpdate(track, artist, album, duration, position, isPlaying)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+        registerSpotifyBroadcasts()
+    }
+
     override fun onListenerConnected() {
         super.onListenerConnected()
+        instance = this
+        registerSpotifyBroadcasts()
         registerMediaSessionListener()
         startPlaybackPositionTicker()
     }
 
+    private fun registerSpotifyBroadcasts() {
+        if (isSpotifyReceiverRegistered) return
+        try {
+            val filter = IntentFilter().apply {
+                addAction("com.spotify.music.playbackstatechanged")
+                addAction("com.spotify.music.metadatachanged")
+                addAction("com.spotify.music.queuechanged")
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(spotifyBroadcastReceiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                registerReceiver(spotifyBroadcastReceiver, filter)
+            }
+            isSpotifyReceiverRegistered = true
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        if (instance == this) instance = null
         serviceJob.cancel()
         try {
+            if (isSpotifyReceiverRegistered) {
+                unregisterReceiver(spotifyBroadcastReceiver)
+                isSpotifyReceiverRegistered = false
+            }
             activeMediaController?.unregisterCallback(mediaCallback)
             val mm = getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager
             sessionListener?.let { mm?.removeOnActiveSessionsChangedListener(it) }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun handleMediaAction(action: String) {
+        try {
+            // Tier 1: Active MediaSession Controller
+            val controls = activeMediaController?.transportControls
+            if (controls != null) {
+                when (action.uppercase()) {
+                    "PLAY_PAUSE", "TOGGLE", "PLAY", "PAUSE" -> {
+                        val state = activeMediaController?.playbackState?.state
+                        if (state == PlaybackState.STATE_PLAYING) {
+                            controls.pause()
+                        } else {
+                            controls.play()
+                        }
+                        return
+                    }
+                    "NEXT", "SKIP_NEXT" -> {
+                        controls.skipToNext()
+                        return
+                    }
+                    "PREV", "SKIP_PREV", "PREVIOUS" -> {
+                        controls.skipToPrevious()
+                        return
+                    }
+                    "STOP" -> {
+                        controls.stop()
+                        return
+                    }
+                }
+            }
+
+            // Tier 2: Spotify Direct Broadcast Intents
+            val spotifyIntent = when (action.uppercase()) {
+                "PLAY_PAUSE", "TOGGLE", "PLAY", "PAUSE" -> Intent("com.spotify.music.playbackcontrol.togglepause")
+                "NEXT", "SKIP_NEXT" -> Intent("com.spotify.mobile.android.ui.widget.NEXT")
+                "PREV", "SKIP_PREV", "PREVIOUS" -> Intent("com.spotify.mobile.android.ui.widget.PREVIOUS")
+                else -> null
+            }
+            if (spotifyIntent != null) {
+                spotifyIntent.setPackage("com.spotify.music")
+                sendBroadcast(spotifyIntent)
+            }
+
+            // Tier 3: Universal System Media Key Events
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+            val keyCode = when (action.uppercase()) {
+                "PLAY_PAUSE", "TOGGLE", "PLAY", "PAUSE" -> android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+                "NEXT", "SKIP_NEXT" -> android.view.KeyEvent.KEYCODE_MEDIA_NEXT
+                "PREV", "SKIP_PREV", "PREVIOUS" -> android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS
+                "STOP" -> android.view.KeyEvent.KEYCODE_MEDIA_STOP
+                else -> null
+            }
+            if (audioManager != null && keyCode != null) {
+                val downEvent = android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, keyCode)
+                val upEvent = android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, keyCode)
+                audioManager.dispatchMediaKeyEvent(downEvent)
+                audioManager.dispatchMediaKeyEvent(upEvent)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun scanAndBindActiveMediaController() {
+        try {
+            val mm = getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager ?: return
+            val component = ComponentName(this, CompanionNotificationListenerService::class.java)
+            val controllers = mm.getActiveSessions(component)
+
+            if (!controllers.isNullOrEmpty()) {
+                var bestController: MediaController? = null
+                // Priority 1: Controller currently in STATE_PLAYING
+                for (c in controllers) {
+                    if (c.playbackState?.state == PlaybackState.STATE_PLAYING) {
+                        bestController = c
+                        break
+                    }
+                }
+                // Priority 2: Spotify package
+                if (bestController == null) {
+                    for (c in controllers) {
+                        if (c.packageName.contains("spotify", ignoreCase = true)) {
+                            bestController = c
+                            break
+                        }
+                    }
+                }
+                // Priority 3: First available
+                if (bestController == null) {
+                    bestController = controllers[0]
+                }
+
+                if (bestController != activeMediaController) {
+                    activeMediaController?.unregisterCallback(mediaCallback)
+                    activeMediaController = bestController
+                    activeMediaController?.registerCallback(mediaCallback)
+                }
+
+                processMediaMetadata(activeMediaController?.metadata, activeMediaController?.playbackState)
+            }
+        } catch (e: SecurityException) {
+            // Needs Notification Access permission
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -73,26 +242,53 @@ class CompanionNotificationListenerService : NotificationListenerService() {
             val component = ComponentName(this, CompanionNotificationListenerService::class.java)
 
             sessionListener = MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
-                if (!controllers.isNullOrEmpty()) {
-                    activeMediaController?.unregisterCallback(mediaCallback)
-                    activeMediaController = controllers[0]
-                    activeMediaController?.registerCallback(mediaCallback)
-                    processMediaMetadata(activeMediaController?.metadata, activeMediaController?.playbackState)
-                }
+                scanAndBindActiveMediaController()
             }
             sessionListener?.let { mm?.addOnActiveSessionsChangedListener(it, component) }
 
-            val controllers = mm?.getActiveSessions(component)
-            if (!controllers.isNullOrEmpty()) {
-                activeMediaController?.unregisterCallback(mediaCallback)
-                activeMediaController = controllers[0]
-                activeMediaController?.registerCallback(mediaCallback)
-                processMediaMetadata(activeMediaController?.metadata, activeMediaController?.playbackState)
-            }
+            scanAndBindActiveMediaController()
         } catch (e: SecurityException) {
             // Permission needs toggle in Settings -> Notification Access
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    private fun handleDirectTrackUpdate(track: String, artist: String, album: String, durationMs: Long, positionMs: Long, isPlaying: Boolean) {
+        val spotifyPayload = JSONObject().apply {
+            put("track", track)
+            put("artist", artist)
+            put("album", album)
+            put("duration", durationMs)
+            put("progress", positionMs)
+            put("playing", isPlaying)
+        }
+        CompanionForegroundService.sendUdp("SPOTIFY:$spotifyPayload")
+        CompanionForegroundService.sendUdp("TRACK:$spotifyPayload")
+        CompanionForegroundService.sendUdp("STATE:$spotifyPayload")
+
+        if (track != lastTrackTitle || artist != lastArtist) {
+            lastTrackTitle = track
+            lastArtist = artist
+
+            currentLyricsList = emptyList()
+            CompanionForegroundService.sendUdp("LYRICS:{\"line1\":\"\",\"line2\":\"\",\"prev\":\"\"}")
+
+            val gen = MediaArtProcessor.nextGeneration()
+            serviceScope.launch {
+                val lyrics = LrcLibLyricsService.fetchLyrics(track, artist)
+                if (MediaArtProcessor.isCurrentGeneration(gen)) {
+                    currentLyricsList = lyrics
+                }
+            }
+
+            serviceScope.launch {
+                val artBitmap = MediaArtProcessor.fetchAlbumArtOnline(track, artist)
+                if (artBitmap != null && MediaArtProcessor.isCurrentGeneration(gen)) {
+                    lastAlbumArt = artBitmap
+                    MediaArtProcessor.streamAlbumArt(artBitmap, gen)
+                }
+            }
         }
     }
 
@@ -103,11 +299,17 @@ class CompanionNotificationListenerService : NotificationListenerService() {
         val artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: ""
         val album = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM) ?: ""
         val durationMs = metadata.getLong(MediaMetadata.METADATA_KEY_DURATION)
-        val durationSec = if (durationMs > 0) (durationMs / 1000).toInt() else 0
 
         val isPlaying = state?.state == PlaybackState.STATE_PLAYING
-        val positionMs = state?.position ?: 0L
-        val progressSec = if (positionMs > 0) (positionMs / 1000).toInt() else 0
+        val basePos = state?.position ?: 0L
+        val lastUpdate = state?.lastPositionUpdateTime ?: 0L
+        val currentPos = if (isPlaying && lastUpdate > 0) {
+            val delta = SystemClock.elapsedRealtime() - lastUpdate
+            val speed = if (state?.playbackSpeed != null && state.playbackSpeed > 0) state.playbackSpeed else 1.0f
+            basePos + (delta * speed).toLong()
+        } else {
+            basePos
+        }
 
         if (track.isEmpty()) return
 
@@ -116,8 +318,8 @@ class CompanionNotificationListenerService : NotificationListenerService() {
             put("track", track)
             put("artist", artist)
             put("album", album)
-            put("duration", durationSec)
-            put("progress", progressSec)
+            put("duration", durationMs)
+            put("progress", currentPos)
             put("playing", isPlaying)
         }
         CompanionForegroundService.sendUdp("SPOTIFY:$spotifyPayload")
@@ -129,11 +331,18 @@ class CompanionNotificationListenerService : NotificationListenerService() {
             lastTrackTitle = track
             lastArtist = artist
 
+            // Instantly clear old lyrics and wipe screen
+            currentLyricsList = emptyList()
+            CompanionForegroundService.sendUdp("LYRICS:{\"line1\":\"\",\"line2\":\"\",\"prev\":\"\"}")
+
             val gen = MediaArtProcessor.nextGeneration()
 
             // Fetch synced lyrics from LRCLIB
             serviceScope.launch {
-                currentLyricsList = LrcLibLyricsService.fetchLyrics(track, artist)
+                val lyrics = LrcLibLyricsService.fetchLyrics(track, artist)
+                if (MediaArtProcessor.isCurrentGeneration(gen)) {
+                    currentLyricsList = lyrics
+                }
             }
 
             // Extract or fetch album art bitmap
@@ -144,8 +353,8 @@ class CompanionNotificationListenerService : NotificationListenerService() {
                 if (artBitmap == null) {
                     val artUriStr = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)
                         ?: metadata.getString(MediaMetadata.METADATA_KEY_ART_URI)
-                    if (!artUriStr.isNullOrEmpty()) {
-                        artBitmap = MediaArtProcessor.downloadBitmap(artUriStr)
+                    if (artUriStr != null) {
+                        artBitmap = MediaArtProcessor.loadBitmapFromUri(applicationContext, artUriStr)
                     }
                 }
 
@@ -153,7 +362,7 @@ class CompanionNotificationListenerService : NotificationListenerService() {
                     artBitmap = MediaArtProcessor.fetchAlbumArtOnline(track, artist)
                 }
 
-                if (artBitmap != null) {
+                if (artBitmap != null && MediaArtProcessor.isCurrentGeneration(gen)) {
                     lastAlbumArt = artBitmap
                     MediaArtProcessor.streamAlbumArt(artBitmap, gen)
                 }
@@ -165,10 +374,23 @@ class CompanionNotificationListenerService : NotificationListenerService() {
         serviceScope.launch {
             while (isActive) {
                 try {
+                    // Continuous session scan if controller is null or idle
+                    if (activeMediaController == null || activeMediaController?.playbackState?.state != PlaybackState.STATE_PLAYING) {
+                        scanAndBindActiveMediaController()
+                    }
+
                     val controller = activeMediaController
                     val state = controller?.playbackState
                     if (state != null && state.state == PlaybackState.STATE_PLAYING) {
-                        val posMs = state.position
+                        val basePos = state.position
+                        val lastUpdate = state.lastPositionUpdateTime
+                        val posMs = if (lastUpdate > 0) {
+                            val delta = SystemClock.elapsedRealtime() - lastUpdate
+                            val speed = if (state.playbackSpeed > 0) state.playbackSpeed else 1.0f
+                            basePos + (delta * speed).toLong()
+                        } else {
+                            basePos
+                        }
                         val durationMs = controller.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
 
                         // Tick Synced Lyrics
@@ -182,12 +404,10 @@ class CompanionNotificationListenerService : NotificationListenerService() {
                             CompanionForegroundService.sendUdp("LYRICS:$lyricsPayload")
                         }
 
-                        // Send Progress update
-                        val progSec = (posMs / 1000).toInt()
-                        val durSec = (durationMs / 1000).toInt()
+                        // Send Progress update with millisecond precision
                         val progPayload = JSONObject().apply {
-                            put("progress", progSec)
-                            put("duration", durSec)
+                            put("progress", posMs)
+                            put("duration", durationMs)
                         }
                         CompanionForegroundService.sendUdp("PROGRESS:$progPayload")
                     }
@@ -208,10 +428,11 @@ class CompanionNotificationListenerService : NotificationListenerService() {
 
         // 1. Check if media notification (Spotify, YouTube Music, Apple Music, etc.)
         val isMedia = sbn.notification.category == Notification.CATEGORY_TRANSPORT ||
-                pkg.contains("spotify") || pkg.contains("music") || pkg.contains("audio") || pkg.contains("player")
+                pkg.contains("spotify", ignoreCase = true) || pkg.contains("music", ignoreCase = true) ||
+                pkg.contains("audio", ignoreCase = true) || pkg.contains("player", ignoreCase = true)
 
         if (isMedia) {
-            registerMediaSessionListener()
+            scanAndBindActiveMediaController()
 
             val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
             val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
@@ -232,9 +453,16 @@ class CompanionNotificationListenerService : NotificationListenerService() {
                     lastTrackTitle = title
                     lastArtist = text
 
+                    // Instantly clear old lyrics
+                    currentLyricsList = emptyList()
+                    CompanionForegroundService.sendUdp("LYRICS:{\"line1\":\"\",\"line2\":\"\",\"prev\":\"\"}")
+
                     val gen = MediaArtProcessor.nextGeneration()
                     serviceScope.launch {
-                        currentLyricsList = LrcLibLyricsService.fetchLyrics(title, text)
+                        val fetched = LrcLibLyricsService.fetchLyrics(title, text)
+                        if (MediaArtProcessor.isCurrentGeneration(gen)) {
+                            currentLyricsList = fetched
+                        }
                     }
 
                     serviceScope.launch {
@@ -255,7 +483,7 @@ class CompanionNotificationListenerService : NotificationListenerService() {
                             notifBmp = MediaArtProcessor.fetchAlbumArtOnline(title, text)
                         }
 
-                        if (notifBmp != null) {
+                        if (notifBmp != null && MediaArtProcessor.isCurrentGeneration(gen)) {
                             lastAlbumArt = notifBmp
                             MediaArtProcessor.streamAlbumArt(notifBmp, gen)
                         }
@@ -272,14 +500,14 @@ class CompanionNotificationListenerService : NotificationListenerService() {
         if (title.isEmpty() || text.isEmpty()) return
 
         val appName = when {
-            pkg.contains("whatsapp") -> "WhatsApp"
-            pkg.contains("telegram") -> "Telegram"
-            pkg.contains("discord") -> "Discord"
-            pkg.contains("mms") || pkg.contains("messaging") -> "SMS"
-            pkg.contains("gmail") || pkg.contains("mail") -> "Gmail"
-            pkg.contains("instagram") -> "Instagram"
-            pkg.contains("twitter") || pkg.contains("x.android") -> "X"
-            pkg.contains("slack") -> "Slack"
+            pkg.contains("whatsapp", ignoreCase = true) -> "WhatsApp"
+            pkg.contains("telegram", ignoreCase = true) -> "Telegram"
+            pkg.contains("discord", ignoreCase = true) -> "Discord"
+            pkg.contains("mms", ignoreCase = true) || pkg.contains("messaging", ignoreCase = true) -> "SMS"
+            pkg.contains("gmail", ignoreCase = true) || pkg.contains("mail", ignoreCase = true) -> "Gmail"
+            pkg.contains("instagram", ignoreCase = true) -> "Instagram"
+            pkg.contains("twitter", ignoreCase = true) || pkg.contains("x.android", ignoreCase = true) -> "X"
+            pkg.contains("slack", ignoreCase = true) -> "Slack"
             else -> pkg.split(".").lastOrNull()?.replaceFirstChar { it.uppercase() } ?: "Alert"
         }
 

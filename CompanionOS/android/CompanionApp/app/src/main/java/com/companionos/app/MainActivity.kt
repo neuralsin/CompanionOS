@@ -237,15 +237,38 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
-        fun showToast(msg: String) {
+        fun openBatterySettings() {
             runOnUiThread {
-                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        startActivity(intent)
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, "Battery Settings not accessible: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
             }
         }
 
         @JavascriptInterface
         fun openNotificationSettings() {
-            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            runOnUiThread {
+                try {
+                    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, "Notification Settings not accessible", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun showToast(msg: String) {
+            runOnUiThread {
+                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

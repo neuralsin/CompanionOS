@@ -17,6 +17,7 @@
 
 #ifdef ESP32
   #include "buttons.h"
+  #include "rotary_knob.h"
 #endif
 
 #include "ui_components.h"
@@ -49,6 +50,7 @@ char udpBuffer[2048];
 uint16_t* customEyeImg = nullptr;
 bool customEyeActive = false;
 bool customEyeReady = false;
+uint8_t customEyeRowsReceived[128] = {0};
 uint16_t spotifyArtCache[4096]; // 64x64 cache for Spotify persistence
 
 // Thought engine scheduler state
@@ -227,6 +229,9 @@ void setup() {
     Serial.print(F("Buttons... "));
     initButtons();
     Serial.println(F("OK (GPIO13/14/27)"));
+    Serial.print(F("Rotary Knob... "));
+    initRotaryKnob();
+    Serial.println(F("OK (GPIO36)"));
   #endif
 
   #ifdef ESP32
@@ -302,9 +307,11 @@ void loop() {
 
   handleNetwork();
 
-  // V8: Tick CSI collector — drain buffer and send to PC
+  // V8: Tick CSI collector — only when RuView page is active to save bandwidth and CPU
   #ifdef ESP32
-    tickCSICollector();
+    if (currentState == STATE_RUVIEW) {
+      tickCSICollector();
+    }
   #endif
 
   // Input handling — platform specific
@@ -313,6 +320,7 @@ void loop() {
   #endif
   #ifdef ESP32
     handleButtons();
+    tickRotaryKnob();
   #endif
 
   // Non-blocking UI frame timer (~20 FPS)
@@ -348,7 +356,8 @@ void loop() {
   static unsigned long lastStatusBarUpdate = 0;
   if (millis() - lastStatusBarUpdate >= 1000) {
     lastStatusBarUpdate = millis();
-    if (currentState != STATE_DR_HACK && currentState != STATE_RUVIEW) {
+    if (currentState != STATE_DR_HACK && currentState != STATE_RUVIEW && 
+        currentState != STATE_CLOCK_DASHBOARD && currentState != STATE_RETRO_WATCH) {
       drawStatusBar();
     }
   }

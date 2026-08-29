@@ -73,6 +73,12 @@
 #define LDR_PIN     39   // GPIO39 ADC1 (input-only OK for analog read)
 
 // ═══════════════════════════════════════════════════════════
+// Potentiometer Rotational Knob Configuration (ESP32 ADC1)
+// ═══════════════════════════════════════════════════════════
+#define ENABLE_ROTARY_KNOB 1
+#define POT_KNOB_PIN       36   // GPIO36 (ADC1_CH0 - VP)
+
+// ═══════════════════════════════════════════════════════════
 // Screen Dimensions — LANDSCAPE orientation (rotation=1)
 // 🔴 BUG-03 FIX: Landscape matches original ESP8266 aspect
 // ratio (wider than tall). SCALE_X/SCALE_Y normalize cleanly:

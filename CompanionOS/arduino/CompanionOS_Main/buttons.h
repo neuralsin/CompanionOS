@@ -211,7 +211,10 @@ void handleButtons() {
 
     // Page-specific SELECT actions
     if (currentState == STATE_EYES) {
-      if (activeTheme == 2) {
+      if (customEyeActive) {
+        customEyeActive = false;
+        renderCurrentPage();
+      } else if (activeTheme == 2) {
         t3_nextExpression();
       } else if (activeTheme == 1) {
         t2_nextExpression();

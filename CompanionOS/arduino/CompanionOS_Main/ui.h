@@ -126,15 +126,17 @@ void drawStatusBar() {
       tft.drawLine(iconX + 2, iconY, iconX - 2, iconY + 4, CLR_SECONDARY);
     }
 
-    // Song name in center on non-eyes pages (Song - Artist)
-    if (musicPlaying) {
+    // Song name in center on non-eyes pages (Song - Artist), skip on Spotify/Clock dashboard to prevent overlap
+    if (musicPlaying && currentState != STATE_SPOTIFY && currentState != STATE_CLOCK_DASHBOARD && currentState != STATE_RETRO_WATCH) {
       extern String currentTrack;
       extern String currentArtist;
       String songSnippet = (currentArtist.length() > 0) ? (currentTrack + " - " + currentArtist) : currentTrack;
       tft.setTextColor(CLR_TEXT_LO, CLR_BG);
       int songX = 36; // Clock is ~30px, so start song at 36px
       int maxSongW = iconX - SCALE_X(12) - songX;
-      drawTruncatedText(songX, SCALE_Y(2), songSnippet.c_str(), maxSongW, CLR_TEXT_LO, 1);
+      if (maxSongW > 20) {
+        drawTruncatedText(songX, SCALE_Y(2), songSnippet.c_str(), maxSongW, CLR_TEXT_LO, 1);
+      }
     }
   }
 }

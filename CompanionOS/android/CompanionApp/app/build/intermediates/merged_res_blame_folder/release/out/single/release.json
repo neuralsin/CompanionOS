@@ -12,10 +12,6 @@
         "source": "com.companionos.app-main-32:/mipmap-xxhdpi/ic_launcher.png"
     },
     {
-        "merged": "C:\\Users\\shaan\\.gradle\\daemon\\8.9\\com.companionos.app-merged_res-31:\\layout_activity_main.xml.flat",
-        "source": "C:\\Users\\shaan\\.gradle\\daemon\\8.9\\com.companionos.app-main-32:\\layout\\activity_main.xml"
-    },
-    {
         "merged": "com.companionos.app-merged_res-31:/mipmap-xxxhdpi_ic_launcher.png.flat",
         "source": "com.companionos.app-main-32:/mipmap-xxxhdpi/ic_launcher.png"
     },
@@ -26,6 +22,10 @@
     {
         "merged": "com.companionos.app-merged_res-31:/drawable_app_cover.png.flat",
         "source": "com.companionos.app-main-32:/drawable/app_cover.png"
+    },
+    {
+        "merged": "com.companionos.app-merged_res-31:/xml_network_security_config.xml.flat",
+        "source": "com.companionos.app-main-32:/xml/network_security_config.xml"
     },
     {
         "merged": "com.companionos.app-merged_res-31:/mipmap-hdpi_ic_launcher.png.flat",
@@ -42,6 +42,10 @@
     {
         "merged": "com.companionos.app-merged_res-31:/mipmap-mdpi_ic_launcher_round.png.flat",
         "source": "com.companionos.app-main-32:/mipmap-mdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.companionos.app-merged_res-31:/layout_activity_main.xml.flat",
+        "source": "com.companionos.app-main-32:/layout/activity_main.xml"
     },
     {
         "merged": "com.companionos.app-merged_res-31:/mipmap-mdpi_ic_launcher.png.flat",

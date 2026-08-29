@@ -22,6 +22,7 @@ object TimeRelay {
             val dayName = days[dayOfWeek - 1]
 
             val payload = JSONObject().apply {
+                put("time", String.format("%02d:%02d", hour, minute))
                 put("hour", hour)
                 put("min", minute)
                 put("sec", second)

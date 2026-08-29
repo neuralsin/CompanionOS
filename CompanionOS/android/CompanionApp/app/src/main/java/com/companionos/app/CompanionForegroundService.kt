@@ -43,115 +43,87 @@ class CompanionForegroundService : Service() {
         var manualBotIp: String? = null
         private var udpSocket: DatagramSocket? = null
 
+        private val socketLock = Any()
+
         fun sendUdp(message: String) {
             CoroutineScope(Dispatchers.IO).launch {
+                sendUdpDirect(message)
+            }
+        }
+
+        fun sendUdpDirect(message: String) {
+            try {
                 val data = message.toByteArray(Charsets.UTF_8)
-                if (udpSocket == null || udpSocket!!.isClosed) {
-                    udpSocket = DatagramSocket().apply { broadcast = true }
-                }
-
-                // 1. Direct Unicast if known
-                val directIp = manualBotIp ?: discoveredEspIp
-                if (directIp != null) {
-                    try {
-                        val packet = DatagramPacket(
-                            data,
-                            data.size,
-                            InetAddress.getByName(directIp),
-                            ESP_PORT
-                        )
-                        udpSocket?.send(packet)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-
-                // 2. Subnet Directed Broadcasts (guaranteed to pass through mobile Wi-Fi & Hotspots)
-                try {
-                    val interfaces = NetworkInterface.getNetworkInterfaces()
-                    while (interfaces.hasMoreElements()) {
-                        val iface = interfaces.nextElement()
-                        if (iface.isLoopback || !iface.isUp) continue
-                        for (addr in iface.interfaceAddresses) {
-                            val bcast = addr.broadcast
-                            if (bcast != null) {
-                                try {
-                                    val packet = DatagramPacket(data, data.size, bcast, ESP_PORT)
-                                    udpSocket?.send(packet)
-                                } catch (e: Exception) {}
-                            }
-                        }
-                    }
-                } catch (e: Exception) {}
-
-                // 3. Global Broadcast Fallback
-                try {
-                    val bcast = DatagramPacket(
-                        data,
-                        data.size,
-                        InetAddress.getByName("255.255.255.255"),
-                        ESP_PORT
-                    )
-                    udpSocket?.send(bcast)
-                } catch (e: Exception) {}
-
-                // 4. Dual-Transport: also send over Bluetooth if connected
-                if (BluetoothDiscoveryManager.isBtConnected) {
-                    BluetoothDiscoveryManager.sendBtMessage(message)
-                }
+                sendUdpBytesDirect(data)
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
 
         fun sendUdpBytes(bytes: ByteArray) {
             CoroutineScope(Dispatchers.IO).launch {
-                if (udpSocket == null || udpSocket!!.isClosed) {
-                    udpSocket = DatagramSocket().apply { broadcast = true }
-                }
+                sendUdpBytesDirect(bytes)
+            }
+        }
 
-                val directIp = manualBotIp ?: discoveredEspIp
-                if (directIp != null) {
-                    try {
-                        val packet = DatagramPacket(
-                            bytes,
-                            bytes.size,
-                            InetAddress.getByName(directIp),
-                            ESP_PORT
-                        )
-                        udpSocket?.send(packet)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-
+        fun sendUdpBytesDirect(bytes: ByteArray) {
+            synchronized(socketLock) {
                 try {
-                    val interfaces = NetworkInterface.getNetworkInterfaces()
-                    while (interfaces.hasMoreElements()) {
-                        val iface = interfaces.nextElement()
-                        if (iface.isLoopback || !iface.isUp) continue
-                        for (addr in iface.interfaceAddresses) {
-                            val bcast = addr.broadcast
-                            if (bcast != null) {
-                                try {
-                                    val p = DatagramPacket(bytes, bytes.size, bcast, ESP_PORT)
-                                    udpSocket?.send(p)
-                                } catch (e: Exception) {}
-                            }
+                    if (udpSocket == null || udpSocket!!.isClosed) {
+                        udpSocket = DatagramSocket().apply { broadcast = true }
+                    }
+
+                    // 1. Direct Unicast if known
+                    val directIp = manualBotIp ?: discoveredEspIp
+                    if (directIp != null) {
+                        try {
+                            val packet = DatagramPacket(
+                                bytes,
+                                bytes.size,
+                                InetAddress.getByName(directIp),
+                                ESP_PORT
+                            )
+                            udpSocket?.send(packet)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
                         }
                     }
-                } catch (e: Exception) {}
 
-                try {
-                    val bcast = DatagramPacket(
-                        bytes,
-                        bytes.size,
-                        InetAddress.getByName("255.255.255.255"),
-                        ESP_PORT
-                    )
-                    udpSocket?.send(bcast)
-                } catch (e: Exception) {}
+                    // 2. Subnet Directed Broadcasts
+                    try {
+                        val interfaces = NetworkInterface.getNetworkInterfaces()
+                        while (interfaces.hasMoreElements()) {
+                            val iface = interfaces.nextElement()
+                            if (iface.isLoopback || !iface.isUp) continue
+                            for (addr in iface.interfaceAddresses) {
+                                val bcast = addr.broadcast
+                                if (bcast != null) {
+                                    try {
+                                        val p = DatagramPacket(bytes, bytes.size, bcast, ESP_PORT)
+                                        udpSocket?.send(p)
+                                    } catch (e: Exception) {}
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {}
 
-                if (BluetoothDiscoveryManager.isBtConnected) {
-                    BluetoothDiscoveryManager.sendBtBytes(bytes)
+                    // 3. Global Broadcast Fallback
+                    try {
+                        val bcast = DatagramPacket(
+                            bytes,
+                            bytes.size,
+                            InetAddress.getByName("255.255.255.255"),
+                            ESP_PORT
+                        )
+                        udpSocket?.send(bcast)
+                    } catch (e: Exception) {}
+
+                    // 4. Dual-Transport over Bluetooth if connected
+                    if (BluetoothDiscoveryManager.isBtConnected) {
+                        BluetoothDiscoveryManager.sendBtBytes(bytes)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
         }
@@ -160,6 +132,10 @@ class CompanionForegroundService : Service() {
             CoroutineScope(Dispatchers.IO).launch {
                 MediaArtProcessor.streamCustomEyeImage(bitmap)
             }
+        }
+
+        fun handleRemoteMediaControl(action: String) {
+            CompanionNotificationListenerService.instance?.handleMediaAction(action)
         }
 
         fun triggerInstantRelays() {
@@ -276,23 +252,40 @@ class CompanionForegroundService : Service() {
                 }
                 val buffer = ByteArray(2048)
 
-                while (isActive) {
-                    try {
-                        val packet = DatagramPacket(buffer, buffer.size)
-                        socket.receive(packet)
-                        val senderIp = packet.address.hostAddress
+                    while (isActive) {
+                        try {
+                            val packet = DatagramPacket(buffer, buffer.size)
+                            socket.receive(packet)
+                            val senderIp = packet.address.hostAddress
 
-                        if (senderIp != null && senderIp != "127.0.0.1") {
-                            if (discoveredEspIp != senderIp) {
-                                discoveredEspIp = senderIp
-                                updateNotification("Connected: $senderIp (WiFi)")
-                                triggerInstantRelays()
+                            if (senderIp != null && senderIp != "127.0.0.1") {
+                                if (discoveredEspIp != senderIp) {
+                                    discoveredEspIp = senderIp
+                                    updateNotification("Connected: $senderIp (WiFi)")
+                                    triggerInstantRelays()
+                                }
                             }
+
+                            val msg = String(packet.data, 0, packet.length, Charsets.UTF_8).trim()
+                            if (msg.startsWith("ART_REQ:")) {
+                                val rows = msg.substringAfter("ART_REQ:").split(",").mapNotNull { it.trim().toIntOrNull() }
+                                if (rows.isNotEmpty()) {
+                                    serviceScope.launch {
+                                        MediaArtProcessor.retransmitAlbumArtChunks(rows)
+                                    }
+                                }
+                            } else if (msg.startsWith("CUSTEYE_REQ:")) {
+                                val rows = msg.substringAfter("CUSTEYE_REQ:").split(",").mapNotNull { it.trim().toIntOrNull() }
+                                if (rows.isNotEmpty()) {
+                                    serviceScope.launch {
+                                        MediaArtProcessor.retransmitCustomEyeRows(rows)
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // socket timeout
                         }
-                    } catch (e: Exception) {
-                        // socket timeout
                     }
-                }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -432,6 +425,18 @@ class CompanionForegroundService : Service() {
                 if (discoveredEspIp != null) {
                     sendUdp("PING")
                 }
+            }
+        }
+
+        // 10. Spotify / Media Session Watchdog & Hybrid Sync Loop (Every 5s)
+        serviceScope.launch {
+            while (isActive) {
+                delay(5000)
+                try {
+                    CompanionNotificationListenerService.instance?.let { service ->
+                        // Ping active session listener to keep state fresh
+                    }
+                } catch (e: Exception) {}
             }
         }
     }

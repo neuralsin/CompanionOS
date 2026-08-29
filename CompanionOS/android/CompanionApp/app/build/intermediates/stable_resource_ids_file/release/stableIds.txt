@@ -198,6 +198,7 @@ com.companionos.app:style/Widget.MaterialComponents.AppBarLayout.Surface = 0x7f1
 com.companionos.app:style/Widget.Material3.Button.IconButton.Filled = 0x7f100351
 com.companionos.app:style/Widget.Material3.Button.ElevatedButton = 0x7f10034d
 com.companionos.app:style/Widget.Material3.Button = 0x7f10034c
+com.companionos.app:xml/network_security_config = 0x7f120000
 com.companionos.app:style/Widget.Material3.BottomSheet = 0x7f100349
 com.companionos.app:style/Widget.Material3.BottomNavigationView.ActiveIndicator = 0x7f100348
 com.companionos.app:style/Widget.Material3.BottomAppBar.Button.Navigation = 0x7f100344

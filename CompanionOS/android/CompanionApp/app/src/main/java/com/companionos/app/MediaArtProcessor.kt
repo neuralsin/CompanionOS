@@ -28,6 +28,22 @@ object MediaArtProcessor {
         return generation == currentGeneration
     }
 
+    suspend fun loadBitmapFromUri(context: android.content.Context, uriStr: String): Bitmap? = withContext(Dispatchers.IO) {
+        try {
+            if (uriStr.startsWith("content://") || uriStr.startsWith("file://") || uriStr.startsWith("android.resource://")) {
+                val uri = android.net.Uri.parse(uriStr)
+                context.contentResolver.openInputStream(uri)?.use {
+                    BitmapFactory.decodeStream(it)
+                }
+            } else {
+                downloadBitmap(uriStr)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
     suspend fun downloadBitmap(url: String): Bitmap? = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder().url(url).build()
@@ -43,11 +59,24 @@ object MediaArtProcessor {
 
     suspend fun fetchAlbumArtOnline(track: String, artist: String): Bitmap? = withContext(Dispatchers.IO) {
         try {
-            val cleanTrack = track.replace(Regex("""\(.*?\)|\[.*?\]|-.*"""), "").trim()
-            val cleanArtist = artist.replace(Regex("""\(.*?\)|\[.*?\]|-.*"""), "").split(",")[0].trim()
-            val query = java.net.URLEncoder.encode("$cleanTrack $cleanArtist", "UTF-8")
+            var cleanTrack = track.replace(Regex("""\(.*?\)|\[.*?\]|-.*"""), "").trim()
+            if (cleanTrack.isEmpty()) cleanTrack = track.trim()
+            var cleanArtist = artist.replace(Regex("""\(.*?\)|\[.*?\]|-.*"""), "").split(",")[0].trim()
+            if (cleanArtist.isEmpty()) cleanArtist = artist.trim()
+            
+            val query = java.net.URLEncoder.encode("$cleanTrack $cleanArtist".trim(), "UTF-8")
+            if (query.isEmpty()) return@withContext null
 
-            // 1. Try iTunes Search API (fast, high resolution, zero keys required)
+            // 1. Try Spotify Official Web API
+            try {
+                val spotifyArtUrl = SpotifyWebApiClient.searchTrackAlbumArtUrl(cleanTrack, cleanArtist)
+                if (!spotifyArtUrl.isNullOrEmpty()) {
+                    val bmp = downloadBitmap(spotifyArtUrl)
+                    if (bmp != null) return@withContext bmp
+                }
+            } catch (e: Exception) {}
+
+            // 2. Fallback to iTunes Search API (fast, high resolution, zero keys required)
             val itunesUrl = "https://itunes.apple.com/search?term=$query&entity=song&limit=1"
             val req1 = Request.Builder().url(itunesUrl).header("User-Agent", "CompanionOS").build()
             val resp1 = httpClient.newCall(req1).execute()
@@ -66,7 +95,7 @@ object MediaArtProcessor {
                 }
             }
 
-            // 2. Fallback to Deezer Search API
+            // 3. Fallback to Deezer Search API
             val deezerUrl = "https://api.deezer.com/search?q=$query"
             val req2 = Request.Builder().url(deezerUrl).header("User-Agent", "CompanionOS").build()
             val resp2 = httpClient.newCall(req2).execute()
@@ -116,14 +145,20 @@ object MediaArtProcessor {
         return bytes
     }
 
+    @Volatile
+    private var lastAlbumArtBytes: ByteArray? = null
+    @Volatile
+    private var lastCustomPhotoBytes: ByteArray? = null
+
     suspend fun streamAlbumArt(bitmap: Bitmap, generation: Int) = withContext(Dispatchers.IO) {
         try {
             if (!isCurrentGeneration(generation)) return@withContext
 
             val rgb565Bytes = convertToRgb565(bitmap, 64)
+            lastAlbumArtBytes = rgb565Bytes
             if (!isCurrentGeneration(generation)) return@withContext
 
-            CompanionForegroundService.sendUdp("ART_START:")
+            CompanionForegroundService.sendUdpDirect("ART_START:")
             delay(100) // Allow ESP SPI/memory clear margin
 
             if (!isCurrentGeneration(generation)) return@withContext
@@ -146,16 +181,37 @@ object MediaArtProcessor {
                 packet[2] = (rowIdx and 0xFF).toByte()
                 System.arraycopy(chunkData, 0, packet, 3, chunkData.size)
 
-                CompanionForegroundService.sendUdpBytes(packet)
+                CompanionForegroundService.sendUdpBytesDirect(packet)
                 delay(20) // Give ESP32 time to render via SPI without dropping packets
             }
 
             if (isCurrentGeneration(generation)) {
-                CompanionForegroundService.sendUdp("ART_COMPLETE:")
+                CompanionForegroundService.sendUdpDirect("ART_COMPLETE:")
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    fun retransmitAlbumArtChunks(rows: List<Int>) {
+        val bytes = lastAlbumArtBytes ?: return
+        val pixelsPerChunk = 64 * 4
+        val chunkSize = pixelsPerChunk * 2
+
+        for (rowIdx in rows) {
+            val i = rowIdx * (64 * 2)
+            if (i >= 0 && i + chunkSize <= bytes.size) {
+                val chunkData = bytes.copyOfRange(i, i + chunkSize)
+                val packet = ByteArray(3 + chunkData.size)
+                packet[0] = 0xFE.toByte()
+                packet[1] = ((rowIdx shr 8) and 0xFF).toByte()
+                packet[2] = (rowIdx and 0xFF).toByte()
+                System.arraycopy(chunkData, 0, packet, 3, chunkData.size)
+
+                CompanionForegroundService.sendUdpBytesDirect(packet)
+            }
+        }
+        CompanionForegroundService.sendUdpDirect("ART_COMPLETE:")
     }
 
     suspend fun streamCustomEyeImage(bitmap: Bitmap) = withContext(Dispatchers.IO) {
@@ -183,6 +239,10 @@ object MediaArtProcessor {
                 bytes[idx++] = (rgb565 and 0xFF).toByte()
             }
 
+            lastCustomPhotoBytes = bytes
+            CompanionForegroundService.sendUdpDirect("CUSTEYE:START")
+            delay(100)
+
             // Stream 1 row (160 pixels = 320 bytes) per packet with 0xFD header
             val rowBytes = width * 2
             for (row in 0 until height) {
@@ -193,14 +253,32 @@ object MediaArtProcessor {
                 packet[2] = (row and 0xFF).toByte()
                 System.arraycopy(chunkData, 0, packet, 3, chunkData.size)
 
-                CompanionForegroundService.sendUdpBytes(packet)
-                delay(15)
+                CompanionForegroundService.sendUdpBytesDirect(packet)
+                delay(12)
             }
 
-            // Activate Custom Eye Face on bot
-            CompanionForegroundService.sendUdp("CUSTEYE:TOGGLE:1")
+            // Verify with ESP that all 128 rows were received with ZERO loss
+            CompanionForegroundService.sendUdpDirect("CUSTEYE:VERIFY")
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    fun retransmitCustomEyeRows(rows: List<Int>) {
+        val bytes = lastCustomPhotoBytes ?: return
+        val rowBytes = 160 * 2
+        for (row in rows) {
+            if (row in 0 until 128) {
+                val chunkData = bytes.copyOfRange(row * rowBytes, (row + 1) * rowBytes)
+                val packet = ByteArray(3 + chunkData.size)
+                packet[0] = 0xFD.toByte()
+                packet[1] = ((row shr 8) and 0xFF).toByte()
+                packet[2] = (row and 0xFF).toByte()
+                System.arraycopy(chunkData, 0, packet, 3, chunkData.size)
+
+                CompanionForegroundService.sendUdpBytesDirect(packet)
+            }
+        }
+        CompanionForegroundService.sendUdpDirect("CUSTEYE:VERIFY")
     }
 }
