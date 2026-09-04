@@ -1,12 +1,12 @@
 1<?xml version="1.0" encoding="utf-8"?>
 2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
 3    package="com.companionos.app"
-4    android:versionCode="1"
-5    android:versionName="7.0.0" >
+4    android:versionCode="2"
+5    android:versionName="7.1.0" >
 6
 7    <uses-sdk
 8        android:minSdkVersion="26"
-9        android:targetSdkVersion="34" />
+9        android:targetSdkVersion="35" />
 10
 11    <!-- Standard Network Communication Permissions -->
 12    <uses-permission android:name="android.permission.INTERNET" />
@@ -59,7 +59,7 @@
 35        android:required="false" />
 35-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:32:9-33
 36
-37    <!-- 24/7 Background Execution & System Notifications -->
+37    <!-- 24/7 Background Execution & System Notifications (Android 15 / API 35) -->
 38    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 38-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:35:5-77
 38-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:35:22-74
@@ -69,178 +69,206 @@
 40    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 40-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:37:5-92
 40-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:37:22-89
-41    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-41-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:38:5-77
-41-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:38:22-74
-42    <uses-permission android:name="android.permission.WAKE_LOCK" />
-42-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:39:5-68
-42-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:39:22-65
-43    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-43-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:40:5-81
-43-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:40:22-78
-44
-45    <permission
-45-->[androidx.core:core:1.12.0] C:\Users\shaan\.gradle\caches\8.9\transforms\7066eb93bc0f412ada0c124253e67c33\transformed\core-1.12.0\AndroidManifest.xml:22:5-24:47
-46        android:name="com.companionos.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
-46-->[androidx.core:core:1.12.0] C:\Users\shaan\.gradle\caches\8.9\transforms\7066eb93bc0f412ada0c124253e67c33\transformed\core-1.12.0\AndroidManifest.xml:23:9-81
-47        android:protectionLevel="signature" />
-47-->[androidx.core:core:1.12.0] C:\Users\shaan\.gradle\caches\8.9\transforms\7066eb93bc0f412ada0c124253e67c33\transformed\core-1.12.0\AndroidManifest.xml:24:9-44
-48
-49    <uses-permission android:name="com.companionos.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
-49-->[androidx.core:core:1.12.0] C:\Users\shaan\.gradle\caches\8.9\transforms\7066eb93bc0f412ada0c124253e67c33\transformed\core-1.12.0\AndroidManifest.xml:26:5-97
-49-->[androidx.core:core:1.12.0] C:\Users\shaan\.gradle\caches\8.9\transforms\7066eb93bc0f412ada0c124253e67c33\transformed\core-1.12.0\AndroidManifest.xml:26:22-94
+41    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+41-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:38:5-87
+41-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:38:22-84
+42    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+42-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:39:5-77
+42-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:39:22-74
+43    <uses-permission android:name="android.permission.WAKE_LOCK" />
+43-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:40:5-68
+43-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:40:22-65
+44    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+44-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:41:5-81
+44-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:41:22-78
+45    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+45-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:42:5-95
+45-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:42:22-92
+46
+47    <permission
+47-->[androidx.core:core:1.12.0] C:\Users\shaan\.gradle\caches\8.9\transforms\7066eb93bc0f412ada0c124253e67c33\transformed\core-1.12.0\AndroidManifest.xml:22:5-24:47
+48        android:name="com.companionos.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+48-->[androidx.core:core:1.12.0] C:\Users\shaan\.gradle\caches\8.9\transforms\7066eb93bc0f412ada0c124253e67c33\transformed\core-1.12.0\AndroidManifest.xml:23:9-81
+49        android:protectionLevel="signature" />
+49-->[androidx.core:core:1.12.0] C:\Users\shaan\.gradle\caches\8.9\transforms\7066eb93bc0f412ada0c124253e67c33\transformed\core-1.12.0\AndroidManifest.xml:24:9-44
 50
-51    <application
-51-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:42:5-89:19
-52        android:allowBackup="true"
-52-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:43:9-35
-53        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
-53-->[androidx.core:core:1.12.0] C:\Users\shaan\.gradle\caches\8.9\transforms\7066eb93bc0f412ada0c124253e67c33\transformed\core-1.12.0\AndroidManifest.xml:28:18-86
-54        android:extractNativeLibs="false"
-55        android:icon="@mipmap/ic_launcher"
-55-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:44:9-43
-56        android:label="@string/app_name"
-56-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:46:9-41
-57        android:networkSecurityConfig="@xml/network_security_config"
-57-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:49:9-69
-58        android:roundIcon="@mipmap/ic_launcher_round"
-58-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:45:9-54
-59        android:supportsRtl="true"
-59-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:47:9-35
-60        android:theme="@style/Theme.CompanionOS"
-60-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:48:9-49
-61        android:usesCleartextTraffic="true" >
-61-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:50:9-44
-62        <activity
-62-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:53:9-63:20
-63            android:name="com.companionos.app.MainActivity"
-63-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:54:13-41
-64            android:configChanges="orientation|screenSize|keyboardHidden"
-64-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:56:13-74
-65            android:exported="true"
-65-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:55:13-36
-66            android:theme="@style/Theme.CompanionOS"
-66-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:58:13-53
-67            android:windowSoftInputMode="adjustResize" >
-67-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:57:13-55
-68            <intent-filter>
-68-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:59:13-62:29
-69                <action android:name="android.intent.action.MAIN" />
-69-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:60:17-69
-69-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:60:25-66
-70
-71                <category android:name="android.intent.category.LAUNCHER" />
-71-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:61:17-77
-71-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:61:27-74
-72            </intent-filter>
-73        </activity>
-74
-75        <!-- 24/7 Companion Master Background Service -->
-76        <service
-76-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:66:9-69:77
-77            android:name="com.companionos.app.CompanionForegroundService"
-77-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:67:13-55
-78            android:exported="false"
-78-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:68:13-37
-79            android:foregroundServiceType="connectedDevice|mediaPlayback" />
-79-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:69:13-74
-80
-81        <!-- Media Session & Notification Interceptor Relay -->
-82        <service
-82-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:72:9-79:19
-83            android:name="com.companionos.app.CompanionNotificationListenerService"
-83-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:73:13-65
-84            android:exported="true"
-84-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:75:13-36
-85            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" >
-85-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:74:13-87
-86            <intent-filter>
-86-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:76:13-78:29
-87                <action android:name="android.service.notification.NotificationListenerService" />
-87-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:77:17-99
-87-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:77:25-96
-88            </intent-filter>
-89        </service>
-90
-91        <receiver
-91-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:81:9-87:20
-92            android:name="com.companionos.app.BootReceiver"
-92-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:82:13-41
-93            android:exported="true" >
-93-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:83:13-36
-94            <intent-filter>
-94-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:84:13-86:29
-95                <action android:name="android.intent.action.BOOT_COMPLETED" />
-95-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:85:17-79
-95-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:85:25-76
-96            </intent-filter>
-97        </receiver>
-98
-99        <provider
-99-->[androidx.emoji2:emoji2:1.2.0] C:\Users\shaan\.gradle\caches\8.9\transforms\31a77ea58c9cf3635de16df587cacc2b\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
-100            android:name="androidx.startup.InitializationProvider"
-100-->[androidx.emoji2:emoji2:1.2.0] C:\Users\shaan\.gradle\caches\8.9\transforms\31a77ea58c9cf3635de16df587cacc2b\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:25:13-67
-101            android:authorities="com.companionos.app.androidx-startup"
-101-->[androidx.emoji2:emoji2:1.2.0] C:\Users\shaan\.gradle\caches\8.9\transforms\31a77ea58c9cf3635de16df587cacc2b\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:26:13-68
-102            android:exported="false" >
-102-->[androidx.emoji2:emoji2:1.2.0] C:\Users\shaan\.gradle\caches\8.9\transforms\31a77ea58c9cf3635de16df587cacc2b\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:27:13-37
-103            <meta-data
-103-->[androidx.emoji2:emoji2:1.2.0] C:\Users\shaan\.gradle\caches\8.9\transforms\31a77ea58c9cf3635de16df587cacc2b\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:29:13-31:52
-104                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-104-->[androidx.emoji2:emoji2:1.2.0] C:\Users\shaan\.gradle\caches\8.9\transforms\31a77ea58c9cf3635de16df587cacc2b\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:30:17-75
-105                android:value="androidx.startup" />
-105-->[androidx.emoji2:emoji2:1.2.0] C:\Users\shaan\.gradle\caches\8.9\transforms\31a77ea58c9cf3635de16df587cacc2b\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:31:17-49
-106            <meta-data
-106-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\shaan\.gradle\caches\8.9\transforms\905e04ce79f8dc7ff03ce5054aa8bbbf\transformed\jetified-lifecycle-process-2.6.1\AndroidManifest.xml:29:13-31:52
-107                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-107-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\shaan\.gradle\caches\8.9\transforms\905e04ce79f8dc7ff03ce5054aa8bbbf\transformed\jetified-lifecycle-process-2.6.1\AndroidManifest.xml:30:17-78
-108                android:value="androidx.startup" />
-108-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\shaan\.gradle\caches\8.9\transforms\905e04ce79f8dc7ff03ce5054aa8bbbf\transformed\jetified-lifecycle-process-2.6.1\AndroidManifest.xml:31:17-49
-109            <meta-data
-109-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:29:13-31:52
-110                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-110-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:30:17-85
-111                android:value="androidx.startup" />
-111-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:31:17-49
-112        </provider>
-113
-114        <receiver
-114-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:34:9-52:20
-115            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-115-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:35:13-76
-116            android:directBootAware="false"
-116-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:36:13-44
-117            android:enabled="true"
-117-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:37:13-35
-118            android:exported="true"
-118-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:38:13-36
-119            android:permission="android.permission.DUMP" >
-119-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:39:13-57
-120            <intent-filter>
-120-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:40:13-42:29
-121                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-121-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:41:17-91
-121-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:41:25-88
-122            </intent-filter>
-123            <intent-filter>
-123-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:43:13-45:29
-124                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-124-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:44:17-85
-124-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:44:25-82
-125            </intent-filter>
-126            <intent-filter>
-126-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:46:13-48:29
-127                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-127-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:47:17-88
-127-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:47:25-85
-128            </intent-filter>
-129            <intent-filter>
-129-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:49:13-51:29
-130                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-130-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:50:17-95
-130-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:50:25-92
-131            </intent-filter>
-132        </receiver>
-133    </application>
-134
-135</manifest>
+51    <uses-permission android:name="com.companionos.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+51-->[androidx.core:core:1.12.0] C:\Users\shaan\.gradle\caches\8.9\transforms\7066eb93bc0f412ada0c124253e67c33\transformed\core-1.12.0\AndroidManifest.xml:26:5-97
+51-->[androidx.core:core:1.12.0] C:\Users\shaan\.gradle\caches\8.9\transforms\7066eb93bc0f412ada0c124253e67c33\transformed\core-1.12.0\AndroidManifest.xml:26:22-94
+52
+53    <application
+53-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:44:5-101:19
+54        android:allowBackup="true"
+54-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:45:9-35
+55        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+55-->[androidx.core:core:1.12.0] C:\Users\shaan\.gradle\caches\8.9\transforms\7066eb93bc0f412ada0c124253e67c33\transformed\core-1.12.0\AndroidManifest.xml:28:18-86
+56        android:extractNativeLibs="false"
+57        android:icon="@mipmap/ic_launcher"
+57-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:46:9-43
+58        android:label="@string/app_name"
+58-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:48:9-41
+59        android:networkSecurityConfig="@xml/network_security_config"
+59-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:51:9-69
+60        android:roundIcon="@mipmap/ic_launcher_round"
+60-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:47:9-54
+61        android:supportsRtl="true"
+61-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:49:9-35
+62        android:theme="@style/Theme.CompanionOS"
+62-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:50:9-49
+63        android:usesCleartextTraffic="true" >
+63-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:52:9-44
+64        <activity
+64-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:55:9-75:20
+65            android:name="com.companionos.app.MainActivity"
+65-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:56:13-41
+66            android:configChanges="orientation|screenSize|keyboardHidden"
+66-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:58:13-74
+67            android:exported="true"
+67-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:57:13-36
+68            android:theme="@style/Theme.CompanionOS"
+68-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:60:13-53
+69            android:windowSoftInputMode="adjustResize" >
+69-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:59:13-55
+70            <intent-filter>
+70-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:61:13-64:29
+71                <action android:name="android.intent.action.MAIN" />
+71-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:62:17-69
+71-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:62:25-66
+72
+73                <category android:name="android.intent.category.LAUNCHER" />
+73-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:63:17-77
+73-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:63:27-74
+74            </intent-filter>
+75
+76            <!-- Spotify OAuth Redirect Handler -->
+77            <intent-filter>
+77-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:67:13-74:29
+78                <action android:name="android.intent.action.VIEW" />
+78-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:68:17-69
+78-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:68:25-66
+79
+80                <category android:name="android.intent.category.DEFAULT" />
+80-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:69:17-76
+80-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:69:27-73
+81                <category android:name="android.intent.category.BROWSABLE" />
+81-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:70:17-78
+81-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:70:27-75
+82
+83                <data
+83-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:71:17-73:52
+84                    android:host="callback"
+84-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:72:21-44
+85                    android:scheme="companionos" />
+85-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:73:21-49
+86            </intent-filter>
+87        </activity>
+88
+89        <!-- 24/7 Companion Master Background Service -->
+90        <service
+90-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:78:9-81:86
+91            android:name="com.companionos.app.CompanionForegroundService"
+91-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:79:13-55
+92            android:exported="false"
+92-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:80:13-37
+93            android:foregroundServiceType="connectedDevice|mediaPlayback|dataSync" />
+93-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:81:13-83
+94
+95        <!-- Media Session & Notification Interceptor Relay -->
+96        <service
+96-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:84:9-91:19
+97            android:name="com.companionos.app.CompanionNotificationListenerService"
+97-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:85:13-65
+98            android:exported="true"
+98-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:87:13-36
+99            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" >
+99-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:86:13-87
+100            <intent-filter>
+100-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:88:13-90:29
+101                <action android:name="android.service.notification.NotificationListenerService" />
+101-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:89:17-99
+101-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:89:25-96
+102            </intent-filter>
+103        </service>
+104
+105        <receiver
+105-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:93:9-99:20
+106            android:name="com.companionos.app.BootReceiver"
+106-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:94:13-41
+107            android:exported="true" >
+107-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:95:13-36
+108            <intent-filter>
+108-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:96:13-98:29
+109                <action android:name="android.intent.action.BOOT_COMPLETED" />
+109-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:97:17-79
+109-->C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\android\CompanionApp\app\src\main\AndroidManifest.xml:97:25-76
+110            </intent-filter>
+111        </receiver>
+112
+113        <provider
+113-->[androidx.emoji2:emoji2:1.2.0] C:\Users\shaan\.gradle\caches\8.9\transforms\31a77ea58c9cf3635de16df587cacc2b\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
+114            android:name="androidx.startup.InitializationProvider"
+114-->[androidx.emoji2:emoji2:1.2.0] C:\Users\shaan\.gradle\caches\8.9\transforms\31a77ea58c9cf3635de16df587cacc2b\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:25:13-67
+115            android:authorities="com.companionos.app.androidx-startup"
+115-->[androidx.emoji2:emoji2:1.2.0] C:\Users\shaan\.gradle\caches\8.9\transforms\31a77ea58c9cf3635de16df587cacc2b\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:26:13-68
+116            android:exported="false" >
+116-->[androidx.emoji2:emoji2:1.2.0] C:\Users\shaan\.gradle\caches\8.9\transforms\31a77ea58c9cf3635de16df587cacc2b\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:27:13-37
+117            <meta-data
+117-->[androidx.emoji2:emoji2:1.2.0] C:\Users\shaan\.gradle\caches\8.9\transforms\31a77ea58c9cf3635de16df587cacc2b\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:29:13-31:52
+118                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+118-->[androidx.emoji2:emoji2:1.2.0] C:\Users\shaan\.gradle\caches\8.9\transforms\31a77ea58c9cf3635de16df587cacc2b\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:30:17-75
+119                android:value="androidx.startup" />
+119-->[androidx.emoji2:emoji2:1.2.0] C:\Users\shaan\.gradle\caches\8.9\transforms\31a77ea58c9cf3635de16df587cacc2b\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:31:17-49
+120            <meta-data
+120-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\shaan\.gradle\caches\8.9\transforms\905e04ce79f8dc7ff03ce5054aa8bbbf\transformed\jetified-lifecycle-process-2.6.1\AndroidManifest.xml:29:13-31:52
+121                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+121-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\shaan\.gradle\caches\8.9\transforms\905e04ce79f8dc7ff03ce5054aa8bbbf\transformed\jetified-lifecycle-process-2.6.1\AndroidManifest.xml:30:17-78
+122                android:value="androidx.startup" />
+122-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\shaan\.gradle\caches\8.9\transforms\905e04ce79f8dc7ff03ce5054aa8bbbf\transformed\jetified-lifecycle-process-2.6.1\AndroidManifest.xml:31:17-49
+123            <meta-data
+123-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:29:13-31:52
+124                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+124-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:30:17-85
+125                android:value="androidx.startup" />
+125-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:31:17-49
+126        </provider>
+127
+128        <receiver
+128-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:34:9-52:20
+129            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+129-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:35:13-76
+130            android:directBootAware="false"
+130-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:36:13-44
+131            android:enabled="true"
+131-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:37:13-35
+132            android:exported="true"
+132-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:38:13-36
+133            android:permission="android.permission.DUMP" >
+133-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:39:13-57
+134            <intent-filter>
+134-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:40:13-42:29
+135                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+135-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:41:17-91
+135-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:41:25-88
+136            </intent-filter>
+137            <intent-filter>
+137-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:43:13-45:29
+138                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+138-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:44:17-85
+138-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:44:25-82
+139            </intent-filter>
+140            <intent-filter>
+140-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:46:13-48:29
+141                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+141-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:47:17-88
+141-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:47:25-85
+142            </intent-filter>
+143            <intent-filter>
+143-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:49:13-51:29
+144                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+144-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:50:17-95
+144-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\shaan\.gradle\caches\8.9\transforms\fa952ef2b6b6e3f30567bd4fb7aaf913\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:50:25-92
+145            </intent-filter>
+146        </receiver>
+147    </application>
+148
+149</manifest>

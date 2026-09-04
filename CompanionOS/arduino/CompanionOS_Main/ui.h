@@ -286,9 +286,13 @@ void showFlashNotification(String text) {
 void drawFlashNotification() {
   if (!flashNotifActive) return;
 
+  int bannerH = SCALE_Y(30);
+  int bannerY = SCR_H - bannerH;
+
   unsigned long elapsed = millis() - flashNotifStart;
   if (elapsed > 3000) {
     flashNotifActive = false;
+    tft.fillRect(0, bannerY, SCR_W, bannerH, CLR_BG);
     return;
   }
 
@@ -297,14 +301,11 @@ void drawFlashNotification() {
   if (elapsed < 300) alpha = elapsed / 300.0f;
   else if (elapsed > 2700) alpha = (3000 - elapsed) / 300.0f;
 
-  int bannerH = SCALE_Y(30);
-  int bannerY = SCR_H - bannerH;
-
   uint16_t bgColor = blendColor(CLR_BG, 0x600F, alpha * 0.8f);
   uint16_t textColor = blendColor(CLR_BG, CLR_TEXT_HI, alpha);
 
   tft.fillRect(0, bannerY, SCR_W, bannerH, bgColor);
-  tft.drawFastHLine(0, bannerY, SCR_W, TFT_MAGENTA);
+  tft.drawFastHLine(0, bannerY, SCR_W, blendColor(CLR_BG, TFT_MAGENTA, alpha));
 
   tft.setTextColor(textColor);
   drawTruncatedText(SCALE_X(8), bannerY + SCALE_Y(6), flashNotifText.c_str(), 

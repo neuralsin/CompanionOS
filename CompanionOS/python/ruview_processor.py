@@ -630,8 +630,24 @@ def ruview_listener_loop(port: int = 8890):
     global ruview_enabled
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(('0.0.0.0', port))
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    except Exception:
+        pass
+
+    bound = False
+    for attempt in range(5):
+        try:
+            sock.bind(('0.0.0.0', port))
+            bound = True
+            break
+        except OSError as e:
+            if attempt < 4:
+                time.sleep(1.0)
+            else:
+                print(f"⚠️ RuView CSI listener could not bind UDP port {port}: {e}")
+                return
+
     sock.settimeout(2.0)  # Non-blocking with timeout for clean shutdown
 
     print(f"📡 RuView CSI listener started on UDP port {port}")

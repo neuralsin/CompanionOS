@@ -98,22 +98,22 @@ static void rw_drawHands(int cx, int cy, int r, int h, int m, int s) {
 
 // ── Corner Telemetry (Minimalist) ──
 static void rw_drawMinimalInfo(int cx, int cy, int r) {
-  // Top: Minimal Digital Time
+  // Top: Minimal Digital Time (pushed down by 10 pixels)
   char digBuf[10];
   int hr12 = displayHour % 12;
   if (hr12 == 0) hr12 = 12;
   sprintf(digBuf, "%d:%02d", hr12, displayMinute);
   
   tft.setTextColor(RW_MUTED, RW_BG);
-  tft.drawCentreString(digBuf, cx, cy - r - SCALE_Y(1), 1);
+  tft.drawCentreString(digBuf, cx, cy - r + 9, 1);
 
-  // Bottom: Song / Wi-Fi status
+  // Bottom: Song / Wi-Fi status (pushed up by 10 pixels)
   if (musicPlaying && currentTrack.length() > 0) {
     String s = "♪ " + currentTrack;
-    drawTruncatedText(SCALE_X(6), SCR_H - SCALE_Y(9), s.c_str(), SCR_W - SCALE_X(12), RW_ACCENT, 1);
+    drawTruncatedText(SCALE_X(6), SCR_H - SCALE_Y(19), s.c_str(), SCR_W - SCALE_X(12), RW_ACCENT, 1);
   } else {
     tft.setTextColor(wifiConnected ? RW_MUTED : 0x4208, RW_BG);
-    tft.drawCentreString(wifiConnected ? "ONLINE" : "OFFLINE", cx, cy + r - SCALE_Y(7), 1);
+    tft.drawCentreString(wifiConnected ? "ONLINE" : "OFFLINE", cx, SCR_H - SCALE_Y(19), 1);
   }
 }
 
@@ -155,13 +155,13 @@ void redrawRetroWatchPartial() {
     // Clear inner dial only (leaves bezel intact)
     tft.fillCircle(cx, cy, r - 7, RW_BG);
 
-    // Minimal digital time update
+    // Minimal digital time update (pushed down by 10 pixels)
     char digBuf[10];
     int hr12 = displayHour % 12;
     if (hr12 == 0) hr12 = 12;
     sprintf(digBuf, "%d:%02d", hr12, displayMinute);
     tft.setTextColor(RW_MUTED, RW_BG);
-    tft.drawCentreString(digBuf, cx, cy - r - SCALE_Y(1), 1);
+    tft.drawCentreString(digBuf, cx, cy - r + 9, 1);
 
     // Redraw hands
     rw_drawHands(cx, cy, r, displayHour, displayMinute, displaySecond);

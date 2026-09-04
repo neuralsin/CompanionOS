@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.companionos.app"
-    android:versionCode="1"
-    android:versionName="7.0.0" >
+    android:versionCode="2"
+    android:versionName="7.1.0" >
 
     <uses-sdk
         android:minSdkVersion="26"
-        android:targetSdkVersion="34" />
+        android:targetSdkVersion="35" />
 
     <!-- Standard Network Communication Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -34,13 +34,15 @@
         android:name="android.hardware.wifi"
         android:required="false" />
 
-    <!-- 24/7 Background Execution & System Notifications -->
+    <!-- 24/7 Background Execution & System Notifications (Android 15 / API 35) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <permission
         android:name="com.companionos.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
@@ -70,13 +72,25 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Spotify OAuth Redirect Handler -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="callback"
+                    android:scheme="companionos" />
+            </intent-filter>
         </activity>
 
         <!-- 24/7 Companion Master Background Service -->
         <service
             android:name="com.companionos.app.CompanionForegroundService"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice|mediaPlayback" />
+            android:foregroundServiceType="connectedDevice|mediaPlayback|dataSync" />
 
         <!-- Media Session & Notification Interceptor Relay -->
         <service

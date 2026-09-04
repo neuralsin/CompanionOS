@@ -119,12 +119,40 @@ object MediaArtProcessor {
         return@withContext null
     }
 
-    fun convertToRgb565(bitmap: Bitmap, size: Int = 64): ByteArray {
-        val scaled = if (bitmap.width != size || bitmap.height != size) {
-            Bitmap.createScaledBitmap(bitmap, size, size, true)
-        } else {
-            bitmap
+    fun resizeAndCropCenter(src: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap {
+        val srcWidth = src.width
+        val srcHeight = src.height
+
+        if (srcWidth == targetWidth && srcHeight == targetHeight) {
+            return src
         }
+
+        val srcAspect = srcWidth.toFloat() / srcHeight.toFloat()
+        val targetAspect = targetWidth.toFloat() / targetHeight.toFloat()
+
+        val cropWidth: Int
+        val cropHeight: Int
+        val cropX: Int
+        val cropY: Int
+
+        if (srcAspect > targetAspect) {
+            cropHeight = srcHeight
+            cropWidth = (srcHeight * targetAspect).toInt().coerceIn(1, srcWidth)
+            cropX = ((srcWidth - cropWidth) / 2).coerceAtLeast(0)
+            cropY = 0
+        } else {
+            cropWidth = srcWidth
+            cropHeight = (srcWidth / targetAspect).toInt().coerceIn(1, srcHeight)
+            cropX = 0
+            cropY = ((srcHeight - cropHeight) / 2).coerceAtLeast(0)
+        }
+
+        val cropped = Bitmap.createBitmap(src, cropX, cropY, cropWidth, cropHeight)
+        return Bitmap.createScaledBitmap(cropped, targetWidth, targetHeight, true)
+    }
+
+    fun convertToRgb565(bitmap: Bitmap, size: Int = 64): ByteArray {
+        val scaled = resizeAndCropCenter(bitmap, size, size)
 
         val byteCount = size * size * 2
         val bytes = ByteArray(byteCount)
@@ -150,7 +178,7 @@ object MediaArtProcessor {
     @Volatile
     private var lastCustomPhotoBytes: ByteArray? = null
 
-    suspend fun streamAlbumArt(bitmap: Bitmap, generation: Int) = withContext(Dispatchers.IO) {
+    suspend fun streamAlbumArt(bitmap: Bitmap, generation: Int = nextGeneration()) = withContext(Dispatchers.IO) {
         try {
             if (!isCurrentGeneration(generation)) return@withContext
 
@@ -218,11 +246,7 @@ object MediaArtProcessor {
         try {
             val width = 160
             val height = 128
-            val scaled = if (bitmap.width != width || bitmap.height != height) {
-                Bitmap.createScaledBitmap(bitmap, width, height, true)
-            } else {
-                bitmap
-            }
+            val scaled = resizeAndCropCenter(bitmap, width, height)
 
             val byteCount = width * height * 2
             val bytes = ByteArray(byteCount)

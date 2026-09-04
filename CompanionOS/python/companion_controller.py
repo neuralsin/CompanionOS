@@ -22,6 +22,26 @@ import struct
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 
+# Force UTF-8 encoding or redirect to companion.log under pythonw.exe
+if sys.stdout is None or sys.stderr is None or 'pythonw' in sys.executable.lower():
+    try:
+        log_file = open(os.path.join(SCRIPT_DIR, "companion.log"), "a", encoding="utf-8", buffering=1)
+        sys.stdout = log_file
+        sys.stderr = log_file
+    except Exception:
+        pass
+else:
+    if hasattr(sys.stdout, 'reconfigure'):
+        try:
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
+        except Exception:
+            pass
+    if hasattr(sys.stderr, 'reconfigure'):
+        try:
+            sys.stderr.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
+        except Exception:
+            pass
+
 from spotify_integration import SpotifyIntegration  # type: ignore # noqa: E402
 from github_integration import GitHubIntegration  # type: ignore # noqa: E402
 from steam_tracker import SteamTracker  # type: ignore # noqa: E402
@@ -73,7 +93,14 @@ GITHUB_REFRESH = config['update_intervals']['github_refresh_minutes'] * 60
 WEATHER_REFRESH = config.get('update_intervals', {}).get('weather_refresh_minutes', 15) * 60
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-active_esp_ip = ESP_IP if "192.168.1" not in ESP_IP else None
+try:
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+except Exception:
+    pass
+active_esp_ip = ESP_IP if (ESP_IP and ESP_IP != "192.168.1.123") else None
+device_connected = False
+last_discovered_ip = None
+last_resync_time = 0.0
 force_resync = False
 fast_poll_now = False
 
@@ -232,8 +259,20 @@ def fetch_weather():
 
 def capture_windows_notifications():
     """V4: Capture Windows 10/11 toast notifications using PowerShell"""
+    if sys.platform != 'win32':
+        return
+
     notif_file = os.path.join(SCRIPT_DIR, "notifications.json")
     
+    # Configure startupinfo and creationflags so PowerShell NEVER creates or flashes a window
+    startupinfo = None
+    creationflags = 0
+    if sys.platform == 'win32':
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = 0  # SW_HIDE
+        creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000)
+
     # PowerShell script to extract toast notifications from Action Center
     ps_script = r'''
     try {
@@ -260,8 +299,10 @@ def capture_windows_notifications():
     while True:
         try:
             result = subprocess.run(
-                ['powershell', '-Command', ps_script],
-                capture_output=True, text=True, timeout=15
+                ['powershell', '-WindowStyle', 'Hidden', '-NoProfile', '-NonInteractive', '-Command', ps_script],
+                capture_output=True, text=True, timeout=15,
+                startupinfo=startupinfo,
+                creationflags=creationflags
             )
             if result.stdout.strip():
                 try:
@@ -311,9 +352,9 @@ def capture_windows_notifications():
                         print(f"📬 Scraped {len(notifs)} Windows notifications")
                 except json.JSONDecodeError:
                     pass
-            time.sleep(10)  # Poll every 10 seconds
+            time.sleep(30)  # Poll every 30 seconds
         except subprocess.TimeoutExpired:
-            time.sleep(15)
+            time.sleep(30)
         except Exception as e:
             # Fallback to file-based method if PowerShell fails
             try:
@@ -1621,31 +1662,138 @@ def start_notes_server():
         print(f"Notes server error: {e}")
 
 
+def cleanup_previous_instances():
+    """Terminate any other running instances of companion_controller.py to prevent port collisions."""
+    try:
+        import psutil
+        current_pid = os.getpid()
+        killed = []
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                if proc.info['pid'] == current_pid:
+                    continue
+                cmdline = proc.info.get('cmdline') or []
+                if any(arg == '-c' for arg in cmdline):
+                    continue
+                if any(arg.lower().endswith('companion_controller.py') for arg in cmdline):
+                    proc.terminate()
+                    killed.append(proc.info['pid'])
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+            except Exception:
+                pass
+        if killed:
+            print(f"⚠️ Cleaned up {len(killed)} previous controller instance(s) (PID: {', '.join(map(str, killed))})")
+            time.sleep(1.0)
+    except Exception:
+        pass
+
+
+def get_broadcast_targets():
+    """Calculate all valid subnet broadcast addresses across network interfaces."""
+    import ipaddress
+    targets = ["255.255.255.255"]
+    if ESP_IP and ESP_IP != "255.255.255.255":
+        targets.append(ESP_IP)
+    if active_esp_ip and active_esp_ip not in targets:
+        targets.append(active_esp_ip)
+    try:
+        import psutil
+        for name, addrs in psutil.net_if_addrs().items():
+            for addr in addrs:
+                if addr.family == socket.AF_INET and not addr.address.startswith('127.'):
+                    if addr.address.startswith('169.254.'):
+                        continue
+                    if addr.netmask:
+                        net = ipaddress.IPv4Network(f"{addr.address}/{addr.netmask}", strict=False)
+                        targets.append(str(net.broadcast_address))
+    except Exception:
+        pass
+    return list(set(targets))
+
+
+def discovery_probe_loop():
+    """Active discovery: broadcasts COMPANION_PROBE on UDP until the ESP is discovered."""
+    global active_esp_ip, device_connected
+    time.sleep(0.5)
+    while True:
+        try:
+            if not device_connected:
+                targets = get_broadcast_targets()
+                for target in targets:
+                    try:
+                        sock.sendto(b"COMPANION_PROBE", (target, ESP_PORT_RX))
+                    except Exception:
+                        pass
+                time.sleep(3.0)  # Fast probe until discovered
+            else:
+                time.sleep(10.0)  # Device already discovered, remain silent
+        except Exception:
+            time.sleep(5.0)
+
+
 def command_listener():
     global active_esp_ip, force_resync, pomodoro_active, pomodoro_remaining
     global pomodoro_is_break, pomodoro_sessions, pomodoro_last_tick
-    global fast_poll_now
+    global fast_poll_now, last_discovered_ip, device_connected
     
     listen_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    listen_sock.bind(('0.0.0.0', PC_PORT_RX))
+    try:
+        listen_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    except Exception:
+        pass
+
+    bound = False
+    for attempt in range(5):
+        try:
+            listen_sock.bind(('0.0.0.0', PC_PORT_RX))
+            bound = True
+            break
+        except OSError as e:
+            if attempt < 4:
+                time.sleep(1.0)
+            else:
+                print(f"❌ Failed to bind UDP port {PC_PORT_RX}: {e}")
+                print(f"   Another process is using port {PC_PORT_RX}. Run stop_controller.bat first.")
+                return
+
     print(f"Listening on port {PC_PORT_RX}...")
     
     while True:
         try:
             data, addr = listen_sock.recvfrom(1024)
-            active_esp_ip = addr[0]
-            command = data.decode().strip()
+            sender_ip = addr[0]
+            command = data.decode(errors='replace').strip()
             
-            msg = data.decode('utf-8').strip()
+            msg = data.decode('utf-8', errors='replace').strip()
             
             if msg == "HELLO_COMPANION":
-                print(f"👋 Companion Device Discovered at {active_esp_ip}!")
-                force_resync = True
+                is_first = not device_connected or (active_esp_ip != sender_ip)
+                active_esp_ip = sender_ip
+                device_connected = True
+                if is_first:
+                    last_discovered_ip = sender_ip
+                    print(f"👋 Companion Device Connected & Confirmed at {active_esp_ip}!")
+                    force_resync = True
+                    if config.get('network', {}).get('esp_ip') != active_esp_ip:
+                        config['network']['esp_ip'] = active_esp_ip
+                        try:
+                            with open(CONFIG_FILE, 'w') as f:
+                                json.dump(config, f, indent=2)
+                        except Exception:
+                            pass
             elif msg == "RESYNC":
+                active_esp_ip = sender_ip
+                device_connected = True
                 print(f"🔄 Resync requested by device at {active_esp_ip}!")
                 force_resync = True
             else:
-                print(f"← [{addr[0]}] {msg}")
+                if not device_connected:
+                    device_connected = True
+                    print(f"👋 Companion Device Connected at {sender_ip}!")
+                    force_resync = True
+                active_esp_ip = sender_ip
+                print(f"← [{sender_ip}] {msg}")
                 if msg.startswith("PLAY_PAUSE"):
                     spotify_service.control_playback("PLAY_PAUSE")
                     fast_poll_now = True
@@ -1937,12 +2085,16 @@ def thought_push_loop():
 
 
 def main():
-    print("\n╔════════════════════════════════════════════════╗")
-    print("║  COMPANION OS - Controller v7.0               ║")
-    print("╚════════════════════════════════════════════════╝\n")
+    print("\n+------------------------------------------------+")
+    print("|  COMPANION OS - Controller v7.0               |")
+    print("+------------------------------------------------+\n")
     
+    # Terminate any duplicate/zombie controller instances to prevent port collision
+    cleanup_previous_instances()
+
     # Start background threads
     threading.Thread(target=command_listener, daemon=True).start()
+    threading.Thread(target=discovery_probe_loop, daemon=True).start()
     threading.Thread(target=capture_windows_notifications, daemon=True).start()
     threading.Thread(target=start_notes_server, daemon=True).start()
     # V6: New data feed threads
@@ -1956,8 +2108,11 @@ def main():
     threading.Thread(target=theme2_spotify_feed, args=(spotify_service, send_udp, config), daemon=True).start()
     # V8: RuView CSI Presence Detection threads
     threading.Thread(target=ruview_listener_loop, args=(8890,), daemon=True).start()
-    threading.Thread(target=ruview_push_loop, args=(send_udp, 2.0), daemon=True).start()
     print("Monitoring playback & connections...")
+    if active_esp_ip:
+        print(f"📡 Target Device IP: {active_esp_ip}")
+    else:
+        print("🔍 Scanning local subnet for Companion Device...")
     
     global current_lyrics, fast_poll_now
     fast_poll_now = False
@@ -1977,6 +2132,7 @@ def main():
     
     global force_resync, pomodoro_active, pomodoro_remaining
     global pomodoro_is_break, pomodoro_sessions, pomodoro_last_tick
+    global last_resync_time
     
     while True:
         try:
@@ -1986,14 +2142,16 @@ def main():
                 fast_poll_now = False
                 
             if force_resync:
-                current_track_id = None
-                last_sent_lyrics = None
-                last_github_check = 0.0
-                last_notes_check = 0.0
-                last_time_sync = 0.0
-                last_weather_check = 0.0
                 force_resync = False
-                print("🔄 Triggered full state resync!")
+                if now - last_resync_time > 5.0:
+                    last_resync_time = now
+                    current_track_id = None
+                    last_sent_lyrics = None
+                    last_github_check = 0.0
+                    last_notes_check = 0.0
+                    last_time_sync = 0.0
+                    last_weather_check = 0.0
+                    print("🔄 Triggered full state resync!")
             
             # --- Time Sync (every 60s) ---
             if now - last_time_sync > 60 or last_time_sync == 0:
@@ -2150,4 +2308,9 @@ def main():
             time.sleep(5)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        with open(os.path.join(SCRIPT_DIR, "crash.log"), "w", encoding="utf-8") as f:
+            traceback.print_exc(file=f)

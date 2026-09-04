@@ -18,6 +18,9 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
@@ -58,12 +61,41 @@ class MainActivity : AppCompatActivity() {
         // Check if Notification Listener is enabled (needed for Spotify & Chat Relays)
         checkNotificationListenerPermission()
 
+        // Handle Spotify OAuth Callback if opened via redirect
+        handleSpotifyOAuthIntent(intent)
+
         // Setup WebView
         webView = findViewById(R.id.companion_webview)
         setupWebView()
 
         // Load offline bundled UI
         webView.loadUrl("file:///android_asset/www/index.html")
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleSpotifyOAuthIntent(intent)
+    }
+
+    private fun handleSpotifyOAuthIntent(intent: Intent?) {
+        val uri = intent?.data
+        if (uri != null && uri.scheme == "companionos" && uri.host == "callback") {
+            val code = uri.getQueryParameter("code")
+            if (!code.isNullOrEmpty()) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    val ok = SpotifyWebApiClient.exchangeCodeForToken(code)
+                    runOnUiThread {
+                        if (ok) {
+                            Toast.makeText(this@MainActivity, "Spotify Connected Successfully!", Toast.LENGTH_LONG).show()
+                            webView.evaluateJavascript("if (window.onSpotifyConnected) window.onSpotifyConnected(true);", null)
+                        } else {
+                            Toast.makeText(this@MainActivity, "Spotify Authentication Failed", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private fun checkNotificationListenerPermission() {
@@ -119,6 +151,52 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun sendUdp(message: String) {
             CompanionForegroundService.sendUdp(message)
+        }
+
+        @JavascriptInterface
+        fun startSpotifyAuth() {
+            runOnUiThread {
+                try {
+                    val authUrl = SpotifyWebApiClient.getAuthorizationUrl()
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl))
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, "Failed to open browser: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun isSpotifyConnected(): Boolean {
+            return SpotifyWebApiClient.isUserAuthenticated()
+        }
+
+        @JavascriptInterface
+        fun pushThought(thoughtText: String) {
+            CompanionForegroundService.pushThought(thoughtText)
+            runOnUiThread {
+                Toast.makeText(this@MainActivity, "Thought pushed to DeskBot!", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        @JavascriptInterface
+        fun setPage(page: Int) {
+            CompanionForegroundService.setPage(page)
+        }
+
+        @JavascriptInterface
+        fun setTheme(theme: Int) {
+            CompanionForegroundService.setTheme(theme)
+        }
+
+        @JavascriptInterface
+        fun setEmotion(emotion: String) {
+            CompanionForegroundService.setEmotion(emotion)
+        }
+
+        @JavascriptInterface
+        fun setBrightness(brightness: Int) {
+            CompanionForegroundService.setBrightness(brightness)
         }
 
         @JavascriptInterface

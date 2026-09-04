@@ -216,9 +216,19 @@ void redrawSpotifyPartial() {
         drawWrapped(currentLyricsLine2, 0x4208, 2);
       }
     } else {
-      tft.setTextColor(0x4208, 0x0821);
-      tft.drawString("♪ Playing", cardX + 4, cardY + 22, 1);
-      tft.drawString("with CompanionOS", cardX + 4, cardY + 32, 1);
+      tft.setTextColor(0x632C, 0x0821);
+      if (currentTrack.length() > 0) {
+        String trkShort = currentTrack.substring(0, min((int)currentTrack.length(), 14));
+        tft.drawString("♪ " + trkShort, cardX + 4, cardY + 22, 1);
+        if (currentArtist.length() > 0) {
+          String artShort = currentArtist.substring(0, min((int)currentArtist.length(), 16));
+          tft.drawString(artShort, cardX + 4, cardY + 32, 1);
+        } else {
+          tft.drawString("Synced Playback", cardX + 4, cardY + 32, 1);
+        }
+      } else {
+        tft.drawString("♪ Ready for Music", cardX + 4, cardY + 22, 1);
+      }
     }
     
     lastLyric1 = currentLyrics;
@@ -607,12 +617,13 @@ void redrawNotificationsPartial() {
 }
 
 void updateFlashNotification() {
-  if (flashNotifActive && millis() - flashNotifStart >= 5000) { // HIGH-07 FIX: >= prevents edge-case stuck overlay
+  if (flashNotifActive && millis() - flashNotifStart >= 3000) {
     flashNotifActive = false;
+    int bannerH = SCALE_Y(30);
+    int bannerY = SCREEN_H - bannerH;
+    tft.fillRect(0, bannerY, SCREEN_W, bannerH, COLOR_BG);
     if (currentState == STATE_EYES) {
-      // Clear overlay area and redraw eyes
-      tft.fillRect(0, 0, SCREEN_W, 45, COLOR_BG);
-      drawEyes();
+      renderCurrentPage();
     }
   }
 }
@@ -980,6 +991,10 @@ void changePage(int direction) {
   }
   #endif
   
+  extern ThoughtBubble activeBubble;
+  activeBubble.active = false;
+  activeBubble.fadingOut = false;
+  activeBubble.fadeAlpha = 0;
   // Explicit full screen clear on page transition
   tft.fillScreen(COLOR_BG);
   
@@ -1008,6 +1023,10 @@ void setPage(int targetPage) {
     dhCurrentState = DH_MENU;
   }
   #endif
+  extern ThoughtBubble activeBubble;
+  activeBubble.active = false;
+  activeBubble.fadingOut = false;
+  activeBubble.fadeAlpha = 0;
   tft.fillScreen(COLOR_BG);
   renderCurrentPage();
 }

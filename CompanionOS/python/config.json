@@ -16,7 +16,7 @@
     "units": "metric"
   },
   "network": {
-    "esp_ip": "192.168.1.123",
+    "esp_ip": "192.168.1.187",
     "esp_port_rx": 8888,
     "esp_port_tx": 8889,
     "pc_port_rx": 8889

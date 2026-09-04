@@ -97,6 +97,7 @@ enum Emotion {
 };
 
 extern Emotion currentEmotion;
+extern unsigned long lastManualEmotionTime;
 
 // ═══════════════════════════════════════════════════════════
 // DR. HACK SUB-STATE MACHINE (ESP32 only)

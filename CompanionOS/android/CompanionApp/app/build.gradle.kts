@@ -5,14 +5,14 @@ plugins {
 
 android {
     namespace = "com.companionos.app"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.companionos.app"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 1
-        versionName = "7.0.0"
+        targetSdk = 35
+        versionCode = 2
+        versionName = "7.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

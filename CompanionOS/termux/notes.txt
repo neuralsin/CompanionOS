@@ -1,0 +1,2 @@
+Welcome to CompanionOS!
+Edit notes.txt to update.

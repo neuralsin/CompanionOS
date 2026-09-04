@@ -442,6 +442,7 @@ void drawEyes() {
 }
 
 void setEmotion(Emotion newEmotion) {
+  lastManualEmotionTime = millis();
   if (currentEmotion != newEmotion) {
     currentEmotion = newEmotion;
     if (currentState == STATE_EYES) {
@@ -472,13 +473,11 @@ void updateEyes() {
       ldrValue = analogRead(A0);
     #endif
     
-    // Auto-emotion based on LDR + time (only if no manual emotion override recently)
+    // Auto-emotion based on LDR + time (only if no manual emotion override in last 60 seconds)
     Emotion suggested = getAutoEmotion();
     if (suggested != autoEmotion) {
       autoEmotion = suggested;
-      // Only apply if emotion hasn't been manually overridden in last 30 seconds
-      static unsigned long lastManualEmotion = 0;
-      if (now - lastManualEmotion > 30000) {
+      if (now - lastManualEmotionTime > 60000) {
         setEmotion(autoEmotion);
       }
     }

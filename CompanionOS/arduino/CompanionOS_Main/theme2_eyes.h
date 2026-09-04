@@ -687,6 +687,7 @@ void t2_initEyes() {
 }
 
 void t2_setEmotion(Emotion emo) {
+  lastManualEmotionTime = millis();
   currentEmotion = emo;
   switch(emo) {
     case EMO_HAPPY:     t2_goTo_Happy(); break;
@@ -705,6 +706,7 @@ void t2_setEmotion(Emotion emo) {
 
 // ── Cycle all 18 expressions for taps ──
 void t2_nextExpression() {
+  lastManualEmotionTime = millis();
   t2_expressionIdx = (t2_expressionIdx + 1) % 18;
   switch (t2_expressionIdx) {
     case 0: t2_goTo_Normal(); break;

@@ -228,33 +228,41 @@
     <!-- ═══════════════════════════════════════════════════════════ -->
     <div id="screen-pet" class="screen-panel hidden flex flex-col gap-4 max-w-md mx-auto">
       
-      <!-- Emotion Palette -->
+      <!-- Emotion Palette (All 8 Emotions) -->
       <div class="bg-surface-card rounded-lg p-4 industrial-border flex flex-col gap-3">
-        <h2 class="text-[11px] font-bold text-outline uppercase tracking-wider">SET EYE EMOTION</h2>
-        <div class="grid grid-cols-3 gap-2">
-          <button onclick="setEmotion('HAPPY')" class="p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
-            <span class="material-symbols-outlined text-primary-light text-[22px]">mood</span>
-            <span class="text-[10px] font-bold uppercase">Happy</span>
+        <h2 class="text-[11px] font-bold text-outline uppercase tracking-wider">SET EYE EMOTION (8 MOODS)</h2>
+        <div class="grid grid-cols-4 gap-2">
+          <button onclick="setEmotion('HAPPY')" class="p-2 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-primary-light text-[20px]">mood</span>
+            <span class="text-[9px] font-bold uppercase">Happy</span>
           </button>
-          <button onclick="setEmotion('NEUTRAL')" class="p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
-            <span class="material-symbols-outlined text-outline text-[22px]">sentiment_neutral</span>
-            <span class="text-[10px] font-bold uppercase">Neutral</span>
+          <button onclick="setEmotion('EXCITED')" class="p-2 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-secondary text-[20px]">celebration</span>
+            <span class="text-[9px] font-bold uppercase">Excited</span>
           </button>
-          <button onclick="setEmotion('SAD')" class="p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
-            <span class="material-symbols-outlined text-secondary text-[22px]">sentiment_dissatisfied</span>
-            <span class="text-[10px] font-bold uppercase">Sad</span>
+          <button onclick="setEmotion('LOVE')" class="p-2 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-error text-[20px]">favorite</span>
+            <span class="text-[9px] font-bold uppercase">Love</span>
           </button>
-          <button onclick="setEmotion('ANGRY')" class="p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
-            <span class="material-symbols-outlined text-error text-[22px]">mood_bad</span>
-            <span class="text-[10px] font-bold uppercase">Angry</span>
+          <button onclick="setEmotion('SURPRISED')" class="p-2 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-yellow-400 text-[20px]">emoji_emotions</span>
+            <span class="text-[9px] font-bold uppercase">Surprised</span>
           </button>
-          <button onclick="setEmotion('SLEEPY')" class="p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
-            <span class="material-symbols-outlined text-tertiary text-[22px]">bedtime</span>
-            <span class="text-[10px] font-bold uppercase">Sleepy</span>
+          <button onclick="setEmotion('NEUTRAL')" class="p-2 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-outline text-[20px]">sentiment_neutral</span>
+            <span class="text-[9px] font-bold uppercase">Neutral</span>
           </button>
-          <button onclick="setEmotion('LOVE')" class="p-2.5 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
-            <span class="material-symbols-outlined text-error text-[22px]">favorite</span>
-            <span class="text-[10px] font-bold uppercase">Love</span>
+          <button onclick="setEmotion('SAD')" class="p-2 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-secondary text-[20px]">sentiment_dissatisfied</span>
+            <span class="text-[9px] font-bold uppercase">Sad</span>
+          </button>
+          <button onclick="setEmotion('SLEEPY')" class="p-2 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-tertiary text-[20px]">bedtime</span>
+            <span class="text-[9px] font-bold uppercase">Sleepy</span>
+          </button>
+          <button onclick="setEmotion('ANGRY')" class="p-2 rounded industrial-border bg-surface-high hover:border-primary flex flex-col items-center gap-1 tactile-btn">
+            <span class="material-symbols-outlined text-error text-[20px]">mood_bad</span>
+            <span class="text-[9px] font-bold uppercase">Angry</span>
           </button>
         </div>
       </div>
@@ -532,6 +540,12 @@
         'system': 'System Settings'
       };
       document.getElementById('active-screen-title').textContent = titleMap[tabId] || 'CompanionOS';
+    }
+
+    function transmitCommand(cmd) {
+      if (window.AndroidBridge && window.AndroidBridge.sendUdp) {
+        window.AndroidBridge.sendUdp(cmd);
+      }
     }
 
     function sendBtn(btn) {

@@ -65,6 +65,9 @@ inline void savePotCalibration() {
 }
 
 inline void initRotaryKnob() {
+  #ifndef ENABLE_ROTARY_KNOB
+  return;
+  #endif
   pinMode(POT_KNOB_PIN, INPUT);
   analogSetPinAttenuation(POT_KNOB_PIN, ADC_11db); // 0V to ~3.3V range
   loadPotCalibration();

@@ -245,6 +245,32 @@ void handleVirtualButton(String btn) {
     return;
   }
 
+  if (btn == "UP") {
+    virtualLeftPressed = true;
+    if (currentState == STATE_SETTINGS) {
+      extern int settingsScrollY;
+      settingsScrollY = max(0, settingsScrollY - 20);
+      redrawSettingsPartial();
+    } else {
+      changePage(-1);
+    }
+    lastInteractionTime = millis();
+    return;
+  }
+
+  if (btn == "DOWN") {
+    virtualRightPressed = true;
+    if (currentState == STATE_SETTINGS) {
+      extern int settingsScrollY;
+      settingsScrollY = min(120, settingsScrollY + 20);
+      redrawSettingsPartial();
+    } else {
+      changePage(1);
+    }
+    lastInteractionTime = millis();
+    return;
+  }
+
   if (btn == "SELECT_LONG") {
 #ifdef ESP32
     if (currentState == STATE_DR_HACK) {
@@ -1102,9 +1128,16 @@ void handleCommand(String msg) {
     String json = msg.substring(7);
     DynamicJsonDocument doc(1024);
     if (!deserializeJson(doc, json)) {
-      if (doc.containsKey("line1")) currentLyrics = doc["line1"].as<String>();
-      if (doc.containsKey("line2")) currentLyricsLine2 = doc["line2"].as<String>();
-      if (doc.containsKey("prev"))  prevLyricsLine = doc["prev"].as<String>();
+      if (doc.is<JsonArray>()) {
+        JsonArray arr = doc.as<JsonArray>();
+        if (arr.size() >= 1) prevLyricsLine = arr[0].as<String>();
+        if (arr.size() >= 2) currentLyrics = arr[1].as<String>();
+        if (arr.size() >= 3) currentLyricsLine2 = arr[2].as<String>();
+      } else {
+        if (doc.containsKey("line1")) currentLyrics = doc["line1"].as<String>();
+        if (doc.containsKey("line2")) currentLyricsLine2 = doc["line2"].as<String>();
+        if (doc.containsKey("prev"))  prevLyricsLine = doc["prev"].as<String>();
+      }
       extern void t2_redrawSpotifyPartial();
       if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
       else if (currentState == STATE_SPOTIFY) redrawSpotifyPartial();
@@ -1267,13 +1300,14 @@ void handleCommand(String msg) {
   // V7: New Command Handlers
   // ═══════════════════════════════════════════════════════
 
-  // THOUGHT: — PC-pushed thought bubble override
+  // THOUGHT: — PC/Phone-pushed thought bubble override
   else if (msg.startsWith("THOUGHT:")) {
     String thought = msg.substring(8);
     thought.trim();
     if (thought.length() > 0 && thought.length() < 80) {
       strncpy(overrideThought, thought.c_str(), 79);
       overrideThought[79] = '\0';
+      activeBubble.active = false; // Reset so scheduler immediately displays the new thought
     }
   }
 

@@ -290,31 +290,62 @@ static void t3_setMood(uint8_t mood) {
 // ═══════════════════════════════════════════════════════════
 
 void t3_setEmotion(Emotion e) {
+  lastManualEmotionTime = millis();
   currentEmotion = e;
   switch (e) {
     case EMO_HAPPY:
+      t3_setMood(T3_MOOD_HAPPY);
+      t3_eyeLhNext = 30;
+      t3_eyeRhNext = 30;
+      t3_curious = true;
+      break;
     case EMO_EXCITED:
+      t3_setMood(T3_MOOD_HAPPY);
+      t3_eyeLhNext = 36;
+      t3_eyeRhNext = 36;
+      t3_eyeLwNext = 36;
+      t3_eyeRwNext = 36;
+      t3_laugh = true;
+      t3_curious = true;
+      break;
     case EMO_LOVE:
       t3_setMood(T3_MOOD_HAPPY);
+      t3_vFlicker = true;
       t3_curious = true;
       break;
     case EMO_SAD:
+      t3_setMood(T3_MOOD_TIRED);
+      t3_eyeLhNext = 22;
+      t3_eyeRhNext = 22;
+      t3_curious = false;
+      break;
     case EMO_SLEEPY:
       t3_setMood(T3_MOOD_TIRED);
+      t3_eyeLhNext = 4;
+      t3_eyeRhNext = 4;
       t3_curious = false;
       break;
     case EMO_ANGRY:
       t3_setMood(T3_MOOD_ANGRY);
+      t3_eyeLhNext = 26;
+      t3_eyeRhNext = 26;
       t3_curious = false;
       break;
     case EMO_SURPRISED:
       t3_setMood(T3_MOOD_DEFAULT);
-      t3_curious = true;
-      // Trigger confused animation for surprise
+      t3_eyeLhNext = 40;
+      t3_eyeRhNext = 40;
+      t3_eyeLwNext = 40;
+      t3_eyeRwNext = 40;
       t3_confused = true;
+      t3_curious = true;
       break;
-    default: // NEUTRAL, CHILL
+    default: // NEUTRAL
       t3_setMood(T3_MOOD_DEFAULT);
+      t3_eyeLhNext = t3_eyeLhDef;
+      t3_eyeRhNext = t3_eyeRhDef;
+      t3_eyeLwNext = t3_eyeLwDef;
+      t3_eyeRwNext = t3_eyeRwDef;
       t3_curious = true;
       break;
   }
@@ -322,8 +353,8 @@ void t3_setEmotion(Emotion e) {
 
 // Expression cycling (SELECT button / tap)
 void t3_nextExpression() {
-  // Cycle through eye variants as the "expression" for Theme 3
-  t3_nextEyeVariant();
+  Emotion next = (Emotion)((currentEmotion + 1) % EMO_COUNT);
+  t3_setEmotion(next);
 }
 
 // ═══════════════════════════════════════════════════════════

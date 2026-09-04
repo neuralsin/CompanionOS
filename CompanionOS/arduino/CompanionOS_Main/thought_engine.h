@@ -187,8 +187,20 @@ void generateThought() {
 
 extern uint16_t blendColor(uint16_t c1, uint16_t c2, float t);
 
+static int lastDrawnBubbleX = 0;
+static int lastDrawnBubbleY = 0;
+static int lastDrawnBubbleW = 0;
+static int lastDrawnBubbleH = 0;
+
 inline void clearThoughtBubbleArea() {
-  tft.fillRect(SCR_W - 88, 14, 88, 54, COLOR_BG);
+  int x = (lastDrawnBubbleX > 0) ? (lastDrawnBubbleX - 6) : (SCR_W - 110);
+  int y = (lastDrawnBubbleY > 0) ? lastDrawnBubbleY : 14;
+  int w = (lastDrawnBubbleW > 0) ? (lastDrawnBubbleW + 12) : 110;
+  int h = (lastDrawnBubbleH > 0) ? (lastDrawnBubbleH + 18) : 56;
+  if (x < 0) x = 0;
+  if (x + w > SCR_W) w = SCR_W - x;
+  tft.fillRect(x, y, w, h, COLOR_BG);
+  lastDrawnBubbleX = 0;
 }
 
 template <typename T>
@@ -246,55 +258,64 @@ void renderThoughtBubble(T* display, bool isSprite) {
   // Alpha blend factor
   float alpha = activeBubble.fadeAlpha / 255.0f;
 
-  // ── Position Calculation ──────────────────────────────
-  int bubbleW = 80;
-  int bubbleX = SCR_W - bubbleW - 1; // Pinned to top-right
-  int bubbleY = 16;  
-  
-  int lineH = 8;
-  int maxChars = (bubbleW - 6) / 6; // ~12 chars per line at font size 1 (6px wide)
+  // ── Strict Layout Constraints (0.7x Scale) ───────────
+  const int RIGHT_MARGIN = 6;  // Strict 6px distance from rightmost screen edge
+  const int paddingX = 3;      // Left/right interior text padding
+  const int paddingY = 2;      // Top/bottom interior headroom
+  const int lineH = 8;         // 7px font + 1px line leading headroom
+  const int MAX_LINES = 3;
+  const int maxAllowedW = min(74, SCR_W - 80); // 0.7x scale of previous 106px
+  const int maxCharsPerLine = (maxAllowedW - paddingX * 2) / 6;
 
   // ── Word-aware line wrapping ──────────────────────────
-  char wrappedLines[3][24]; // max 3 lines, 23 chars + null
+  char wrappedLines[MAX_LINES][20];
   int lineCount = 0;
+  int maxLinePixelW = 0;
+
   int textLen = strlen(activeBubble.text);
   int pos = 0;
 
-  while (pos < textLen && lineCount < 3) {
+  while (pos < textLen && lineCount < MAX_LINES) {
     while (pos < textLen && activeBubble.text[pos] == ' ') pos++;
     if (pos >= textLen) break;
 
     int remaining = textLen - pos;
-    if (remaining <= maxChars) {
-      int copyLen = remaining > 23 ? 23 : remaining;
+    if (remaining <= maxCharsPerLine) {
+      int copyLen = min(remaining, 19);
       strncpy(wrappedLines[lineCount], activeBubble.text + pos, copyLen);
       wrappedLines[lineCount][copyLen] = '\0';
+      int lw = strlen(wrappedLines[lineCount]) * 6;
+      if (lw > maxLinePixelW) maxLinePixelW = lw;
       lineCount++;
       break;
     }
 
-    int breakAt = maxChars;
-    for (int j = maxChars; j > 0; j--) {
+    // Break cleanly at space
+    int breakAt = maxCharsPerLine;
+    for (int j = maxCharsPerLine; j > 0; j--) {
       if (activeBubble.text[pos + j] == ' ') {
         breakAt = j;
         break;
       }
     }
 
-    int copyLen = breakAt > 23 ? 23 : breakAt;
+    int copyLen = min(breakAt, 19);
     strncpy(wrappedLines[lineCount], activeBubble.text + pos, copyLen);
     wrappedLines[lineCount][copyLen] = '\0';
+    int lw = strlen(wrappedLines[lineCount]) * 6;
+    if (lw > maxLinePixelW) maxLinePixelW = lw;
     lineCount++;
     pos += breakAt;
   }
 
-  if (lineCount > 2) {
-    lineCount = 2;
-    int len2 = strlen(wrappedLines[1]);
-    if (len2 > maxChars - 2) len2 = maxChars - 2;
-    wrappedLines[1][len2] = '.';
-    wrappedLines[1][len2 + 1] = '.';
-    wrappedLines[1][len2 + 2] = '\0';
+  // If text exceeded 3 lines, append ellipsis
+  if (pos < textLen && lineCount == MAX_LINES) {
+    int lenLast = strlen(wrappedLines[MAX_LINES - 1]);
+    if (lenLast > maxCharsPerLine - 2) lenLast = maxCharsPerLine - 2;
+    if (lenLast < 0) lenLast = 0;
+    wrappedLines[MAX_LINES - 1][lenLast] = '.';
+    wrappedLines[MAX_LINES - 1][lenLast + 1] = '.';
+    wrappedLines[MAX_LINES - 1][lenLast + 2] = '\0';
   }
 
   if (lineCount == 0) {
@@ -303,9 +324,19 @@ void renderThoughtBubble(T* display, bool isSprite) {
     return;
   }
 
-  int padding = 3;
-  int bubbleH = lineCount * lineH + padding * 2;
-  if (bubbleY + bubbleH > 58) bubbleH = 58 - bubbleY;
+  // ── Dynamic Dimensions & Strict Right Margin (0.7x) ───
+  int bubbleW = max(34, maxLinePixelW + paddingX * 2);
+  if (bubbleW > maxAllowedW) bubbleW = maxAllowedW;
+
+  int bubbleX = SCR_W - bubbleW - RIGHT_MARGIN; // Strict 6px margin from right edge
+  int bubbleY = 16;
+  int bubbleH = lineCount * lineH + paddingY * 2;
+  if (bubbleY + bubbleH > 52) bubbleH = 52 - bubbleY;
+
+  lastDrawnBubbleX = bubbleX;
+  lastDrawnBubbleY = bubbleY;
+  lastDrawnBubbleW = bubbleW;
+  lastDrawnBubbleH = bubbleH;
 
   uint16_t borderColor = blendColor(CLR_BG, CLR_PRIMARY, alpha);
   uint16_t bgColor = blendColor(CLR_BG, CLR_SURFACE_2, alpha);
@@ -316,30 +347,35 @@ void renderThoughtBubble(T* display, bool isSprite) {
     drawY = bubbleY - 16;
   }
 
-  display->fillRoundRect(bubbleX, drawY, bubbleW, bubbleH, 3, bgColor);
-  display->drawRoundRect(bubbleX, drawY, bubbleW, bubbleH, 3, borderColor);
+  // Bubble Box
+  display->fillRoundRect(bubbleX, drawY, bubbleW, bubbleH, 2, bgColor);
+  display->drawRoundRect(bubbleX, drawY, bubbleW, bubbleH, 2, borderColor);
 
+  // Interior Headroom Glow Accent
   uint16_t glowColor = blendColor(CLR_BG, CLR_PRIMARY, alpha * 0.3f);
-  display->drawRoundRect(bubbleX + 1, drawY + 1, bubbleW - 2, bubbleH - 2, 2, glowColor);
+  display->drawRoundRect(bubbleX + 1, drawY + 1, bubbleW - 2, bubbleH - 2, 1, glowColor);
 
-  int tailX = bubbleX + 12;
+  // Tail pointing to eye (0.7x scale)
+  int tailX = bubbleX + 8;
   int tailY = drawY + bubbleH;
-  int tailW = 5;
-  int tailH = 6;
+  int tailW = 4;
+  int tailH = 4;
   display->fillTriangle(tailX, tailY, tailX + tailW, tailY,
-                           tailX - tailW/2, tailY + tailH, bgColor);
+                        tailX - tailW/2, tailY + tailH, bgColor);
   display->drawLine(tailX, tailY, tailX - tailW/2, tailY + tailH, borderColor);
   display->drawLine(tailX + tailW, tailY, tailX - tailW/2, tailY + tailH, borderColor);
 
-  int dotX = tailX - 4;
-  int dotY = tailY + tailH + 3;
-  display->fillCircle(dotX, dotY, 2, borderColor);
-  display->fillCircle(dotX - 4, dotY + 4, 1, borderColor);
+  // Thought bubbles trailing dots (0.7x scale)
+  int dotX = tailX - 2;
+  int dotY = tailY + tailH + 2;
+  display->fillCircle(dotX, dotY, 1, borderColor);
+  display->drawPixel(dotX - 3, dotY + 2, borderColor);
 
-  display->setTextColor(textColor);
+  // Interior Text with padding & headroom
+  display->setTextColor(textColor, bgColor);
   display->setTextSize(1); 
-  int textX = bubbleX + padding;
-  int textY = drawY + padding;
+  int textX = bubbleX + paddingX;
+  int textY = drawY + paddingY;
 
   for (int line = 0; line < lineCount; line++) {
     display->drawString(wrappedLines[line], textX, textY + line * lineH, 1);
@@ -353,13 +389,7 @@ void tickThoughtScheduler(T* display, bool isSprite) {
   if (currentState != STATE_EYES) return;
   if (customEyeActive && customEyeReady) return;
 
-  // Check if bubble is currently active — handle fade/display
-  if (activeBubble.active) {
-    renderThoughtBubble(display, isSprite);  // draw/fade current bubble
-    return;
-  }
-
-  // Check for PC-pushed override thought (immediate display)
+  // Check for PC-pushed override thought (immediate display priority)
   if (strlen(overrideThought) > 0) {
     generateThought();
     if (strlen(activeBubble.text) > 0) {
@@ -370,6 +400,12 @@ void tickThoughtScheduler(T* display, bool isSprite) {
       activeBubble.fadingOut = false;
       renderThoughtBubble(display, isSprite);
     }
+    return;
+  }
+
+  // Check if bubble is currently active — handle fade/display
+  if (activeBubble.active) {
+    renderThoughtBubble(display, isSprite);  // draw/fade current bubble
     return;
   }
 

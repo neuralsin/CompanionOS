@@ -87,36 +87,36 @@ class CompanionForegroundService : Service() {
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
-                    }
-
-                    // 2. Subnet Directed Broadcasts
-                    try {
-                        val interfaces = NetworkInterface.getNetworkInterfaces()
-                        while (interfaces.hasMoreElements()) {
-                            val iface = interfaces.nextElement()
-                            if (iface.isLoopback || !iface.isUp) continue
-                            for (addr in iface.interfaceAddresses) {
-                                val bcast = addr.broadcast
-                                if (bcast != null) {
-                                    try {
-                                        val p = DatagramPacket(bytes, bytes.size, bcast, ESP_PORT)
-                                        udpSocket?.send(p)
-                                    } catch (e: Exception) {}
+                    } else {
+                        // 2. Subnet Directed Broadcasts (Only if bot IP is unknown)
+                        try {
+                            val interfaces = NetworkInterface.getNetworkInterfaces()
+                            while (interfaces.hasMoreElements()) {
+                                val iface = interfaces.nextElement()
+                                if (iface.isLoopback || !iface.isUp) continue
+                                for (addr in iface.interfaceAddresses) {
+                                    val bcast = addr.broadcast
+                                    if (bcast != null) {
+                                        try {
+                                            val p = DatagramPacket(bytes, bytes.size, bcast, ESP_PORT)
+                                            udpSocket?.send(p)
+                                        } catch (e: Exception) {}
+                                    }
                                 }
                             }
-                        }
-                    } catch (e: Exception) {}
+                        } catch (e: Exception) {}
 
-                    // 3. Global Broadcast Fallback
-                    try {
-                        val bcast = DatagramPacket(
-                            bytes,
-                            bytes.size,
-                            InetAddress.getByName("255.255.255.255"),
-                            ESP_PORT
-                        )
-                        udpSocket?.send(bcast)
-                    } catch (e: Exception) {}
+                        // 3. Global Broadcast Fallback
+                        try {
+                            val bcast = DatagramPacket(
+                                bytes,
+                                bytes.size,
+                                InetAddress.getByName("255.255.255.255"),
+                                ESP_PORT
+                            )
+                            udpSocket?.send(bcast)
+                        } catch (e: Exception) {}
+                    }
 
                     // 4. Dual-Transport over Bluetooth if connected
                     if (BluetoothDiscoveryManager.isBtConnected) {
@@ -162,6 +162,27 @@ class CompanionForegroundService : Service() {
         fun saveAndSetMultiWifi(jsonPayload: String) {
             sendUdp("WIFI:MULTI_SET:$jsonPayload")
         }
+        fun setPage(page: Int) {
+            sendUdp("PAGE:$page")
+        }
+
+        fun setTheme(theme: Int) {
+            sendUdp("THEME:$theme")
+        }
+
+        fun setEmotion(emotion: String) {
+            sendUdp("EMOTION:$emotion")
+        }
+
+        fun pushThought(text: String) {
+            CoroutineScope(Dispatchers.IO).launch {
+                ThoughtRelay.pushThought(text)
+            }
+        }
+
+        fun setBrightness(brightness: Int) {
+            sendUdp("BRIGHTNESS:$brightness")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -183,6 +204,7 @@ class CompanionForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        SpotifyWebApiClient.init(this)
         createNotificationChannel()
 
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -252,40 +274,40 @@ class CompanionForegroundService : Service() {
                 }
                 val buffer = ByteArray(2048)
 
-                    while (isActive) {
-                        try {
-                            val packet = DatagramPacket(buffer, buffer.size)
-                            socket.receive(packet)
-                            val senderIp = packet.address.hostAddress
+                while (isActive) {
+                    try {
+                        val packet = DatagramPacket(buffer, buffer.size)
+                        socket.receive(packet)
+                        val senderIp = packet.address.hostAddress
 
-                            if (senderIp != null && senderIp != "127.0.0.1") {
-                                if (discoveredEspIp != senderIp) {
-                                    discoveredEspIp = senderIp
-                                    updateNotification("Connected: $senderIp (WiFi)")
-                                    triggerInstantRelays()
-                                }
+                        if (senderIp != null && senderIp != "127.0.0.1") {
+                            if (discoveredEspIp != senderIp) {
+                                discoveredEspIp = senderIp
+                                updateNotification("Connected: $senderIp (WiFi)")
+                                triggerInstantRelays()
                             }
-
-                            val msg = String(packet.data, 0, packet.length, Charsets.UTF_8).trim()
-                            if (msg.startsWith("ART_REQ:")) {
-                                val rows = msg.substringAfter("ART_REQ:").split(",").mapNotNull { it.trim().toIntOrNull() }
-                                if (rows.isNotEmpty()) {
-                                    serviceScope.launch {
-                                        MediaArtProcessor.retransmitAlbumArtChunks(rows)
-                                    }
-                                }
-                            } else if (msg.startsWith("CUSTEYE_REQ:")) {
-                                val rows = msg.substringAfter("CUSTEYE_REQ:").split(",").mapNotNull { it.trim().toIntOrNull() }
-                                if (rows.isNotEmpty()) {
-                                    serviceScope.launch {
-                                        MediaArtProcessor.retransmitCustomEyeRows(rows)
-                                    }
-                                }
-                            }
-                        } catch (e: Exception) {
-                            // socket timeout
                         }
+
+                        val msg = String(packet.data, 0, packet.length, Charsets.UTF_8).trim()
+                        if (msg.startsWith("ART_REQ:")) {
+                            val rows = msg.substringAfter("ART_REQ:").split(",").mapNotNull { it.trim().toIntOrNull() }
+                            if (rows.isNotEmpty()) {
+                                serviceScope.launch {
+                                    MediaArtProcessor.retransmitAlbumArtChunks(rows)
+                                }
+                            }
+                        } else if (msg.startsWith("CUSTEYE_REQ:")) {
+                            val rows = msg.substringAfter("CUSTEYE_REQ:").split(",").mapNotNull { it.trim().toIntOrNull() }
+                            if (rows.isNotEmpty()) {
+                                serviceScope.launch {
+                                    MediaArtProcessor.retransmitCustomEyeRows(rows)
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        // socket timeout
                     }
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -354,6 +376,69 @@ class CompanionForegroundService : Service() {
     }
 
     private fun startBackgroundRelays() {
+        // 0. Continuous Spotify Web API Poll Loop (1s Resolution)
+        serviceScope.launch {
+            var lastTrackId: String? = null
+            var cachedLyrics: List<LrcLibLyricsService.LyricLine> = emptyList()
+            var lastLyricLine: String? = null
+
+            while (isActive) {
+                try {
+                    if (SpotifyWebApiClient.isUserAuthenticated()) {
+                        val playback = SpotifyWebApiClient.fetchCurrentPlayback()
+                        if (playback != null) {
+                            // Send Track Name & Artist
+                            sendUdpDirect("TRACK:${playback.title}")
+                            sendUdpDirect("ARTIST:${playback.artist}")
+
+                            // Send State JSON
+                            val stateJson = JSONObject().apply {
+                                put("playing", playback.isPlaying)
+                                put("progress", playback.progressMs / 1000)
+                                put("duration", playback.durationMs / 1000)
+                            }
+                            sendUdpDirect("STATE:$stateJson")
+
+                            // Check if track changed
+                            if (playback.trackId != lastTrackId) {
+                                lastTrackId = playback.trackId
+                                cachedLyrics = LrcLibLyricsService.fetchLyrics(playback.title, playback.artist)
+                                lastLyricLine = null
+
+                                // Stream album art
+                                if (!playback.albumArtUrl.isNullOrEmpty()) {
+                                    val artBmp = MediaArtProcessor.downloadBitmap(playback.albumArtUrl)
+                                    if (artBmp != null) {
+                                        MediaArtProcessor.streamAlbumArt(artBmp)
+                                    }
+                                }
+
+                                // Push music thought
+                                ThoughtRelay.pushMusicThought(playback.title, playback.artist)
+                            }
+
+                            // Synced Lyrics Dispatch
+                            if (cachedLyrics.isNotEmpty()) {
+                                val (prev, cur, next) = LrcLibLyricsService.getLyricsAtPosition(cachedLyrics, playback.progressMs)
+                                if (cur.isNotEmpty() && cur != lastLyricLine) {
+                                    lastLyricLine = cur
+                                    val arr = org.json.JSONArray().apply {
+                                        put(prev)
+                                        put(cur)
+                                        put(next)
+                                    }
+                                    sendUdpDirect("LYRICS:$arr")
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                delay(1000)
+            }
+        }
+
         // 1. Time Sync Loop (Every 60s)
         serviceScope.launch {
             while (isActive) {

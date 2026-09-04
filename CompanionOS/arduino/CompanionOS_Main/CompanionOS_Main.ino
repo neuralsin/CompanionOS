@@ -42,6 +42,7 @@
 // Define uninitialized globals
 AppState currentState = STATE_EYES;
 Emotion currentEmotion = EMO_NEUTRAL;
+unsigned long lastManualEmotionTime = 0;
 unsigned long lastBlink = 0;
 bool isBlinking = false;
 int blinkPhase = 0;
@@ -335,8 +336,8 @@ void loop() {
         t2_updateEyes();
       } else {
         updateEyes();
-        tickThoughtScheduler(&tft, false);
       }
+      tickThoughtScheduler(&tft, false);
       
       // V4: Agent overlay on eyes page
       drawAgentOverlay();

@@ -34,7 +34,7 @@ object LrcLibLyricsService {
 
     private fun parseLrc(syncedLyrics: String): List<LyricLine> {
         val lines = mutableListOf<LyricLine>()
-        val pattern = Pattern.compile("""\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)""")
+        val pattern = Pattern.compile("""\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\](.*)""")
         
         for (rawLine in syncedLyrics.lines()) {
             val matcher = pattern.matcher(rawLine.trim())
@@ -42,7 +42,12 @@ object LrcLibLyricsService {
                 val min = matcher.group(1)?.toLongOrNull() ?: 0L
                 val sec = matcher.group(2)?.toLongOrNull() ?: 0L
                 val fracStr = matcher.group(3) ?: "00"
-                val frac = if (fracStr.length == 2) fracStr.toLong() * 10 else fracStr.toLong()
+                val frac = when (fracStr.length) {
+                    1 -> fracStr.toLong() * 100
+                    2 -> fracStr.toLong() * 10
+                    3 -> fracStr.toLong()
+                    else -> 0L
+                }
                 val totalMs = (min * 60 * 1000) + (sec * 1000) + frac
                 val text = matcher.group(4)?.trim() ?: ""
                 lines.add(LyricLine(totalMs, text))

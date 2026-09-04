@@ -75,7 +75,8 @@
 // ═══════════════════════════════════════════════════════════
 // Potentiometer Rotational Knob Configuration (ESP32 ADC1)
 // ═══════════════════════════════════════════════════════════
-#define ENABLE_ROTARY_KNOB 1
+// Disabled by default to prevent floating ADC pin from capturing navigation
+// #define ENABLE_ROTARY_KNOB 1
 #define POT_KNOB_PIN       36   // GPIO36 (ADC1_CH0 - VP)
 
 // ═══════════════════════════════════════════════════════════
