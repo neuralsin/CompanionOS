@@ -47,6 +47,7 @@ static volatile uint8_t  _csi_noise      = 0;
 static uint32_t          _csi_sequence   = 0;
 static WiFiUDP           _csi_udp;
 static bool              _csi_started    = false;
+static bool              _csi_paused     = true; // Start paused to save CPU/bandwidth
 static unsigned long     _csi_last_send  = 0;
 
 // ═══════════════════════════════════════════════════════════
@@ -56,7 +57,7 @@ static unsigned long     _csi_last_send  = 0;
 // ═══════════════════════════════════════════════════════════
 
 static void _csi_rx_callback(void* ctx, wifi_csi_info_t* info) {
-    if (!info || !info->buf || info->len < 2) return;
+    if (_csi_paused || !info || !info->buf || info->len < 2) return;
 
     // Copy I/Q data (capped at our max)
     int copy_len = info->len;
@@ -72,8 +73,7 @@ static void _csi_rx_callback(void* ctx, wifi_csi_info_t* info) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// SETUP — Register the CSI callback and enable collection
-// Call this AFTER WiFi is connected (in setup() or lazy-init)
+// SETUP — Register the CSI callback (starts paused)
 // ═══════════════════════════════════════════════════════════
 
 void setupCSICollector() {
@@ -103,14 +103,31 @@ void setupCSICollector() {
         return;
     }
 
-    rc = esp_wifi_set_csi(true);
-    if (rc != ESP_OK) {
-        Serial.printf("CSI enable failed: 0x%x\n", rc);
-        return;
-    }
-
+    // Keep disabled on boot to save CPU and bandwidth
+    esp_wifi_set_csi(false);
     _csi_started = true;
-    Serial.println(F("📡 CSI Collector started — sending ADR-018 to PC:8890"));
+    _csi_paused = true;
+    Serial.println(F("📡 CSI Collector initialized (paused until RuView page opened)"));
+}
+
+void resumeCSICollector() {
+    if (!_csi_started) {
+        setupCSICollector();
+    }
+    if (_csi_paused) {
+        esp_wifi_set_csi(true);
+        _csi_paused = false;
+        Serial.println(F("📡 RuView CSI Collector RESUMED (Active Sensing)"));
+    }
+}
+
+void pauseCSICollector() {
+    if (_csi_started && !_csi_paused) {
+        esp_wifi_set_csi(false);
+        _csi_paused = true;
+        _csi_data_ready = false;
+        Serial.println(F("⏸ RuView CSI Collector PAUSED to save CPU/Bandwidth"));
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -119,7 +136,7 @@ void setupCSICollector() {
 // ═══════════════════════════════════════════════════════════
 
 void tickCSICollector() {
-    if (!_csi_started) return;
+    if (!_csi_started || _csi_paused) return;
     if (!_csi_data_ready) return;
 
     unsigned long now = millis();

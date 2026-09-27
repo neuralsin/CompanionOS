@@ -1654,6 +1654,7 @@ def command_listener():
             
             if msg == "HELLO_COMPANION":
                 print(f"👋 Companion Device Discovered at {active_esp_ip}!")
+                send_udp("HOST:ANDROID")
                 force_resync = True
             elif msg == "RESYNC":
                 print(f"🔄 Resync requested by device at {active_esp_ip}!")
@@ -1983,6 +1984,7 @@ def main():
     last_time_sync: float = 0.0
     last_weather_check: float = 0.0
     last_pomodoro_sync: float = 0.0
+    last_spotify_token_sync: float = 0.0
     
     notes_file = os.path.join(SCRIPT_DIR, "notes.txt")
     if not os.path.exists(notes_file):
@@ -2100,6 +2102,18 @@ def main():
             
             # --- Spotify Playback ---
             if spotify_service.enabled:
+                if now - last_spotify_token_sync > 300.0:
+                    last_spotify_token_sync = now
+                    token_info = spotify_service.get_token_info()
+                    if token_info and 'access_token' in token_info:
+                        auth_payload = {
+                            "access": token_info.get("access_token", ""),
+                            "refresh": token_info.get("refresh_token", ""),
+                            "client_id": SPOTIFY_CLIENT_ID,
+                            "client_secret": SPOTIFY_CLIENT_SECRET
+                        }
+                        send_udp(f"SPOTIFY_AUTH:{json.dumps(auth_payload)}")
+
                 track = spotify_service.get_current_track()
                 if track and track['id'] != current_track_id:
                     print(f"\n🎵 {track['name']} - {track['artist']}")

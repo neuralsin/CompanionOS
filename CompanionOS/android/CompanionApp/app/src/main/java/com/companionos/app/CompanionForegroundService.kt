@@ -284,6 +284,7 @@ class CompanionForegroundService : Service() {
                             if (discoveredEspIp != senderIp) {
                                 discoveredEspIp = senderIp
                                 updateNotification("Connected: $senderIp (WiFi)")
+                                sendUdpDirect("HOST:ANDROID")
                                 triggerInstantRelays()
                             }
                         }
@@ -329,7 +330,7 @@ class CompanionForegroundService : Service() {
 
     private fun performSubnetProbe() {
         try {
-            val probeData = "COMPANION_PROBE".toByteArray(Charsets.UTF_8)
+            val probeData = "COMPANION_PROBE:ANDROID".toByteArray(Charsets.UTF_8)
             val socket = DatagramSocket().apply { broadcast = true }
 
             // 1. Global Broadcast
@@ -381,10 +382,27 @@ class CompanionForegroundService : Service() {
             var lastTrackId: String? = null
             var cachedLyrics: List<LrcLibLyricsService.LyricLine> = emptyList()
             var lastLyricLine: String? = null
+            var lastSentToken: String? = null
+            var lastTokenForwardTime = 0L
 
             while (isActive) {
                 try {
                     if (SpotifyWebApiClient.isUserAuthenticated()) {
+                        val curAccess = SpotifyWebApiClient.getUserAccessToken()
+                        val curRefresh = SpotifyWebApiClient.getRefreshToken()
+                        val now = System.currentTimeMillis()
+                        if (curAccess != null && (curAccess != lastSentToken || now - lastTokenForwardTime > 300000L)) {
+                            lastSentToken = curAccess
+                            lastTokenForwardTime = now
+                            val authObj = JSONObject().apply {
+                                put("access", curAccess)
+                                put("refresh", curRefresh ?: "")
+                                put("client_id", SpotifyWebApiClient.clientId)
+                                put("client_secret", SpotifyWebApiClient.clientSecret)
+                            }
+                            sendUdpDirect("SPOTIFY_AUTH:$authObj")
+                        }
+
                         val playback = SpotifyWebApiClient.fetchCurrentPlayback()
                         if (playback != null) {
                             // Send Track Name & Artist
@@ -508,7 +526,7 @@ class CompanionForegroundService : Service() {
             while (isActive) {
                 delay(15000)
                 if (discoveredEspIp != null) {
-                    sendUdp("PING")
+                    sendUdp("PING:ANDROID")
                 }
             }
         }

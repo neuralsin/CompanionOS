@@ -11,9 +11,13 @@
 #ifdef ESP32
 #include <WiFi.h>
 #include <BluetoothSerial.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #elif defined(ESP8266)
 #include <ESP8266WiFi.h>
 #include <WiFiManager.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClientSecure.h>
 #endif
 
 #include "globals.h"
@@ -618,6 +622,8 @@ void handleBluetoothData() {
         msg.trim();
         btLineIdx = 0;
         if (msg.length() > 0) {
+          extern unsigned long lastHostPacketMillis;
+          lastHostPacketMillis = millis();
           handleCommand(msg);
         }
       }
@@ -648,6 +654,262 @@ void sendCommand(String cmd) {
 #endif
   Serial.print(F("Sent: "));
   Serial.println(cmd);
+}
+
+// ═══════════════════════════════════════════════════════════
+// STANDALONE HOST PRESENCE & DIRECT APIS (SPOTIFY & WEATHER)
+// ═══════════════════════════════════════════════════════════
+
+unsigned long lastHostPacketMillis = 0;
+bool isHostAndroid = false;
+
+bool isHostActive() {
+  return (lastHostPacketMillis > 0 && (millis() - lastHostPacketMillis < HOST_TIMEOUT_MS));
+}
+
+// Standalone Spotify state
+String spotifyAccessToken = DEFAULT_SPOTIFY_ACCESS_TOKEN;
+String spotifyRefreshToken = DEFAULT_SPOTIFY_REFRESH_TOKEN;
+String spotifyClientId = SPOTIFY_CLIENT_ID;
+String spotifyClientSecret = SPOTIFY_CLIENT_SECRET;
+unsigned long lastSpotifyPollMillis = 0;
+unsigned long lastWeatherPollMillis = 0;
+
+static inline String encodeBase64(const String& input) {
+  static const char b64_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  String out = "";
+  int len = input.length();
+  for (int i = 0; i < len; i += 3) {
+    uint32_t octet_a = (uint8_t)input[i];
+    uint32_t octet_b = (i + 1 < len) ? (uint8_t)input[i + 1] : 0;
+    uint32_t octet_c = (i + 2 < len) ? (uint8_t)input[i + 2] : 0;
+    uint32_t triple = (octet_a << 16) + (octet_b << 8) + octet_c;
+    out += b64_table[(triple >> 18) & 0x3F];
+    out += b64_table[(triple >> 12) & 0x3F];
+    out += (i + 1 < len) ? b64_table[(triple >> 6) & 0x3F] : '=';
+    out += (i + 2 < len) ? b64_table[triple & 0x3F] : '=';
+  }
+  return out;
+}
+
+bool refreshSpotifyToken() {
+  if (spotifyRefreshToken.length() == 0 || spotifyClientId.length() == 0 || spotifyClientSecret.length() == 0) {
+    return false;
+  }
+#if defined(ESP32) || defined(ESP8266)
+  WiFiClientSecure client;
+  client.setInsecure();
+  #ifdef ESP8266
+  client.setBufferSizes(1024, 512);
+  #endif
+
+  HTTPClient https;
+  if (!https.begin(client, "https://accounts.spotify.com/api/token")) {
+    return false;
+  }
+
+  https.setTimeout(4000);
+  https.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  String authBasic = encodeBase64(spotifyClientId + ":" + spotifyClientSecret);
+  https.addHeader("Authorization", "Basic " + authBasic);
+
+  String postBody = "grant_type=refresh_token&refresh_token=" + spotifyRefreshToken;
+  int httpCode = https.POST(postBody);
+
+  if (httpCode == 200) {
+    String resp = https.getString();
+    DynamicJsonDocument doc(1024);
+    if (!deserializeJson(doc, resp)) {
+      if (doc.containsKey("access_token")) {
+        spotifyAccessToken = doc["access_token"].as<String>();
+        Serial.println(F("Spotify standalone token refreshed!"));
+        https.end();
+        return true;
+      }
+    }
+  } else {
+    Serial.printf("Spotify refresh failed HTTP %d\n", httpCode);
+  }
+  https.end();
+#endif
+  return false;
+}
+
+void pollSpotifyStandalone() {
+  if (!wifiConnected) return;
+  if (isHostActive() && !isHostAndroid) return;
+
+  unsigned long now = millis();
+  unsigned long interval = (currentState == STATE_SPOTIFY || isPlaying) ? 
+                           SPOTIFY_POLL_INTERVAL_ACTIVE_MS : SPOTIFY_POLL_INTERVAL_IDLE_MS;
+
+  if (now - lastSpotifyPollMillis < interval) return;
+  lastSpotifyPollMillis = now;
+
+  if (spotifyAccessToken.length() == 0) {
+    if (!refreshSpotifyToken()) return;
+  }
+
+#if defined(ESP32) || defined(ESP8266)
+  WiFiClientSecure client;
+  client.setInsecure();
+  #ifdef ESP8266
+  client.setBufferSizes(1024, 512);
+  #endif
+
+  HTTPClient https;
+  if (!https.begin(client, "https://api.spotify.com/v1/me/player")) {
+    return;
+  }
+
+  https.setTimeout(2500);
+  https.addHeader("Authorization", "Bearer " + spotifyAccessToken);
+  int httpCode = https.GET();
+
+  if (httpCode == 200) {
+    String payload = https.getString();
+    DynamicJsonDocument doc(2048);
+    if (!deserializeJson(doc, payload)) {
+      bool playing = doc["is_playing"] | false;
+      int prg = doc["progress_ms"] | 0;
+      JsonObject item = doc["item"];
+      if (!item.isNull()) {
+        String trk = item["name"] | "";
+        String art = "";
+        if (item.containsKey("artists") && item["artists"].size() > 0) {
+          art = item["artists"][0]["name"] | "";
+        }
+        int dur = item["duration_ms"] | 0;
+
+        if (trk.length() > 0 && (trk != currentTrack || art != currentArtist)) {
+          currentTrack = trk;
+          currentArtist = art;
+          currentLyrics = "";
+          currentLyricsLine2 = "";
+          prevLyricsLine = "";
+        }
+        playProgress = prg;
+        playDuration = dur;
+      }
+      isPlaying = playing;
+      musicPlaying = playing;
+
+      extern void t2_redrawSpotifyPartial();
+      if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
+      else if (currentState == STATE_SPOTIFY) redrawSpotifyPartial();
+      else if (currentState == STATE_CLOCK_DASHBOARD) redrawClockDashboardPartial();
+      else if (currentState == STATE_RETRO_WATCH) redrawRetroWatchPartial();
+    }
+  } else if (httpCode == 204) {
+    if (isPlaying) {
+      isPlaying = false;
+      musicPlaying = false;
+      extern void t2_redrawSpotifyPartial();
+      if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
+      else if (currentState == STATE_SPOTIFY) redrawSpotifyPartial();
+    }
+  } else if (httpCode == 401) {
+    Serial.println(F("Spotify token expired (401), refreshing..."));
+    refreshSpotifyToken();
+  }
+  https.end();
+#endif
+}
+
+void fetchWeatherStandalone() {
+  if (!wifiConnected || isHostActive()) return;
+
+  unsigned long now = millis();
+  if (lastWeatherPollMillis > 0 && now - lastWeatherPollMillis < WEATHER_POLL_INTERVAL_MS) return;
+  lastWeatherPollMillis = now;
+
+#if defined(ESP32) || defined(ESP8266)
+  WiFiClientSecure client;
+  client.setInsecure();
+  #ifdef ESP8266
+  client.setBufferSizes(2048, 512);
+  #endif
+
+  HTTPClient https;
+  String url = "https://api.open-meteo.com/v1/forecast?latitude=" + String(WEATHER_LATITUDE, 4) +
+               "&longitude=" + String(WEATHER_LONGITUDE, 4) +
+               "&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m" +
+               "&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto";
+
+  if (!https.begin(client, url)) {
+    return;
+  }
+
+  https.setTimeout(3500);
+  int httpCode = https.GET();
+
+  if (httpCode == 200) {
+    String payload = https.getString();
+    DynamicJsonDocument doc(2048);
+    if (!deserializeJson(doc, payload)) {
+      JsonObject current = doc["current"];
+      JsonObject daily = doc["daily"];
+
+      if (!current.isNull()) {
+        weatherTemp = (int)(current["temperature_2m"].as<float>() + 0.5f);
+        weatherFeels = (int)(current["apparent_temperature"].as<float>() + 0.5f);
+        weatherHumidity = current["relative_humidity_2m"] | 50;
+        weatherWind = (int)(current["wind_speed_10m"].as<float>() + 0.5f);
+        int wmo = current["weather_code"] | 0;
+
+        // Map WMO code to condition & code (identical to WeatherRelay.kt)
+        switch (wmo) {
+          case 0:  weatherCondition = "Clear"; weatherCode = 800; break;
+          case 1:
+          case 2:
+          case 3:  weatherCondition = "Partly Cloudy"; weatherCode = 802; break;
+          case 45:
+          case 48: weatherCondition = "Foggy"; weatherCode = 741; break;
+          case 51: case 53: case 55:
+          case 56: case 57: weatherCondition = "Drizzle"; weatherCode = 300; break;
+          case 61: case 63: case 65:
+          case 66: case 67: weatherCondition = "Rain"; weatherCode = 500; break;
+          case 71: case 73: case 75:
+          case 77: weatherCondition = "Snow"; weatherCode = 600; break;
+          case 80: case 81: case 82: weatherCondition = "Showers"; weatherCode = 521; break;
+          case 85: case 86: weatherCondition = "Snow Showers"; weatherCode = 621; break;
+          case 95: case 96: case 99: weatherCondition = "Thunderstorm"; weatherCode = 200; break;
+          default: weatherCondition = "Clouds"; weatherCode = 803; break;
+        }
+      }
+
+      if (!daily.isNull()) {
+        if (daily.containsKey("temperature_2m_max") && daily["temperature_2m_max"].size() > 0) {
+          weatherHigh = (int)(daily["temperature_2m_max"][0].as<float>() + 0.5f);
+        } else {
+          weatherHigh = weatherTemp + 4;
+        }
+        if (daily.containsKey("temperature_2m_min") && daily["temperature_2m_min"].size() > 0) {
+          weatherLow = (int)(daily["temperature_2m_min"][0].as<float>() + 0.5f);
+        } else {
+          weatherLow = weatherTemp - 4;
+        }
+        if (daily.containsKey("sunrise") && daily["sunrise"].size() > 0) {
+          String sr = daily["sunrise"][0].as<String>();
+          int tIdx = sr.indexOf('T');
+          weatherSunrise = (tIdx > 0) ? sr.substring(tIdx + 1, tIdx + 6) : sr;
+        }
+        if (daily.containsKey("sunset") && daily["sunset"].size() > 0) {
+          String ss = daily["sunset"][0].as<String>();
+          int tIdx = ss.indexOf('T');
+          weatherSunset = (tIdx > 0) ? ss.substring(tIdx + 1, tIdx + 6) : ss;
+        }
+      }
+
+      weatherCity = WEATHER_CITY_NAME;
+      Serial.printf("Standalone Weather: %s %d C (%s)\n", weatherCity.c_str(), weatherTemp, weatherCondition.c_str());
+      redrawWeatherPartial();
+    }
+  } else {
+    Serial.printf("Standalone Weather fetch failed HTTP %d\n", httpCode);
+  }
+  https.end();
+#endif
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -706,6 +968,7 @@ void handleNetwork() {
   int packetSize = udp.parsePacket();
   if (packetSize) {
     pcFound = true;
+    lastHostPacketMillis = millis();
     IPAddress remoteIP = udp.remoteIP();
     pcIPStr = remoteIP.toString();
 
@@ -847,6 +1110,16 @@ void handleNetwork() {
 #ifdef ESP32
   handleBluetoothData();
 #endif
+
+  // Standalone Services (When no host device is active or host is Android)
+  if (wifiConnected) {
+    if (!isHostActive() || isHostAndroid) {
+      pollSpotifyStandalone();
+    }
+    if (!isHostActive()) {
+      fetchWeatherStandalone();
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -857,7 +1130,12 @@ void handleNetwork() {
 extern void updateTimeFromUDP(String t);
 
 void handleCommand(String msg) {
-  if (msg.startsWith("EMOTION:")) {
+  if (msg.startsWith("HOST:")) {
+    if (msg.indexOf("ANDROID") >= 0) isHostAndroid = true;
+    else if (msg.indexOf("PC") >= 0) isHostAndroid = false;
+    lastHostPacketMillis = millis();
+    return;
+  } else if (msg.startsWith("EMOTION:")) {
     String emo = msg.substring(8);
     Emotion e = EMO_NEUTRAL;
     if (emo == "HAPPY") e = EMO_HAPPY;
@@ -1096,6 +1374,27 @@ void handleCommand(String msg) {
     extern void t2_redrawSpotifyPartial();
     if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
     else if (currentState == STATE_SPOTIFY) redrawSpotifyPartial();
+  } else if (msg.startsWith("SPOTIFY_AUTH:")) {
+    isHostAndroid = true;
+    lastHostPacketMillis = millis();
+    String payload = msg.substring(13);
+    DynamicJsonDocument doc(512);
+    if (!deserializeJson(doc, payload)) {
+      if (doc.containsKey("access")) {
+        spotifyAccessToken = doc["access"].as<String>();
+      }
+      if (doc.containsKey("refresh")) {
+        spotifyRefreshToken = doc["refresh"].as<String>();
+      }
+      if (doc.containsKey("client_id")) {
+        spotifyClientId = doc["client_id"].as<String>();
+      }
+      if (doc.containsKey("client_secret")) {
+        spotifyClientSecret = doc["client_secret"].as<String>();
+      }
+      Serial.println(F("Spotify OAuth credentials synced from host!"));
+      showFlashNotification("Spotify Synced");
+    }
   } else if (msg.startsWith("STATE:")) {
     String json = msg.substring(6);
     DynamicJsonDocument doc(512);
@@ -1150,12 +1449,14 @@ void handleCommand(String msg) {
     if (!deserializeJson(doc, json)) {
       if (doc.containsKey("temp")) weatherTemp = doc["temp"].as<int>();
       if (doc.containsKey("condition")) weatherCondition = doc["condition"].as<String>();
+      else if (doc.containsKey("cond")) weatherCondition = doc["cond"].as<String>();
       if (doc.containsKey("humidity")) weatherHumidity = doc["humidity"].as<int>();
       if (doc.containsKey("city")) weatherCity = doc["city"].as<String>();
       if (doc.containsKey("wind")) weatherWind = doc["wind"].as<int>();
       if (doc.containsKey("code")) weatherCode = doc["code"].as<int>();
       if (doc.containsKey("high")) weatherHigh = doc["high"].as<int>();
       if (doc.containsKey("low")) weatherLow = doc["low"].as<int>();
+      if (doc.containsKey("feels")) weatherFeels = doc["feels"].as<int>();
       redrawWeatherPartial();
     }
   } else if (msg.startsWith("POMO:")) {
@@ -1170,6 +1471,8 @@ void handleCommand(String msg) {
       redrawPomodoroPartial();
     }
   } else if (msg.startsWith("NOTIF:")) {
+    isHostAndroid = true;
+    lastHostPacketMillis = millis();
     String json = msg.substring(6);
     DynamicJsonDocument doc(1024);
     if (!deserializeJson(doc, json)) {
@@ -1205,6 +1508,8 @@ void handleCommand(String msg) {
       redrawNotesPartial();
     }
   } else if (msg.startsWith("TIME:")) {
+    isHostAndroid = true;
+    lastHostPacketMillis = millis();
     String json = msg.substring(5);
     DynamicJsonDocument doc(256);
     deserializeJson(doc, json);
@@ -1248,6 +1553,8 @@ void handleCommand(String msg) {
       redrawStocksPartial();
     }
   } else if (msg.startsWith("GAMING:")) {
+    isHostAndroid = false;
+    lastHostPacketMillis = millis();
     String json = msg.substring(7);
     DynamicJsonDocument doc(512);
     if (!deserializeJson(doc, json)) {
@@ -1321,8 +1628,11 @@ void handleCommand(String msg) {
   }
 
   // COMPANION_PROBE / PING — Auto-discovery instant response
-  else if (msg == "COMPANION_PROBE" || msg == "PING" || msg == "HELLO_BOT") {
+  else if (msg.startsWith("COMPANION_PROBE") || msg.startsWith("PING") || msg == "HELLO_BOT") {
+    if (msg.indexOf("ANDROID") >= 0) isHostAndroid = true;
+    else if (msg.indexOf("PC") >= 0) isHostAndroid = false;
     pcFound = true;
+    lastHostPacketMillis = millis();
     udp.beginPacket(udp.remoteIP(), UDP_PORT_TX);
     const char* hello = "HELLO_COMPANION";
     udp.write((const uint8_t*)hello, strlen(hello));
@@ -1435,6 +1745,9 @@ void handleCommand(String msg) {
     }
   } else if (msg.startsWith("RUVIEW:")) {
     // ── RuView CSI Presence Data ──
+    isHostAndroid = false;
+    lastHostPacketMillis = millis();
+    if (currentState != STATE_RUVIEW) return; // Skip CPU-intensive parsing when not viewing RuView
     String payload = msg.substring(7);
     StaticJsonDocument<256> doc;
     if (deserializeJson(doc, payload) == DeserializationError::Ok) {

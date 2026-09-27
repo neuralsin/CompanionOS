@@ -1722,7 +1722,7 @@ def discovery_probe_loop():
                 targets = get_broadcast_targets()
                 for target in targets:
                     try:
-                        sock.sendto(b"COMPANION_PROBE", (target, ESP_PORT_RX))
+                        sock.sendto(b"COMPANION_PROBE:PC", (target, ESP_PORT_RX))
                     except Exception:
                         pass
                 time.sleep(3.0)  # Fast probe until discovered
@@ -1771,6 +1771,7 @@ def command_listener():
                 is_first = not device_connected or (active_esp_ip != sender_ip)
                 active_esp_ip = sender_ip
                 device_connected = True
+                send_udp("HOST:PC")
                 if is_first:
                     last_discovered_ip = sender_ip
                     print(f"👋 Companion Device Connected & Confirmed at {active_esp_ip}!")
@@ -2124,6 +2125,7 @@ def main():
     last_time_sync: float = 0.0
     last_weather_check: float = 0.0
     last_pomodoro_sync: float = 0.0
+    last_spotify_token_sync: float = 0.0
     
     notes_file = os.path.join(SCRIPT_DIR, "notes.txt")
     if not os.path.exists(notes_file):
@@ -2244,6 +2246,18 @@ def main():
             
             # --- Spotify Playback ---
             if spotify_service.enabled:
+                if now - last_spotify_token_sync > 300.0:
+                    last_spotify_token_sync = now
+                    token_info = spotify_service.get_token_info()
+                    if token_info and 'access_token' in token_info:
+                        auth_payload = {
+                            "access": token_info.get("access_token", ""),
+                            "refresh": token_info.get("refresh_token", ""),
+                            "client_id": SPOTIFY_CLIENT_ID,
+                            "client_secret": SPOTIFY_CLIENT_SECRET
+                        }
+                        send_udp(f"SPOTIFY_AUTH:{json.dumps(auth_payload)}")
+
                 track = spotify_service.get_current_track()
                 if track and track['id'] != current_track_id:
                     print(f"\n🎵 {track['name']} - {track['artist']}")

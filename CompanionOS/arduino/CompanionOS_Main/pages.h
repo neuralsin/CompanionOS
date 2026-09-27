@@ -953,7 +953,15 @@ void renderCurrentPage() {
     case STATE_PRODUCTIVITY: drawProductivityPageFull(); break;
     case STATE_NETWORK: drawNetworkPageFull(); break;
     case STATE_SETTINGS: drawSettingsPage(); break;
-    case STATE_RUVIEW: drawRuviewPageFull(); break;
+    case STATE_RUVIEW:
+      #ifdef ESP32
+      {
+        extern void resumeCSICollector();
+        resumeCSICollector();
+      }
+      #endif
+      drawRuviewPageFull();
+      break;
     case STATE_CLOCK_DASHBOARD: drawClockDashboardPageFull(); break;
     case STATE_RETRO_WATCH: drawRetroWatchPageFull(); break;
     #ifdef ESP32
@@ -964,6 +972,7 @@ void renderCurrentPage() {
 }
 
 void changePage(int direction) {
+  AppState prevState = currentState;
   int next = (int)currentState + direction;
   // Compute effective max page count
   int maxPage = STATE_COUNT;
@@ -973,6 +982,8 @@ void changePage(int direction) {
   #endif
   if (next >= maxPage) next = 0;
   if (next < 0) next = maxPage - 1;
+  currentState = (AppState)next;
+
   if (currentState != STATE_EYES) {
     customEyeActive = false;
   }
@@ -988,6 +999,14 @@ void changePage(int direction) {
   if (currentState != STATE_DR_HACK) {
     extern DrHackSubState dhCurrentState;
     dhCurrentState = DH_MENU;
+  }
+  // Manage RuView CSI hardware state: pause when leaving, resume when entering
+  if (prevState == STATE_RUVIEW && currentState != STATE_RUVIEW) {
+    extern void pauseCSICollector();
+    pauseCSICollector();
+  } else if (currentState == STATE_RUVIEW) {
+    extern void resumeCSICollector();
+    resumeCSICollector();
   }
   #endif
   
@@ -1010,6 +1029,7 @@ void setPage(int targetPage) {
   if (targetPage != (int)STATE_EYES) {
     customEyeActive = false;
   }
+  AppState prevState = currentState;
   currentState = (AppState)targetPage;
   resetSpotifyDrawState();
   resetClockDashboardDrawState();
@@ -1021,6 +1041,14 @@ void setPage(int targetPage) {
   if (currentState != STATE_DR_HACK) {
     extern DrHackSubState dhCurrentState;
     dhCurrentState = DH_MENU;
+  }
+  // Manage RuView CSI hardware state: pause when leaving, resume when entering
+  if (prevState == STATE_RUVIEW && currentState != STATE_RUVIEW) {
+    extern void pauseCSICollector();
+    pauseCSICollector();
+  } else if (currentState == STATE_RUVIEW) {
+    extern void resumeCSICollector();
+    resumeCSICollector();
   }
   #endif
   extern ThoughtBubble activeBubble;

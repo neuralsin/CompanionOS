@@ -945,8 +945,8 @@ static void dhRunBtJammer() {
   tft.drawString("BT JAMMER", SCALE_X(4), SCALE_Y(2), 1);
 
   tft.setTextColor(CLR_TEXT_MED);
-  tft.drawString("Jams BLE advert", SCALE_X(4), SCALE_Y(24), 1);
-  tft.drawString("channels 37/38/39", SCALE_X(4), SCALE_Y(36), 1);
+  tft.drawString("Jams BLE Channels", SCALE_X(4), SCALE_Y(24), 1);
+  tft.drawString("40 CH: 2.400-2.4835G", SCALE_X(4), SCALE_Y(36), 1);
   tft.setTextColor(CLR_WARNING);
   tft.drawString("Needs nRF24L01!", SCALE_X(4), SCALE_Y(54), 1);
 
@@ -961,8 +961,8 @@ static void dhRunBtJammer() {
   }
 
   // Initialize nRF24 for BLE channel jamming
-  // BLE advert channels: CH37=2402MHz, CH38=2426MHz, CH39=2480MHz
-  // nRF24 channel = freq - 2400 → 2, 26, 80
+  // Full 40 BLE channels: data channels 0-36 + advertising channels 37, 38, 39
+  // Frequency range: 2.400 GHz to 2.4835 GHz (nRF24 ch = freq - 2400 -> 2..80 even)
   RF24 jam1(NRF1_CE_PIN, NRF1_CSN_PIN);
   RF24 jam2(NRF2_CE_PIN, NRF2_CSN_PIN);
 
@@ -991,7 +991,14 @@ static void dhRunBtJammer() {
     return;
   }
 
-  static const uint8_t bleChs[] = {2, 26, 80};
+  // Bluetooth Low Energy 40 CH (2402 - 2480 MHz)
+  static const uint8_t bleChs[40] = {
+     2,  4,  6,  8, 10, 12, 14, 16, 18, 20,
+    22, 24, 26, 28, 30, 32, 34, 36, 38, 40,
+    42, 44, 46, 48, 50, 52, 54, 56, 58, 60,
+    62, 64, 66, 68, 70, 72, 74, 76, 78, 80
+  };
+  const int numBleChs = 40;
   int chIdx = 0;
   bool active = false;
   const uint8_t noise[32] = {
@@ -1009,7 +1016,7 @@ static void dhRunBtJammer() {
     tft.setTextColor(active ? CLR_SECONDARY : CLR_SUCCESS);
     tft.drawString(active ? "[JAMMING]" : "[READY]", SCR_W - SCALE_X(52), SCALE_Y(4), 1);
 
-    char buf[32]; sprintf(buf, "BLE CH%d (%dMHz)", 37+chIdx, 2400+bleChs[chIdx]);
+    char buf[32]; sprintf(buf, "BLE CH%d (%dMHz)", chIdx, 2400+bleChs[chIdx]);
     tft.setTextColor(CLR_WARNING); tft.drawString(buf, SCALE_X(4), SCALE_Y(24), 1);
 
     sprintf(buf, "Radios: %d/2", (jam1Ok?1:0)+(jam2Ok?1:0));
@@ -1027,12 +1034,11 @@ static void dhRunBtJammer() {
   while (true) {
     extern void handleNetwork(); handleNetwork();
     if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
-      // Manual selection is overridden by hopping when active, but leave UI capability for when inactive
-      chIdx = (chIdx + 2) % 3;
+      chIdx = (chIdx == 0) ? numBleChs - 1 : chIdx - 1;
       drawState(); delay(180);
     }
     if ((digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
-      chIdx = (chIdx + 1) % 3;
+      chIdx = (chIdx + 1) % numBleChs;
       drawState(); delay(180);
     }
 
@@ -1061,8 +1067,8 @@ static void dhRunBtJammer() {
 
     if (active) {
       static unsigned long lastHop = 0;
-      if (millis() - lastHop > 30) { // Hop every 30ms to disrupt fast BLE advertisements
-        chIdx = (chIdx + 1) % 3;
+      if (millis() - lastHop > 20) { // Hop every 20ms to blanket 40 BLE channels
+        chIdx = (chIdx + 1) % numBleChs;
         
         if (jam1Ok) {
           jam1.stopConstCarrier();
@@ -1070,7 +1076,7 @@ static void dhRunBtJammer() {
           jam1.startConstCarrier(RF24_PA_MAX, bleChs[chIdx]);
         }
         if (jam2Ok) {
-          jam2.setChannel(bleChs[(chIdx + 1) % 3]); // Offset second radio
+          jam2.setChannel(bleChs[(chIdx + numBleChs / 2) % numBleChs]); // Offset second radio
           for (int i = 0; i < 5; i++) jam2.startWrite(noise, 32, true);
         }
         lastHop = millis();

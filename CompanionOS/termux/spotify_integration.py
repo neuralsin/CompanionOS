@@ -64,6 +64,16 @@ class SpotifyIntegration:
         except Exception as e:
             print(f"Spotify Setup Error: {e}")
 
+    def get_token_info(self) -> dict | None:
+        if not self.enabled or self.client is None:
+            return None
+        try:
+            if hasattr(self.client, 'auth_manager'):
+                return self.client.auth_manager.get_cached_token()
+        except Exception as e:
+            print(f"Spotify Token Error: {e}")
+        return None
+
     def get_current_track(self) -> dict | None:
         if not self.enabled or self.client is None:
             return None

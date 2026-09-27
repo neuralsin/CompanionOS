@@ -39,11 +39,11 @@ static uint8_t dhRssiPct(int rssi) {
 
 // ═══════════════════════════════════════════════════════════
 // TOOL: WiFi Channel Scanner
-// Groups networks by channel 1-13, bar chart, drill-down
+// Groups networks by channel 1-14, bar chart, drill-down
 // ═══════════════════════════════════════════════════════════
 
 #define DH_CH_MIN 1
-#define DH_CH_MAX 13
+#define DH_CH_MAX 14
 #define DH_CH_MAX_NETS 30
 #define DH_CH_VISIBLE 5
 
@@ -56,20 +56,20 @@ struct DH_ChNet {
 
 static DH_ChNet dhChNets[DH_CH_MAX_NETS];
 static int dhChNetCount = 0;
-static uint8_t dhChCounts[14];
-static int dhChBestRssi[14];
+static uint8_t dhChCounts[15];
+static int dhChBestRssi[15];
 static int dhChCursor = 1;
 static int dhChScroll = 0;
 
 static void dhChScan() {
   dhChNetCount = 0;
   memset(dhChCounts, 0, sizeof(dhChCounts));
-  for (int i = 0; i < 14; i++) dhChBestRssi[i] = -127;
+  for (int i = 0; i < 15; i++) dhChBestRssi[i] = -127;
 
   dhWifiPrepare();
   tft.fillScreen(CLR_BG);
   tft.setTextColor(CLR_PRIMARY);
-  tft.drawCentreString("Scanning CH 1-13", SCR_CX, SCR_CY - 5, 1);
+  tft.drawCentreString("Scanning CH 1-14", SCR_CX, SCR_CY - 5, 1);
 
   int n = WiFi.scanNetworks(false, true);
   if (n < 0) n = 0;

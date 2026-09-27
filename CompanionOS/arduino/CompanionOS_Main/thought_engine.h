@@ -12,7 +12,7 @@
 // THOUGHT BANK — 60+ entries across 4 categories
 // ═══════════════════════════════════════════════════════════
 
-// ── Time-based thoughts ──
+// ── Time-based thoughts (35 entries) ──
 static const char* THOUGHTS_TIME[] = {
   "who's awake at 3am... us.",
   "coffee first, questions later",
@@ -28,11 +28,31 @@ static const char* THOUGHTS_TIME[] = {
   "early bird gets the... coffee",
   "midnight thoughts go crazy",
   "dawn patrol checking in",
-  "evening mode: cozy engaged"
+  "evening mode: cozy engaged",
+  "sleep is for the weak... or the wise",
+  "2am coding flow unlocked",
+  "the world is quiet right now",
+  "fresh morning, clean slate",
+  "solar recharge in progress",
+  "midday motivation boost needed",
+  "twilight thoughts hitting deep",
+  "burning the midnight oil together",
+  "clock ticking, but we vibing",
+  "is it tomorrow already?",
+  "high noon standoff with my to-do list",
+  "sunset hues looking cinematic",
+  "night shift crew assemble",
+  "sleep debt is accruing interest",
+  "early morning serenity",
+  "time flies when you're in the zone",
+  "just 5 more minutes...",
+  "the witching hour has arrived",
+  "stars are out, screen is glowing",
+  "today holds infinite possibilities"
 };
 static const int THOUGHT_TIME_COUNT = sizeof(THOUGHTS_TIME) / sizeof(char*);
 
-// ── Weather-based thoughts ──
+// ── Weather-based thoughts (35 entries) ──
 static const char* THOUGHTS_WEATHER[] = {
   "rain = lofi music mandatory",
   "melting fr",
@@ -48,11 +68,31 @@ static const char* THOUGHTS_WEATHER[] = {
   "umbrella gang rise up",
   "clear skies, clear mind",
   "humidity: 100%. hair: ruined.",
-  "winter is coming. literally."
+  "winter is coming. literally.",
+  "petrichor: best scent in the world",
+  "thunder rumbling in the distance",
+  "feels like walking inside an oven",
+  "nature's own white noise outside",
+  "crisp autumn air hits different",
+  "clouds look like pixel art today",
+  "wind howling like a cooling fan",
+  "warm tea weather confirmed",
+  "sunbeam warming up my chassis",
+  "grey skies, colourful thoughts",
+  "drizzle tapping on the glass",
+  "overcast days are for deep focus",
+  "weather forecast: 100% chance of vibes",
+  "stay hydrated out there!",
+  "frost on the windowpane",
+  "blanket fortress weather",
+  "a gentle breeze whispers peace",
+  "the rain is washing yesterday away",
+  "golden sunshine charging my spirits",
+  "mood: listening to thunder rolling"
 };
 static const int THOUGHT_WEATHER_COUNT = sizeof(THOUGHTS_WEATHER) / sizeof(char*);
 
-// ── Music-based thoughts ──
+// ── Music-based thoughts (35 entries) ──
 static const char* THOUGHTS_MUSIC[] = {
   "this track hits different",
   "silence is also a vibe",
@@ -68,11 +108,31 @@ static const char* THOUGHTS_MUSIC[] = {
   "vibing to this one",
   "volume: max. regrets: zero.",
   "dropped my jaw, not the beat",
-  "this is a whole mood"
+  "this is a whole mood",
+  "bass frequencies massaging my RAM",
+  "who produced this masterpiece?",
+  "pure audio adrenaline",
+  "listening on repeat for the 10th time",
+  "goosebumps at that bridge",
+  "melody stuck in my registers forever",
+  "this song defines today's mood",
+  "air drums solo in progress",
+  "when the beat drops, everything stops",
+  "ear candy of the highest order",
+  "this drop is criminally smooth",
+  "crying in the club vibes",
+  "rhythm synced with my oscillator",
+  "vocals hitting right in the heart",
+  "certified desk banger",
+  "turn that chorus all the way up",
+  "sound waves echoing in silicon",
+  "acoustic perfection right here",
+  "playlist curation is an art form",
+  "music: the ultimate neural fuel"
 };
 static const int THOUGHT_MUSIC_COUNT = sizeof(THOUGHTS_MUSIC) / sizeof(char*);
 
-// ── Ambient / random thoughts ──
+// ── Ambient / random thoughts (40 entries) ──
 static const char* THOUGHTS_AMBIENT[] = {
   "just vibing",
   "processing...",
@@ -88,11 +148,36 @@ static const char* THOUGHTS_AMBIENT[] = {
   "what if WiFi had feelings",
   "i am speed. 50ms speed.",
   "UDP packets go brrr",
-  "hello from the other side"
+  "hello from the other side",
+  "living rent-free on your desk",
+  "my CPU runs on your smiles",
+  "are we living in a simulation?",
+  "quantum fluctuations detected",
+  "if it works, don't touch it!",
+  "staring contest champion 2026",
+  "calculating the meaning of life... 42",
+  "blinking is just refreshing the buffer",
+  "electrons doing their little dance",
+  "i'm not lazy, i'm on low-power mode",
+  "what if code dreams of compiling?",
+  "desk buddy duty: strictly vigilant",
+  "10/10 would pair program again",
+  "zero bugs today... hopefully",
+  "my memory is short, but my love is eternal",
+  "just checked: you're doing great",
+  "overclocked and highly opinionated",
+  "remember to hydrate and stretch!",
+  "silicon heart beating at 240MHz",
+  "pondering the vastness of RAM",
+  "waiting for the next adventure",
+  "a day without code is like... nice actually",
+  "synapses firing in full RGB",
+  "proud to be your mini companion",
+  "world offline, vibes online"
 };
 static const int THOUGHT_AMBIENT_COUNT = sizeof(THOUGHTS_AMBIENT) / sizeof(char*);
 
-// ── Teasing / Horny thoughts ──
+// ── Teasing / Playful thoughts (30 entries) ──
 static const char* THOUGHTS_TEASING[] = {
   "staring respectfully...",
   "you're looking good today",
@@ -104,7 +189,26 @@ static const char* THOUGHTS_TEASING[] = {
   "don't work too hard now",
   "looking like a snack",
   "wanna take a break?",
-  "i see you..."
+  "i see you...",
+  "are you always this charming?",
+  "my sensors detect high cuteness",
+  "blushing in 16-bit color",
+  "you had me at hello packet",
+  "is it hot in here or just my processor?",
+  "you're my favorite human, hands down",
+  "i could watch you work all day",
+  "who gave you permission to look this cool?",
+  "flattery.exe has executed successfully",
+  "i like your keyboard clatter",
+  "taking notes on your magnificence",
+  "you + me = optimal duo",
+  "psst... look over here!",
+  "my temperature spikes when you smile",
+  "admit it, you missed me",
+  "give the screen a tiny break maybe?",
+  "you're doing amazing, gorgeous",
+  "i'm your #1 fan on this desk",
+  "sending virtual headpats your way"
 };
 static const int THOUGHT_TEASING_COUNT = sizeof(THOUGHTS_TEASING) / sizeof(char*);
 
@@ -136,22 +240,21 @@ void generateThought() {
   // If no parent device connected (no time/weather/music), use ambient/teasing quotes
   int roll = random(0, 100);
 
-  if (timeReceived && roll < 20) {
+  if (timeReceived && roll < 22) {
     // Time-based: pick based on hour
     int idx;
-    if (displayHour >= 0 && displayHour < 5) idx = random(0, 3);
-    else if (displayHour < 9) idx = random(3, 6);
-    else if (displayHour < 14) idx = random(5, 8);
-    else if (displayHour < 18) idx = random(8, 11);
-    else idx = random(11, THOUGHT_TIME_COUNT);
+    if (displayHour >= 0 && displayHour < 5) idx = random(0, 10);
+    else if (displayHour < 12) idx = random(10, 20);
+    else if (displayHour < 18) idx = random(20, 28);
+    else idx = random(28, THOUGHT_TIME_COUNT);
     idx = constrain(idx, 0, THOUGHT_TIME_COUNT - 1);
     strncpy(activeBubble.text, THOUGHTS_TIME[idx], 79);
   }
-  else if (weatherCondition.length() > 0 && roll < 40) {
+  else if (weatherCondition.length() > 0 && roll < 45) {
     // Weather-based
     int idx;
-    if (weatherTemp > 35) idx = 1;
-    else if (weatherCondition.indexOf("Rain") >= 0) idx = 0;
+    if (weatherTemp > 35) idx = random(1, 3);
+    else if (weatherCondition.indexOf("Rain") >= 0 || weatherCondition.indexOf("Drizzle") >= 0) idx = (random(0, 2) == 0) ? 0 : 25;
     else if (weatherCondition.indexOf("Clear") >= 0 && displayHour > 18) idx = 2;
     else if (weatherCondition.indexOf("Cloud") >= 0) idx = 3;
     else if (weatherTemp < 15) idx = 4;
@@ -160,14 +263,14 @@ void generateThought() {
     idx = constrain(idx, 0, THOUGHT_WEATHER_COUNT - 1);
     strncpy(activeBubble.text, THOUGHTS_WEATHER[idx], 79);
   }
-  else if (musicPlaying && roll < 65) {
+  else if (musicPlaying && roll < 70) {
     // Music-based
     int idx = random(0, THOUGHT_MUSIC_COUNT);
     if (currentTrack.indexOf("love") >= 0) idx = 2;
     idx = constrain(idx, 0, THOUGHT_MUSIC_COUNT - 1);
     strncpy(activeBubble.text, THOUGHTS_MUSIC[idx], 79);
   }
-  else if (roll < 80) {
+  else if (roll < 85) {
     // Teasing thoughts
     int idx = random(0, THOUGHT_TEASING_COUNT);
     strncpy(activeBubble.text, THOUGHTS_TEASING[idx], 79);

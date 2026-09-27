@@ -68,6 +68,28 @@ const int UDP_PORT_TX = 8889;
 #define ENABLE_GALLERY true
 #define ENABLE_MIC true
 
+// ═══════════════════════════════════════════════════════════
+// STANDALONE DIRECT APIS (Used when host device is absent)
+// ═══════════════════════════════════════════════════════════
+
+// Spotify Web API Credentials
+#define SPOTIFY_CLIENT_ID       "450a2e6ab1ed4ce4ac9738f654814240"
+#define SPOTIFY_CLIENT_SECRET   "78200536e7804c8ca427102a6ba2138f"
+// Hardcoded token fallback from Python script (.cache)
+#define DEFAULT_SPOTIFY_REFRESH_TOKEN "AQCDzzl6TnG-FpdJKuWddUHoX_wTx2jA1mMHJR3okGYjllb_DnifVtaplec0Do9EJWTZippa7R5DCejRbR_eJgexej9BEmsFbCdE3o6zwgXCs4tXHOth3eOT6NksbNi1lSs"
+#define DEFAULT_SPOTIFY_ACCESS_TOKEN  "BQCNa_jBDQmPUroD1WVTgAyt9Eq60wJ7tXGqgElBSDFZywXo11mKCBQ7NcpsK8QT4jIJzlQNPjMi8Lgno601-FU_9bD1o6KMa9REzSVxqqXtLMSoiYNKju3jBPH-5vg-sC8vhTakaClrVipZjpzT6d0cw4mGvqid7LFqOH_rfJwL-2K7f99CQvYL5dKUhcM85adLeBXLdCjhng8A27oI0PyC0VsUVa2x9LEKRkZguylaiOKqqwGFq4tG-oU2gQxmrU7RJOhNHVJh8TdkDF2tZUCwxVdQ7w"
+#define SPOTIFY_POLL_INTERVAL_ACTIVE_MS   3500UL  // 3.5s when on Spotify page / playing
+#define SPOTIFY_POLL_INTERVAL_IDLE_MS     10000UL // 10s when idle on another page
+
+// Standalone Weather (Open-Meteo API - No key required)
+#define WEATHER_CITY_NAME           "Delhi"
+#define WEATHER_LATITUDE            28.6139
+#define WEATHER_LONGITUDE           77.2090
+#define WEATHER_POLL_INTERVAL_MS    (15UL * 60UL * 1000UL) // 15 mins
+
+// Host Device Silence Threshold (determines when host is disconnected)
+#define HOST_TIMEOUT_MS             20000UL // 20 seconds silence -> host absent
+
 // EEPROM addresses
 #define EEPROM_EXOTIC_ADDR 0        // 1 byte: legacy
 #define EEPROM_THEME_ADDR 1         // 1 byte: unused (themes removed)

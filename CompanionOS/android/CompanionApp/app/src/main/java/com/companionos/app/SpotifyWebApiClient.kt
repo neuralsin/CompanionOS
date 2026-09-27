@@ -30,6 +30,9 @@ object SpotifyWebApiClient {
     const val REDIRECT_URI = "companionos://callback"
     const val SCOPES = "user-read-playback-state user-modify-playback-state user-read-currently-playing"
 
+    const val DEFAULT_REFRESH_TOKEN = "AQCDzzl6TnG-FpdJKuWddUHoX_wTx2jA1mMHJR3okGYjllb_DnifVtaplec0Do9EJWTZippa7R5DCejRbR_eJgexej9BEmsFbCdE3o6zwgXCs4tXHOth3eOT6NksbNi1lSs"
+    const val DEFAULT_ACCESS_TOKEN = "BQCNa_jBDQmPUroD1WVTgAyt9Eq60wJ7tXGqgElBSDFZywXo11mKCBQ7NcpsK8QT4jIJzlQNPjMi8Lgno601-FU_9bD1o6KMa9REzSVxqqXtLMSoiYNKju3jBPH-5vg-sC8vhTakaClrVipZjpzT6d0cw4mGvqid7LFqOH_rfJwL-2K7f99CQvYL5dKUhcM85adLeBXLdCjhng8A27oI0PyC0VsUVa2x9LEKRkZguylaiOKqqwGFq4tG-oU2gQxmrU7RJOhNHVJh8TdkDF2tZUCwxVdQ7w"
+
     private var userAccessToken: String? = null
     private var userRefreshToken: String? = null
     private var userTokenExpiry: Long = 0L
@@ -46,14 +49,17 @@ object SpotifyWebApiClient {
 
     fun init(context: Context) {
         prefs = context.getSharedPreferences("spotify_auth_prefs", Context.MODE_PRIVATE)
-        userAccessToken = prefs?.getString("access_token", null)
-        userRefreshToken = prefs?.getString("refresh_token", null)
+        userAccessToken = prefs?.getString("access_token", DEFAULT_ACCESS_TOKEN) ?: DEFAULT_ACCESS_TOKEN
+        userRefreshToken = prefs?.getString("refresh_token", DEFAULT_REFRESH_TOKEN) ?: DEFAULT_REFRESH_TOKEN
         userTokenExpiry = prefs?.getLong("token_expiry", 0L) ?: 0L
     }
 
     fun isUserAuthenticated(): Boolean {
         return !userRefreshToken.isNullOrEmpty()
     }
+
+    fun getRefreshToken(): String? = userRefreshToken
+    fun getCurrentAccessToken(): String? = userAccessToken
 
     fun getAuthorizationUrl(): String {
         val encodedScopes = URLEncoder.encode(SCOPES, "UTF-8")

@@ -14,13 +14,48 @@
 #include <RF24.h>
 
 // ═══════════════════════════════════════════════════════════
-// TOOL: 2.4GHz Jammer — Dual nRF24L01 Wi-Fi channel jammer
+// TOOL: 2.4GHz BlueJammer — 6-mode nRF24L01 channel jammer
+// Aligned to ESP32-BlueJammer lab specifications:
+//   Mode 1: Bluetooth Classic (79 CH, 2402-2480 MHz)
+//   Mode 2: BLE (40 CH, 2400-2483.5 MHz)
+//   Mode 3: BT + BLE (Dual Radio 79 + 40 CH)
+//   Mode 4: BT + WiFi (Dual Radio 79 + 14 CH)
+//   Mode 5: WiFi (14 CH, 2412-2484 MHz)
+//   Mode 6: RC/Drone (126 CH, 2400-2525 MHz)
 // ═══════════════════════════════════════════════════════════
 
-static uint8_t dhJamChToNrf(int wifiCh) {
-  if (wifiCh == 14) return 84; // CH 14 is 2484 MHz (nRF24 CH 84)
-  return (uint8_t)((wifiCh * 5) + 7);
-}
+// Spec-correct channel arrays (nRF24 channel = freq_MHz - 2400)
+
+// Bluetooth Classic: 79 channels, 2402-2480 MHz, 1 MHz spacing
+static const uint8_t ch_bt_classic[79] = {
+   2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,16,17,18,19,20,
+  21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,
+  41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,
+  61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80
+};
+#define CH_BT_COUNT 79
+
+// BLE: 40 channels, 2 MHz spacing
+// Data channels 0-36 mapped to nRF24 channels + 3 advertising channels
+static const uint8_t ch_ble_full[40] = {
+   4, 6, 8,10,12,14,16,18,20,22,   // BLE data CH 0-9
+  24,28,30,32,34,36,38,40,42,44,   // BLE data CH 10-19 (skip 26=adv CH38)
+  46,48,50,52,54,56,58,60,62,64,   // BLE data CH 20-29
+  66,68,70,72,74,76,78,             // BLE data CH 30-36
+   2,26,80                          // BLE advertising CH 37,38,39
+};
+#define CH_BLE_COUNT 40
+
+// WiFi: 14 channels, center frequencies mapped to nRF24 channels
+// CH1=2412->nRF12, CH2=2417->nRF17, ... CH13=2472->nRF72, CH14=2484->nRF84
+static const uint8_t ch_wifi_spec[14] = {
+  12,17,22,27,32,37,42,47,52,57,62,67,72,84
+};
+#define CH_WIFI_COUNT 14
+
+// RC/Drone: nRF24 supports channels 0-125 (2400-2525 MHz, 1 MHz spacing)
+// No array needed - sweep 0..125 directly
+#define CH_RC_COUNT 126
 
 static void dhRunJammer24() {
   RF24 jam1(NRF1_CE_PIN, NRF1_CSN_PIN);
@@ -59,14 +94,20 @@ static void dhRunJammer24() {
     return;
   }
 
-  int jamCh = 1;
+  // BlueJammer 6-mode architecture matching lab specifications:
+  // 1. Bluetooth_80_CH (Classic BT: 2.402 - 2.480 GHz)
+  // 2. BluetoothLowEnergy_40_CH (BLE: 2.400 - 2.4835 GHz)
+  // 3. Bluetooth-BluetoothLowEnergy_40-80_CH (BT & BLE dual band)
+  // 4. Bluetooth-WiFi_14-80_CH (BT & WiFi dual band)
+  // 5. WiFi_14_CH (WiFi 1-14: 2412 - 2484 MHz)
+  // 6. RC/Drone (126 CH: 2400 - 2525 MHz)
+  const char* modeNames[] = {"Bluetooth", "BLE", "BT+BLE", "BT+WiFi", "WiFi", "RC/Drone"};
+  const char* modeSpecs[] = {"79 CH (1MHz)", "40 CH (2MHz)", "79+40 CH", "79+14 CH", "14 CH (5MHz)", "126 CH (1MHz)"};
+  const int modeCounts[] = {CH_BT_COUNT, CH_BLE_COUNT, CH_BT_COUNT, CH_BT_COUNT, CH_WIFI_COUNT, CH_RC_COUNT};
+  const int totalModes = 6;
+  int currentMode = 0;
   bool isAttacking = false;
-  const uint8_t noise[32] = {
-    0x55,0xAA,0x55,0xAA,0x55,0xAA,0x55,0xAA,
-    0x55,0xAA,0x55,0xAA,0x55,0xAA,0x55,0xAA,
-    0x55,0xAA,0x55,0xAA,0x55,0xAA,0x55,0xAA,
-    0x55,0xAA,0x55,0xAA,0x55,0xAA,0x55,0xAA
-  };
+  uint8_t noise[32]; // Randomized per hop
 
   auto drawGauge = [&]() {
     tft.fillScreen(CLR_BG);
@@ -75,23 +116,20 @@ static void dhRunJammer24() {
     drawGradientCard(2, 2, SCR_W-4, SCALE_Y(14), isAttacking ? CLR_SECONDARY : CLR_PRIMARY,
                      darkenColor(isAttacking ? CLR_SECONDARY : CLR_PRIMARY, 50), 0);
     tft.setTextColor(CLR_TEXT_HI);
-    tft.drawString("JAMMER", SCALE_X(4), SCALE_Y(3), 1);
+    tft.drawString("BLUEJAMMER", SCALE_X(4), SCALE_Y(3), 1);
     tft.setTextColor(isAttacking ? CLR_SECONDARY : CLR_SUCCESS);
     tft.drawString(isAttacking ? "ACTIVE" : "READY", SCR_W - SCALE_X(38), SCALE_Y(3), 1);
 
-    // Channel display
-    char chStr[16]; sprintf(chStr, "CH %d", jamCh);
+    // Mode display
     tft.setTextColor(CLR_WARNING);
-    tft.drawCentreString(chStr, SCR_CX, SCALE_Y(22), 2);
+    tft.drawCentreString(modeNames[currentMode], SCR_CX, SCALE_Y(22), 2);
 
-    char freqStr[20]; sprintf(freqStr, "%d MHz NRF", 2400 + dhJamChToNrf(jamCh));
     tft.setTextColor(CLR_PRIMARY);
-    tft.drawCentreString(freqStr, SCR_CX, SCALE_Y(42), 1);
+    tft.drawCentreString(modeSpecs[currentMode], SCR_CX, SCALE_Y(42), 1);
 
-    // Channel bar
-    int pct = 7 + ((jamCh - 1) * 93) / 13;
+    // Channel bar showing mode's frequency range
     tft.drawRect(SCALE_X(8), SCALE_Y(56), SCR_W - SCALE_X(16), SCALE_Y(8), CLR_BORDER);
-    int fillW = ((SCR_W - SCALE_X(18)) * pct) / 100;
+    int fillW = ((SCR_W - SCALE_X(18)) * modeCounts[currentMode]) / CH_RC_COUNT;
     tft.fillRect(SCALE_X(9), SCALE_Y(57), fillW, SCALE_Y(6), isAttacking ? CLR_SECONDARY : CLR_SUCCESS);
 
     // Radio status
@@ -106,7 +144,7 @@ static void dhRunJammer24() {
     }
 
     tft.setTextColor(CLR_TEXT_LO);
-    tft.drawString("</>:CH HOLD:Back", SCALE_X(2), SCR_H - SCALE_Y(10), 1);
+    tft.drawString("</>::Mode HOLD:Back", SCALE_X(2), SCR_H - SCALE_Y(10), 1);
   };
 
   drawGauge();
@@ -121,21 +159,26 @@ static void dhRunJammer24() {
 
   while (true) {
     extern void handleNetwork(); handleNetwork();
-    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
-      jamCh = (jamCh == 1) ? 14 : jamCh - 1;
-      if (isAttacking && j1Ok) jam1.startConstCarrier(RF24_PA_MAX, dhJamChToNrf(jamCh));
-      drawGauge(); delay(180);
-    }
-    if ((digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
-      jamCh = (jamCh == 14) ? 1 : jamCh + 1;
-      if (isAttacking && j1Ok) jam1.startConstCarrier(RF24_PA_MAX, dhJamChToNrf(jamCh));
-      drawGauge(); delay(180);
+
+    // Mode switching (only when idle)
+    if (!isAttacking) {
+      if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
+        currentMode = (currentMode == 0) ? totalModes - 1 : currentMode - 1;
+        drawGauge(); delay(180);
+      }
+      if ((digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
+        currentMode = (currentMode == totalModes - 1) ? 0 : currentMode + 1;
+        drawGauge(); delay(180);
+      }
     }
 
     if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) {
-        if (isAttacking) { if (j1Ok) jam1.stopConstCarrier(); if (j2Ok) jam2.stopConstCarrier(); }
+        if (isAttacking) {
+          if (j1Ok) jam1.stopConstCarrier();
+          if (j2Ok) { jam2.stopConstCarrier(); jam2.flush_tx(); }
+        }
         if (j1Ok) jam1.powerDown();
         if (j2Ok) jam2.powerDown();
         return;
@@ -143,13 +186,9 @@ static void dhRunJammer24() {
     } else {
       if (holding && millis() - holdStart < 800) {
         isAttacking = !isAttacking;
-        uint8_t freq = dhJamChToNrf(jamCh);
-        if (isAttacking) {
-          if (j1Ok) jam1.startConstCarrier(RF24_PA_MAX, freq);
-          if (j2Ok) jam2.setChannel(freq);
-        } else {
+        if (!isAttacking) {
           if (j1Ok) jam1.stopConstCarrier();
-          if (j2Ok) jam2.stopConstCarrier();
+          if (j2Ok) { jam2.stopConstCarrier(); jam2.flush_tx(); }
         }
         drawGauge();
       }
@@ -157,23 +196,59 @@ static void dhRunJammer24() {
     }
 
     if (isAttacking) {
-      uint8_t freq = dhJamChToNrf(jamCh);
       static unsigned long lastHop = 0;
-      static uint8_t scanCh = 0;
-      
-      // Sweep channels to blanket the 2.4GHz spectrum
-      if (millis() - lastHop > 20) {
-        scanCh = (scanCh + 2) % 80; // Rapidly sweep through nRF channels 0 to 80
-        
+      static int hopIdx1 = 0;
+      int chCount = modeCounts[currentMode];
+
+      // High-speed channel hopping - 1ms per hop for maximum disruption
+      // Matches BlueJammer's tight-loop sweep approach
+      if (millis() - lastHop >= 1) {
+        // Randomize noise payload every hop (not static 0x55AA)
+        for (int i = 0; i < 32; i++) noise[i] = (uint8_t)random(0, 256);
+
+        uint8_t ch1 = 0;
+        uint8_t ch2 = 0;
+        switch (currentMode) {
+          case 0: // Bluetooth Classic (79 CH, 2.402-2.480 GHz)
+            ch1 = ch_bt_classic[hopIdx1 % CH_BT_COUNT];
+            ch2 = ch_bt_classic[(hopIdx1 + CH_BT_COUNT / 2) % CH_BT_COUNT];
+            break;
+          case 1: // BLE (40 CH, 2.400-2.4835 GHz)
+            ch1 = ch_ble_full[hopIdx1 % CH_BLE_COUNT];
+            ch2 = ch_ble_full[(hopIdx1 + CH_BLE_COUNT / 2) % CH_BLE_COUNT];
+            break;
+          case 2: // Bluetooth + BLE combo (2.402-2.480 GHz & 2.400-2.4835 GHz)
+            ch1 = ch_bt_classic[hopIdx1 % CH_BT_COUNT];
+            ch2 = ch_ble_full[hopIdx1 % CH_BLE_COUNT];
+            break;
+          case 3: // Bluetooth + WiFi combo (2.402-2.480 GHz & 2.400-2.4835 GHz)
+            ch1 = ch_bt_classic[hopIdx1 % CH_BT_COUNT];
+            ch2 = ch_wifi_spec[hopIdx1 % CH_WIFI_COUNT];
+            break;
+          case 4: // WiFi (14 CH, 2.400-2.4835 GHz)
+            ch1 = ch_wifi_spec[hopIdx1 % CH_WIFI_COUNT];
+            ch2 = ch_wifi_spec[(hopIdx1 + CH_WIFI_COUNT / 2) % CH_WIFI_COUNT];
+            break;
+          case 5: // RC / Drone (126 CH, 2.400-2.525 GHz)
+            ch1 = (uint8_t)(hopIdx1 % CH_RC_COUNT);
+            ch2 = (uint8_t)((hopIdx1 + CH_RC_COUNT / 2) % CH_RC_COUNT);
+            break;
+        }
+
+        // Radio 1: transmit carrier wave
         if (j1Ok) {
           jam1.stopConstCarrier();
-          jam1.setChannel(scanCh);
-          jam1.startConstCarrier(RF24_PA_MAX, scanCh);
+          jam1.setChannel(ch1);
+          jam1.startConstCarrier(RF24_PA_MAX, ch1);
         }
+
+        // Radio 2: packet flooding
         if (j2Ok) {
-          jam2.setChannel((scanCh + 40) % 80); // Offset second radio
-          for (int i = 0; i < 5; i++) jam2.startWrite(noise, 32, true);
+          jam2.setChannel(ch2);
+          for (int i = 0; i < 3; i++) jam2.startWrite(noise, 32, true);
         }
+
+        hopIdx1 = (hopIdx1 + 1) % chCount;
         lastHop = millis();
       }
 
@@ -189,7 +264,7 @@ static void dhRunJammer24() {
       }
     }
 
-    delay(5);
+    delay(isAttacking ? 1 : 50); // 1ms delay allows FreeRTOS scheduler/TWDT to yield safely
   }
 }
 
@@ -215,7 +290,7 @@ static void dhRunRfClownJammer() {
     jam1.powerUp(); jam1.setAddressWidth(3); jam1.setRetries(0,0);
     jam1.setDataRate(RF24_2MBPS); jam1.setPALevel(RF24_PA_MAX);
     jam1.setCRCLength(RF24_CRC_DISABLED); jam1.setAutoAck(false);
-    jam1.stopListening();
+    jam1.openWritingPipe((uint8_t*)"JAM"); jam1.stopListening();
   }
   
   bool j2Ok = jam2.begin();
@@ -223,7 +298,7 @@ static void dhRunRfClownJammer() {
     jam2.powerUp(); jam2.setAddressWidth(3); jam2.setRetries(0,0);
     jam2.setDataRate(RF24_2MBPS); jam2.setPALevel(RF24_PA_MAX);
     jam2.setCRCLength(RF24_CRC_DISABLED); jam2.setAutoAck(false);
-    jam2.stopListening();
+    jam2.openWritingPipe((uint8_t*)"JAM"); jam2.stopListening();
   }
 
   int activeCount = (j1Ok?1:0) + (j2Ok?1:0);
@@ -239,13 +314,28 @@ static void dhRunRfClownJammer() {
   int currentMode = 0;
   bool isAttacking = false;
 
-  const byte ch_wifi[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+  // Wi-Fi 14 CH: Center frequencies mapped to nRF24 channel registers (2400 + reg = freq)
+  // CH 1 (2412MHz)->12, CH 6 (2437MHz)->37, CH 11 (2462MHz)->62, CH 13 (2472MHz)->72, CH 14 (2484MHz)->84
+  const byte ch_wifi[] = {12, 17, 22, 27, 32, 37, 42, 47, 52, 57, 62, 67, 72, 84};
   const byte ch_video[] = {70, 75, 80};
   const byte ch_rc[] = {1, 3, 5, 7};
-  const byte ch_ble[] = {2, 26, 80};
-  const byte ch_bt[] = {32, 34, 46, 48, 50, 52, 0, 1, 2, 4, 6, 8, 22, 24, 26, 28, 30, 74, 76, 78, 80};
+  // BLE 40 CH: 3 advertising channels (37, 38, 39 -> 2, 26, 80) + 37 data channels (0-36 -> 4,6..78)
+  const byte ch_ble[] = {
+     2,  4,  6,  8, 10, 12, 14, 16, 18, 20,
+    22, 24, 26, 28, 30, 32, 34, 36, 38, 40,
+    42, 44, 46, 48, 50, 52, 54, 56, 58, 60,
+    62, 64, 66, 68, 70, 72, 74, 76, 78, 80
+  };
+  // Bluetooth Classic 79 CH: 2402 to 2480 MHz (nRF24 reg = freq - 2400 -> 2..80)
+  const byte ch_bt[] = {
+     2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+    21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+    41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60,
+    61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80
+  };
   const byte ch_usb[] = {40, 50, 60};
-  const byte ch_zigbee[] = {11, 15, 20, 25};
+  // Zigbee IEEE 802.15.4 channels 11-26 (2405 to 2480 MHz, 5 MHz spacing -> nRF24 reg 5, 10, 15..80)
+  const byte ch_zigbee[] = {5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80};
   const byte ch_nrf24[] = {76, 78, 79};
 
   auto getChannelData = [&](int mode, const byte*& arr, int& size) {
@@ -328,7 +418,7 @@ static void dhRunRfClownJammer() {
         isAttacking = !isAttacking;
         if (!isAttacking) {
           if (j1Ok) jam1.stopConstCarrier();
-          if (j2Ok) jam2.stopConstCarrier();
+          if (j2Ok) { jam2.stopConstCarrier(); jam2.flush_tx(); }
         }
         drawUI();
         holding = false;
@@ -354,11 +444,10 @@ static void dhRunRfClownJammer() {
       // creating a wider spread of interference.
       static unsigned long lastHop = 0;
       static int hopIdx1 = 0;
-      static int hopIdx2 = size / 2;
       
       if (millis() - lastHop > 20) { // Hop every 20ms
         hopIdx1 = (hopIdx1 + 1) % size;
-        hopIdx2 = (hopIdx2 + 1) % size;
+        int hopIdx2 = (hopIdx1 + size / 2) % size;
         
         byte ch1 = arr[hopIdx1];
         byte ch2 = arr[hopIdx2];
@@ -406,6 +495,9 @@ static void dhRunRadioScanner() {
 
   pinMode(TFT_CS, OUTPUT); digitalWrite(TFT_CS, HIGH);
   pinMode(NRF1_CSN_PIN, OUTPUT); digitalWrite(NRF1_CSN_PIN, HIGH);
+  pinMode(NRF2_CSN_PIN, OUTPUT); digitalWrite(NRF2_CSN_PIN, HIGH);
+  pinMode(NRF1_CE_PIN, OUTPUT); digitalWrite(NRF1_CE_PIN, LOW);
+  pinMode(NRF2_CE_PIN, OUTPUT); digitalWrite(NRF2_CE_PIN, LOW);
 
   // SPI initialized globally
 
@@ -495,9 +587,9 @@ static void dhRunRadioScanner() {
       tft.drawString("2400", SCALE_X(0), plotY + plotH + SCALE_Y(2), 1);
       tft.drawString("2525", SCR_W - SCALE_X(24), plotY + plotH + SCALE_Y(2), 1);
 
-      // WiFi channel markers
-      for (int wch = 1; wch <= 13; wch++) {
-        int nrf = (wch * 5) + 2;
+      // WiFi channel markers (14 channels mapped to spec center frequencies)
+      for (int wch = 0; wch < CH_WIFI_COUNT; wch++) {
+        int nrf = ch_wifi_spec[wch];
         int x = (nrf * SCR_W) / DH_SCAN_CHANNELS;
         tft.drawPixel(x, plotY + plotH + 1, CLR_PRIMARY);
       }
