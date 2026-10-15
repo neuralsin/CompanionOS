@@ -19,11 +19,13 @@ extern void drawPageIndicator(int current, int total);
 
 static char lastStockPrice[12] = "";
 static char lastStockDelta[12] = "";
+static char lastStockSymbol[8] = "";
 static bool stockPageDrawn = false;
 
 void resetStockDrawState() {
   lastStockPrice[0] = 0;
   lastStockDelta[0] = 0;
+  lastStockSymbol[0] = 0;
   stockPageDrawn = false;
 }
 
@@ -136,11 +138,19 @@ void drawStocksPage() {
   }
 
   drawPageIndicator(STATE_STOCKS, STATE_COUNT);
+  strcpy(lastStockSymbol, stockSymbol);
   stockPageDrawn = true;
 }
 
 void redrawStocksPartial() {
   if (currentState != STATE_STOCKS) return;
+
+  if (strcmp(stockSymbol, lastStockSymbol) != 0) {
+    tft.fillRect(STK_PAD, 22, 140, 24, 0x0841);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawString(stockSymbol, STK_PAD, 22, 4);
+    strcpy(lastStockSymbol, stockSymbol);
+  }
 
   if (strcmp(stockPrice, lastStockPrice) != 0) {
     uint16_t priceColor = stockIsUp ? STK_GREEN : STK_RED;

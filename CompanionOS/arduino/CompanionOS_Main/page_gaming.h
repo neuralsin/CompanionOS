@@ -20,10 +20,14 @@ extern void drawPageIndicator(int current, int total);
 
 static bool gamingPageDrawn = false;
 static char lastSessionTime[12] = "";
+static int lastFriendsOnline = -1;
+static uint8_t lastAchievePct = 255;
 
 void resetGamingDrawState() {
   gamingPageDrawn = false;
   lastSessionTime[0] = 0;
+  lastFriendsOnline = -1;
+  lastAchievePct = 255;
 }
 
 void drawAchievementBar(int x, int y, int w, int h, uint8_t pct) {
@@ -143,7 +147,7 @@ void redrawGamingPartial() {
     
     if (gameTitle[0]) {
       if (albumArt[0] != 0 || albumArt[1] != 0) {
-        tft.pushImage(px2+1, 32, 100, 60, (uint16_t*)albumArt);
+        tft.pushImage(px2, 32, 100, 60, (uint16_t*)albumArt);
       } else {
         tft.fillRoundRect(px2+5, 32, w2-10, 60, 4, 0x0421);
         for (int i=0; i<6; i++) {
@@ -164,19 +168,25 @@ void redrawGamingPartial() {
     }
   }
 
+  int px1 = 8;
   if (strcmp(sessionTime, lastSessionTime) != 0) {
-    int px1 = 8;
     tft.fillRect(px1+5, 44, 80, 20, GAM_CARD);
     tft.setTextColor(GAM_CYAN);
     tft.drawString(sessionTime, px1+5, 44, 2);
     strcpy(lastSessionTime, sessionTime);
+  }
 
+  if (achievePct != lastAchievePct) {
     drawAchievementBar(px1+5, 105, 85, 10, achievePct);
+    lastAchievePct = achievePct;
+  }
 
+  if (friendsOnline != lastFriendsOnline) {
     tft.fillRect(px1+5, 160, 80, 20, GAM_CARD);
     char friendStr[8]; sprintf(friendStr, "%d", friendsOnline);
     tft.setTextColor(GAM_GREEN);
     tft.drawString(friendStr, px1+5, 160, 2);
+    lastFriendsOnline = friendsOnline;
   }
 }
 

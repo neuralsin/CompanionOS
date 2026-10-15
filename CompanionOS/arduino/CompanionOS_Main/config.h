@@ -28,12 +28,19 @@ const int UDP_PORT_TX = 8889;
 // Feature Toggles
 #define ENABLE_EYES true
 #define ENABLE_SPOTIFY true
+#define ENABLE_DIRECT_SPOTIFY true
 #define ENABLE_GALLERY true
 #define ENABLE_MIC true
+
+// Direct Spotify Credentials (standalone mode - no PC companion needed)
+const char* SPOTIFY_CLIENT_ID = "450a2e6ab1ed4ce4ac9738f654814240";
+const char* SPOTIFY_CLIENT_SECRET = "78200536e7804c8ca427102a6ba2138f";
+const char* SPOTIFY_REFRESH_TOKEN = "AQB8r90xaOmCyjq7yMJhe7ir6KYXGPGCGsh8W3gqo87ijaDZIbline98_67zEJQnf6DOiLCEhKBZszkmORPUSleKB95o1QLfME-o-6DjBJkx9zFRm39nyMG8Hia2ZPQY5EA";
 
 // EEPROM addresses
 #define EEPROM_EXOTIC_ADDR 0    // 1 byte: legacy
 #define EEPROM_THEME_ADDR 1     // 1 byte: unused (themes removed)
+#define EEPROM_ACTIVE_THEME_ADDR 2  // 1 byte: 0 = Theme 1, 1 = Theme 2
 #define EEPROM_SIZE 8           // Total EEPROM bytes used
 
 // Display constants

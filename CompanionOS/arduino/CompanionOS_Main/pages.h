@@ -8,6 +8,9 @@
 #include "page_gaming.h"
 #include "page_social.h"
 #include "page_productivity.h"
+#include "page_network.h"
+#include "theme2_eyes.h"
+#include "theme2_spotify.h"
 
 // Data from network.h
 extern String currentTrack;
@@ -339,17 +342,22 @@ void completeAlbumArt() {
   albumArtReady = true;
   
   if (currentState == STATE_SPOTIFY) {
-    // Advanced 160MHz Drop Shadow around Album Art 
-    // (We draw this strictly when album art is done, so it wraps perfectly)
-    int blurRadius = 4;
-    for (int i = 1; i <= blurRadius; i++) {
-      uint16_t shadeColor = (i == 1) ? 0x1042 : (i == 2) ? 0x0821 : 0x0000;
-      // Bottom shadow
-      tft.drawFastHLine(ALBUM_X + i, ALBUM_Y + ALBUM_SIZE + i - 1, ALBUM_SIZE, shadeColor);
-      // Right shadow
-      tft.drawFastVLine(ALBUM_X + ALBUM_SIZE + i - 1, ALBUM_Y + i, ALBUM_SIZE, shadeColor);
+    if (activeTheme == 1) {
+      extern void t2_redrawSpotifyPartial();
+      t2_redrawSpotifyPartial();
+    } else {
+      // Advanced 160MHz Drop Shadow around Album Art 
+      // (We draw this strictly when album art is done, so it wraps perfectly)
+      int blurRadius = 4;
+      for (int i = 1; i <= blurRadius; i++) {
+        uint16_t shadeColor = (i == 1) ? 0x1042 : (i == 2) ? 0x0821 : 0x0000;
+        // Bottom shadow
+        tft.drawFastHLine(ALBUM_X + i, ALBUM_Y + ALBUM_SIZE + i - 1, ALBUM_SIZE, shadeColor);
+        // Right shadow
+        tft.drawFastVLine(ALBUM_X + ALBUM_SIZE + i - 1, ALBUM_Y + i, ALBUM_SIZE, shadeColor);
+      }
+      redrawSpotifyPartial(); // Redraw whole UI safely
     }
-    redrawSpotifyPartial(); // Redraw whole UI safely
   } else if (currentState == STATE_GAMING) {
     extern void redrawGamingPartial();
     redrawGamingPartial();
@@ -381,13 +389,20 @@ void drawSmoothRing(int cx, int cy, int r, int thickness, float percent, uint16_
 // POMODORO TIMER PAGE 🍅
 // ═══════════════════════════════════════════════════════════
 
+static int lastPomoRemaining = -1;
+static bool lastPomoIsBreak = false;
+static int lastPomoSessions = -1;
+static bool lastPomoActive = false;
+
+void resetPomodoroDrawState() {
+  lastPomoRemaining = -1;
+  lastPomoIsBreak = false;
+  lastPomoSessions = -1;
+  lastPomoActive = false;
+}
+
 void redrawPomodoroPartial() {
   if (currentState != STATE_POMODORO) return;
-  
-  static int lastRemaining = -1;
-  static bool lastIsBreak = false;
-  static int lastSessions = -1;
-  static bool lastActive = false;
   
   int cx = SCREEN_W / 2;
   int cy = SCREEN_H / 2 - 10;
@@ -399,7 +414,7 @@ void redrawPomodoroPartial() {
   
   uint16_t ringColor = pomoIsBreak ? TFT_GREEN : 0xDF26; // Orange
   
-  if (lastRemaining != pomoRemaining || lastIsBreak != pomoIsBreak || lastActive != pomoActive) {
+  if (lastPomoRemaining != pomoRemaining || lastPomoIsBreak != pomoIsBreak || lastPomoActive != pomoActive) {
     // Only clear the text area inside the ring instead of a massive 160x160 rectangle
     tft.fillRect(cx - 50, cy - 30, 100, 60, COLOR_BG);
     drawSmoothRing(cx, cy, 55, 6, progress, ringColor, 0x18E3);
@@ -432,9 +447,9 @@ void redrawPomodoroPartial() {
       tft.drawCentreString("TAP TO PAUSE", cx, cy + 70, 1);
     }
     
-    lastRemaining = pomoRemaining;
-    lastIsBreak = pomoIsBreak;
-    lastActive = pomoActive;
+    lastPomoRemaining = pomoRemaining;
+    lastPomoIsBreak = pomoIsBreak;
+    lastPomoActive = pomoActive;
   }
 }
 
@@ -619,7 +634,8 @@ void redrawNotesPartial() {
   }
   
   tft.setTextColor(0x4208);
-  tft.drawCentreString("Edit at http://YOUR_IP:5555", SCREEN_W/2, SCREEN_H - 28, 1);
+  String notesUrl = "Edit at http://" + WiFi.localIP().toString() + ":5555";
+  tft.drawCentreString(notesUrl, SCREEN_W/2, SCREEN_H - 28, 1);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -735,6 +751,36 @@ void redrawSettingsPartial() {
       tft.drawString("--:--", 10, y, 4);
     }
   }
+
+  // ── Theme Switcher ──
+  y += 40;
+  if (y > -20 && y < SCREEN_H) {
+    tft.setTextColor(TFT_CYAN);
+    tft.drawString("THEME", 10, y, 2);
+  }
+  y += 22;
+  if (y > -20 && y < SCREEN_H) {
+    // Pill-shaped slider track
+    int sliderX = 10, sliderW = 120, sliderH = 24;
+    int thumbW = 54, thumbH = 20;
+    int thumbX = activeTheme == 0 ? sliderX + 2 : sliderX + sliderW - thumbW - 2;
+    
+    // Track background (purple-tinted for T2, dark for T1)
+    tft.fillRoundRect(sliderX, y, sliderW, sliderH, sliderH/2,
+                      activeTheme == 0 ? 0x2104 : 0x4810);
+    // Thumb
+    tft.fillRoundRect(thumbX, y + 2, thumbW, thumbH, thumbH/2, TFT_WHITE);
+    
+    // Labels
+    tft.setTextColor(activeTheme == 0 ? TFT_BLACK : 0x4208);
+    tft.drawCentreString("OG", sliderX + 29, y + 5, 2);
+    tft.setTextColor(activeTheme == 1 ? TFT_BLACK : 0x4208);
+    tft.drawCentreString("T2", sliderX + sliderW - 29, y + 5, 2);
+    
+    // Current theme label
+    tft.setTextColor(0x8410);
+    tft.drawString(activeTheme == 0 ? "Original" : "Alternate", sliderX + sliderW + 10, y + 4, 2);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -742,13 +788,15 @@ void redrawSettingsPartial() {
 // ═══════════════════════════════════════════════════════════
 
 void drawEyesPage() {
-  tft.fillRect(0, 16, SCREEN_W, SCREEN_H - 16, COLOR_BG);
+  if (activeTheme == 1) { t2_drawEyesPage(); drawStatusBar(); return; }
+  tft.fillScreen(COLOR_BG);
   drawStarfield();
   drawEyes();
   drawStatusBar();
 }
 
 void drawSpotifyPage() {
+  if (activeTheme == 1) { t2_drawSpotifyPage(); drawStatusBar(); return; }
   tft.fillScreen(COLOR_BG);
   resetSpotifyDrawState();
   redrawSpotifyPartial();
@@ -757,6 +805,7 @@ void drawSpotifyPage() {
 
 void drawPomodoroPage() {
   tft.fillScreen(COLOR_BG);
+  resetPomodoroDrawState();
   redrawPomodoroPartial();
   drawPageHeader("Pomodoro");
   drawStatusBar();
@@ -820,6 +869,12 @@ void drawProductivityPageFull() {
   drawStatusBar();
 }
 
+void drawNetworkPageFull() {
+  resetNetworkDrawState();
+  drawNetworkPage();
+  drawStatusBar();
+}
+
 void renderCurrentPage() {
   switch(currentState) {
     case STATE_EYES: drawEyesPage(); break;
@@ -832,6 +887,7 @@ void renderCurrentPage() {
     case STATE_GAMING: drawGamingPageFull(); break;
     case STATE_SOCIAL: drawSocialPageFull(); break;
     case STATE_PRODUCTIVITY: drawProductivityPageFull(); break;
+    case STATE_NETWORK: drawNetworkPageFull(); break;
     case STATE_SETTINGS: drawSettingsPage(); break;
     default: break;
   }

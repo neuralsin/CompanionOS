@@ -16,6 +16,7 @@
 #include "pages.h"
 #include "touch.h"
 #include "ui.h"
+#include "spotify_direct.h"
 
 // Define uninitialized globals
 AppState currentState = STATE_EYES;
@@ -94,10 +95,15 @@ void setup() {
   
   // Initialize EEPROM
   EEPROM.begin(EEPROM_SIZE);
+  activeTheme = EEPROM.read(EEPROM_ACTIVE_THEME_ADDR);
+  if (activeTheme > 1) activeTheme = 0; // Sanitize on first boot (0xFF → 0)
   EEPROM.end();
-  
   setupWiFi();
   runBootSequence();
+
+#if ENABLE_DIRECT_SPOTIFY
+  setupSpotifyDirect();
+#endif
   
   lastInteractionTime = millis();
   
@@ -108,6 +114,9 @@ void setup() {
 void loop() {
   handleNetwork();
   handleTouch();
+#if ENABLE_DIRECT_SPOTIFY
+  handleSpotifyDirect();
+#endif
   
   // Non-blocking UI frame timer (~20 FPS)
   static unsigned long lastFrameTime = 0;
@@ -115,8 +124,11 @@ void loop() {
     lastFrameTime = millis();
     
     if (currentState == STATE_EYES) {
-      updateEyes();
-      
+      if (activeTheme == 1) {
+        t2_updateEyes();
+      } else {
+        updateEyes();
+      }
       // V4: Agent overlay on eyes page
       drawAgentOverlay();
     }
@@ -130,6 +142,27 @@ void loop() {
   if (millis() - lastStatusBarUpdate >= 1000) {
     lastStatusBarUpdate = millis();
     drawStatusBar();
+  }
+  
+  // Network stats page refresh every 2 seconds
+  static unsigned long lastNetRefresh = 0;
+  if (currentState == STATE_NETWORK && millis() - lastNetRefresh >= 2000) {
+    lastNetRefresh = millis();
+    redrawNetworkPartial();
+  }
+
+  // Productivity page refresh (clock & timeline) every 1 second
+  static unsigned long lastProdRefresh = 0;
+  if (currentState == STATE_PRODUCTIVITY && millis() - lastProdRefresh >= 1000) {
+    lastProdRefresh = millis();
+    redrawProductivityPartial();
+  }
+
+  // Gaming page refresh (session & pulse) every 1 second
+  static unsigned long lastGamingRefresh = 0;
+  if (currentState == STATE_GAMING && millis() - lastGamingRefresh >= 1000) {
+    lastGamingRefresh = millis();
+    redrawGamingPartial();
   }
   
   // V4: Pet mood decay (every 60 seconds of no interaction)

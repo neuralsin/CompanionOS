@@ -27,6 +27,7 @@ from github_integration import GitHubIntegration  # type: ignore # noqa: E402
 from steam_tracker import SteamTracker  # type: ignore # noqa: E402
 from google_cal import GoogleCalendar, LocalTaskList  # type: ignore # noqa: E402
 from stock_manager import StockManager  # type: ignore # noqa: E402
+from theme2_bridge import theme2_spotify_feed  # type: ignore # noqa: E402
 
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
 
@@ -367,7 +368,11 @@ def start_notes_server():
             data = request.get_json()
             if data:
                 status = data.get('status', 'thinking')  # thinking, done, error
-                text = data.get('text', '')[:60]  # Truncate for ESP display
+                text = str(data.get('text', '')).strip()[:60]  # Truncate for ESP display
+                if not text or status == 'clear':
+                    # Explicitly send clear command so device dismisses any open overlay
+                    send_udp('AGENT:{"status":"clear","text":""}')
+                    return {'status': 'cleared'}, 200
                 agent_payload = json.dumps({'status': status, 'text': text})
                 send_udp(f"AGENT:{agent_payload}")
                 print(f"🤖 Agent: [{status}] {text[:40]}")
@@ -387,13 +392,14 @@ def start_notes_server():
                 
                 file = request.files['image']
                 img = Image.open(io.BytesIO(file.read()))
-                img = img.resize((96, 96), Image.LANCZOS)
+                resample_filter = getattr(getattr(Image, 'Resampling', Image), 'LANCZOS', getattr(Image, 'BICUBIC', 3))  # type: ignore
+                img = img.resize((96, 96), resample_filter)  # type: ignore
                 img = img.convert('RGB')
                 
                 pixels = []
                 for y in range(96):
                     for x in range(96):
-                        r, g, b = img.getpixel((x, y))
+                        r, g, b = img.getpixel((x, y))  # type: ignore
                         rgb565 = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
                         pixels.append(rgb565)
                 
@@ -473,32 +479,37 @@ def command_listener():
                     spotify_service.control_playback(msg)
                 elif msg == "SHUFFLE:TOGGLE":
                     try:
-                        state = spotify_service.client.current_playback()
-                        if state:
-                            spotify_service.client.shuffle(not state['shuffle_state'])
-                            print(f"🔀 Shuffle {'ON' if not state['shuffle_state'] else 'OFF'}")
+                        client = spotify_service.client
+                        if client is not None:
+                            state = client.current_playback()
+                            if state:
+                                client.shuffle(not state['shuffle_state'])
+                                print(f"🔀 Shuffle {'ON' if not state['shuffle_state'] else 'OFF'}")
                     except Exception as e:
                         print(f"Shuffle error: {e}")
                 elif msg == "REPEAT:TOGGLE":
                     try:
-                        state = spotify_service.client.current_playback()
-                        if state:
-                            states = ["off", "context", "track"]
-                            idx = (states.index(state['repeat_state']) + 1) % 3
-                            spotify_service.client.repeat(states[idx])
-                            print(f"🔁 Repeat {states[idx].upper()}")
+                        client = spotify_service.client
+                        if client is not None:
+                            state = client.current_playback()
+                            if state:
+                                states = ["off", "context", "track"]
+                                idx = (states.index(state['repeat_state']) + 1) % 3
+                                client.repeat(states[idx])
+                                print(f"🔁 Repeat {states[idx].upper()}")
                     except Exception as e:
                         print(f"Repeat error: {e}")
                 elif msg == "LIKE:TOGGLE":
                     try:
+                        client = spotify_service.client
                         track = spotify_service.get_current_track()
-                        if track and track.get('id'):
-                            is_saved = spotify_service.client.current_user_saved_tracks_contains([track['id']])[0]
-                            if is_saved:
-                                spotify_service.client.current_user_saved_tracks_delete([track['id']])
+                        if track and track.get('id') and client is not None:
+                            saved_list = client.current_user_saved_tracks_contains([track['id']])
+                            if saved_list and len(saved_list) > 0 and saved_list[0]:
+                                client.current_user_saved_tracks_delete([track['id']])
                                 print(f"💔 Unsaved {track['name']}")
                             else:
-                                spotify_service.client.current_user_saved_tracks_add([track['id']])
+                                client.current_user_saved_tracks_add([track['id']])
                                 print(f"❤️ Saved {track['name']}")
                     except Exception as e:
                         print(f"Like toggle error: {e}")
@@ -578,7 +589,8 @@ def push_game_cover(title):
         resp = requests.get(url, timeout=10)
         img = Image.open(io.BytesIO(resp.content))
         # Keep it 100x60 to fit precisely inside the Gaming UI bounds
-        img = img.resize((100, 60), Image.LANCZOS)
+        resample_filter = getattr(getattr(Image, 'Resampling', Image), 'LANCZOS', getattr(Image, 'BICUBIC', 3))  # type: ignore
+        img = img.resize((100, 60), resample_filter)  # type: ignore
         img = img.convert('RGB')
         
         send_udp("ART_START:")
@@ -703,6 +715,8 @@ def main():
     threading.Thread(target=gaming_feed_loop, daemon=True).start()
     threading.Thread(target=social_feed_loop, daemon=True).start()
     threading.Thread(target=productivity_feed_loop, daemon=True).start()
+    # Theme 2: Extended Spotify data bridge (reuses same spotify_service + API keys)
+    threading.Thread(target=theme2_spotify_feed, args=(spotify_service, send_udp, config), daemon=True).start()
     print("Monitoring playback & connections...")
     
     global current_lyrics, fast_poll_now

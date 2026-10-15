@@ -31,8 +31,61 @@ void showLoadingScreen(const char* message) {
   delay(200);
 }
 
-// Minimal status bar: tiny icons at top-right, no colored background
+// Minimal status bar: tiny icons at top-right, respects page background and headers
 void drawStatusBar() {
+  // On V6 tiles (Stocks, Gaming, Social, Productivity, Network):
+  // They use navy background (0x0841) and have their own title on the left.
+  // Never wipe the whole 15px with black!
+  if (currentState >= STATE_STOCKS && currentState <= STATE_NETWORK) {
+    uint16_t tileBg = 0x0841;
+    int iconAreaX = SCREEN_W - 35;
+    tft.fillRect(iconAreaX, 0, 35, 15, tileBg);
+    
+    // Draw WiFi icon at top right
+    int x = SCREEN_W - 10;
+    int y = 5;
+    if (wifiConnected) {
+      tft.fillCircle(x - 5, y + 8, 2, TFT_CYAN);
+      tft.drawFastHLine(x - 7, y + 4, 5, TFT_CYAN);
+      tft.drawFastHLine(x - 10, y, 11, TFT_CYAN);
+      tft.drawFastHLine(x - 13, y - 4, 17, TFT_CYAN);
+    } else {
+      tft.fillCircle(x - 5, y + 8, 2, TFT_RED);
+      tft.drawLine(x - 8, y, x - 2, y + 6, TFT_RED);
+      tft.drawLine(x - 2, y, x - 8, y + 6, TFT_RED);
+    }
+    return;
+  }
+
+  // On pages with PageHeader (Pomodoro, Weather, Notifications, Notes, Settings):
+  // Title is at (8, 2). Only clear the top-right slot so we never erase the title!
+  if (currentState == STATE_POMODORO || currentState == STATE_WEATHER ||
+      currentState == STATE_NOTIFICATIONS || currentState == STATE_NOTES ||
+      currentState == STATE_SETTINGS) {
+    tft.fillRect(SCREEN_W - 90, 0, 90, 16, COLOR_BG);
+    if (timeReceived) {
+      char timeStr[6];
+      sprintf(timeStr, "%02d:%02d", displayHour, displayMinute);
+      tft.setTextColor(TFT_WHITE, COLOR_BG);
+      tft.drawRightString(timeStr, SCREEN_W - 35, 2, 1);
+    }
+    int x = SCREEN_W - 10;
+    int y = 5;
+    if (wifiConnected) {
+      tft.fillCircle(x - 5, y + 8, 2, TFT_CYAN);
+      tft.drawFastHLine(x - 7, y + 4, 5, TFT_CYAN);
+      tft.drawFastHLine(x - 10, y, 11, TFT_CYAN);
+      tft.drawFastHLine(x - 13, y - 4, 17, TFT_CYAN);
+    } else {
+      tft.fillCircle(x - 5, y + 8, 2, TFT_RED);
+      tft.drawLine(x - 8, y, x - 2, y + 6, TFT_RED);
+      tft.drawLine(x - 2, y, x - 8, y + 6, TFT_RED);
+    }
+    return;
+  }
+
+  // On EYES and SPOTIFY:
+  // Full status bar at y = 0..15 with black background
   tft.fillRect(0, 0, SCREEN_W, 15, COLOR_BG);
   
   // Persistent Clock on left
@@ -104,7 +157,7 @@ void drawPageIndicator(int current, int total) {
 
 // Thin header for content pages (no orange, just text)
 void drawPageHeader(const char* title) {
-  tft.fillRect(0, 0, SCREEN_W - 80, 16, COLOR_BG);
+  tft.fillRect(0, 0, SCREEN_W - 90, 16, COLOR_BG);
   tft.setTextColor(0x8410);  // Dim grey
   tft.drawString(title, 8, 2, 2);
 }
@@ -112,6 +165,24 @@ void drawPageHeader(const char* title) {
 // ── V4: Agent Status Overlay ──────────────────────────────
 void drawAgentOverlay() {
   if (!agentOverlayActive) return;
+  
+  // Guard against blank thoughts ("blank thoughts also come with a blank box")
+  String trimmed = agentStatusText;
+  trimmed.trim();
+  if (trimmed.length() == 0) {
+    agentOverlayActive = false;
+    tft.fillRect(8, SCREEN_H - 55, SCREEN_W - 16, 42, COLOR_BG);
+    return;
+  }
+  
+  // Timeout check: immediately erase box when done/error times out
+  if ((agentStatus == "done" && millis() - agentStatusStart > 5000) ||
+      (agentStatus == "error" && millis() - agentStatusStart > 8000) ||
+      (agentStatus == "" && millis() - agentStatusStart > 5000)) {
+    agentOverlayActive = false;
+    tft.fillRect(8, SCREEN_H - 55, SCREEN_W - 16, 42, COLOR_BG);
+    return;
+  }
   
   extern uint16_t blendColor(uint16_t c1, uint16_t c2, float t);
   
@@ -135,17 +206,10 @@ void drawAgentOverlay() {
   }
   
   tft.setTextColor(TFT_WHITE);
-  String displayText = agentStatusText.substring(0, 32);
+  String displayText = trimmed.substring(0, 32);
   tft.drawString(displayText, 28, SCREEN_H - 42, 1);
-  if (agentStatusText.length() > 32) {
-    tft.drawString(agentStatusText.substring(32, 64), 28, SCREEN_H - 30, 1);
-  }
-  
-  if (agentStatus == "done" && millis() - agentStatusStart > 5000) {
-    agentOverlayActive = false;
-  }
-  if (agentStatus == "error" && millis() - agentStatusStart > 8000) {
-    agentOverlayActive = false;
+  if (trimmed.length() > 32) {
+    tft.drawString(trimmed.substring(32, 64), 28, SCREEN_H - 30, 1);
   }
 }
 
