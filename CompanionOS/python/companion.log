@@ -1,0 +1,209 @@
+Spotify Integration Online
+
++------------------------------------------------+
+|  COMPANION OS - Controller v7.0               |
++------------------------------------------------+
+
+Listening on port 8889...
+Monitoring playback & connections...
+📡 RuView CSI listener started on UDP port 8890
+🌐 CompanionOS Web Remote starting on http://0.0.0.0:5555
+  🎮 Virtual Remote: http://localhost:5555
+  🤖 Agent webhook: POST /api/agent
+  🖼️ Gallery push:  POST /api/gallery
+  🔘 Button API:    POST /api/button
+  📡 RuView CSI:    http://localhost:5555/ruview
+🌤️ Weather: 28°C Patchy rain nearby in Mahalakshmi
+📝 Synced Notes to Device
+ * Serving Flask app 'companion_controller'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5555
+ * Running on http://192.168.1.201:5555
+Press CTRL+C to quit
+📡 RuView push loop started
+Spotify Integration Online
+
++------------------------------------------------+
+|  COMPANION OS - Controller v7.0               |
++------------------------------------------------+
+
+Listening on port 8889...
+📡 RuView CSI listener started on UDP port 8890
+Monitoring playback & connections...
+🌐 CompanionOS Web Remote starting on http://0.0.0.0:5555
+  🎮 Virtual Remote: http://localhost:5555
+  🤖 Agent webhook: POST /api/agent
+  🖼️ Gallery push:  POST /api/gallery
+  🔘 Button API:    POST /api/button
+  📡 RuView CSI:    http://localhost:5555/ruview
+ * Serving Flask app 'companion_controller'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5555
+ * Running on http://192.168.1.201:5555
+Press CTRL+C to quit
+🌤️ Weather: 28°C Patchy rain nearby in Mahalakshmi
+📝 Synced Notes to Device
+Spotify Integration Online
+
++------------------------------------------------+
+|  COMPANION OS - Controller v7.0               |
++------------------------------------------------+
+
+Listening on port 8889...
+📡 RuView CSI listener started on UDP port 8890
+Monitoring playback & connections...
+🌤️ Weather: 28°C Patchy rain nearby in Mahalakshmi
+📝 Synced Notes to Device
+🌐 CompanionOS Web Remote starting on http://0.0.0.0:5555
+  🎮 Virtual Remote: http://localhost:5555
+  🤖 Agent webhook: POST /api/agent
+  🖼️ Gallery push:  POST /api/gallery
+  🔘 Button API:    POST /api/button
+  📡 RuView CSI:    http://localhost:5555/ruview
+ * Serving Flask app 'companion_controller'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5555
+ * Running on http://192.168.1.201:5555
+Press CTRL+C to quit
+📡 RuView push loop started
+📊 Stock sync: TATAELXSI.NS Rs.3580.00
+Spotify Integration Online
+
++------------------------------------------------+
+|  COMPANION OS - Controller v7.0               |
++------------------------------------------------+
+
+Listening on port 8889...
+📡 RuView CSI listener started on UDP port 8890
+Monitoring playback & connections...
+🌐 CompanionOS Web Remote starting on http://0.0.0.0:5555
+  🎮 Virtual Remote: http://localhost:5555
+  🤖 Agent webhook: POST /api/agent
+  🖼️ Gallery push:  POST /api/gallery
+  🔘 Button API:    POST /api/button
+  📡 RuView CSI:    http://localhost:5555/ruview
+🌤️ Weather: 28°C Patchy rain nearby in Mahalakshmi
+📝 Synced Notes to Device
+ * Serving Flask app 'companion_controller'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5555
+ * Running on http://192.168.1.163:5555
+Press CTRL+C to quit
+📡 RuView push loop started
+🎮 Playing: Program Manager (00:00)
+🖼️ Game cover found for Program Manager; not streamed over Spotify art channel
+📊 Stock sync: TATAELXSI.NS Rs.3580.00
+Spotify Integration Online
+
++------------------------------------------------+
+|  COMPANION OS - Controller v7.0               |
++------------------------------------------------+
+
+Exception in thread Thread-1 (command_listener):
+Traceback (most recent call last):
+  File "C:\Users\shaan\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 1045, in _bootstrap_inner
+📡 RuView CSI listener started on UDP port 8890
+Monitoring playback & connections...
+    self.run()
+  File "C:\Users\shaan\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\python\companion_controller.py", line 1664, in command_listener
+    listen_sock.bind(('0.0.0.0', PC_PORT_RX))
+OSError: [WinError 10048] Only one usage of each socket address (protocol/network address/port) is normally permitted
+🌤️ Weather: 28°C Patchy rain nearby in Mahalakshmi
+📝 Synced Notes to Device
+🌐 CompanionOS Web Remote starting on http://0.0.0.0:5555
+  🎮 Virtual Remote: http://localhost:5555
+  🤖 Agent webhook: POST /api/agent
+  🖼️ Gallery push:  POST /api/gallery
+  🔘 Button API:    POST /api/button
+  📡 RuView CSI:    http://localhost:5555/ruview
+ * Serving Flask app 'companion_controller'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5555
+ * Running on http://192.168.1.163:5555
+Press CTRL+C to quit
+📡 RuView push loop started
+📊 Stock sync: TATAELXSI.NS Rs.3580.00
+💭 Pushed thought: still going strong at 23
+🎮 Playing: Open Folder (00:00)
+💭 Pushed thought: time check: 23:00
+🎮 Playing: Video call (00:00)
+🎮 Playing: Video call (00:00)
+📊 Stock sync: TATAELXSI.NS Rs.3580.00
+🎮 Playing: Group video call (00:00)
+📊 Stock sync: TATAELXSI.NS Rs.3580.00
+🎮 Playing: Group video call (00:00)
+Spotify Integration Online
+
++------------------------------------------------+
+|  COMPANION OS - Controller v7.0               |
++------------------------------------------------+
+
+Exception in thread Thread-1 (command_listener):
+Traceback (most recent call last):
+  File "C:\Users\shaan\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "C:\Users\shaan\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\python\companion_controller.py", line 1664, in command_listener
+Monitoring playback & connections...
+📡 RuView CSI listener started on UDP port 8890
+    listen_sock.bind(('0.0.0.0', PC_PORT_RX))
+OSError: [WinError 10048] Only one usage of each socket address (protocol/network address/port) is normally permitted
+🌐 CompanionOS Web Remote starting on http://0.0.0.0:5555
+  🎮 Virtual Remote: http://localhost:5555
+  🤖 Agent webhook: POST /api/agent
+  🖼️ Gallery push:  POST /api/gallery
+  🔘 Button API:    POST /api/button
+  📡 RuView CSI:    http://localhost:5555/ruview
+🌤️ Weather: 28°C Patchy rain nearby in Mahalakshmi
+📝 Synced Notes to Device
+ * Serving Flask app 'companion_controller'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5555
+ * Running on http://192.168.1.163:5555
+Press CTRL+C to quit
+🎮 Playing: Program Manager (00:00)
+📡 RuView push loop started
+📊 Stock sync: TATAELXSI.NS Rs.3580.00
+🖼️ Game cover found for Program Manager; not streamed over Spotify art channel
+📊 Stock sync: TATAELXSI.NS Rs.3580.00
+📊 Stock sync: TATAELXSI.NS Rs.3580.00
+👋 Companion Device Discovered at 192.168.1.187!
+💭 Pushed thought: time check: 23:00
+🔄 Triggered full state resync!
+🌤️ Weather: 28°C Patchy rain nearby in Mahalakshmi
+👋 Companion Device Discovered at 192.168.1.187!
+🔄 Triggered full state resync!
+🌤️ Weather: 28°C Patchy rain nearby in Mahalakshmi
+👋 Companion Device Discovered at 192.168.1.187!
+🔄 Triggered full state resync!
+🌤️ Weather: 28°C Patchy rain nearby in Mahalakshmi
+👋 Companion Device Discovered at 192.168.1.187!
+🔄 Triggered full state resync!
+🌤️ Weather: 28°C Patchy rain nearby in Mahalakshmi
+📊 Stock sync: TATAELXSI.NS Rs.3580.00
+📊 Stock sync: TATAELXSI.NS Rs.3580.00
+📊 Stock sync: TATAELXSI.NS Rs.3580.00
+👋 Companion Device Discovered at 192.168.1.187!
+🔄 Triggered full state resync!
+🌤️ Weather: 28°C Patchy rain nearby in Mahalakshmi
+👋 Companion Device Discovered at 192.168.1.187!
+🔄 Triggered full state resync!
+🌤️ Weather: 28°C Patchy rain nearby in Mahalakshmi
+📊 Stock sync: TATAELXSI.NS Rs.3580.00
+📊 Stock sync: TATAELXSI.NS Rs.3580.00
+📊 Stock sync: TATAELXSI.NS Rs.3580.00

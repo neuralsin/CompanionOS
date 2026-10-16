@@ -15,6 +15,7 @@
  */
 
 #include "globals.h"
+#include "thought_engine.h"
 #include <math.h>
 
 // ═══════════════════════════════════════════════════════════
@@ -138,44 +139,37 @@ enum T2Corner { T2_TR, T2_TL, T2_BL, T2_BR };
 
 class T2EyeDrawer {
 public:
-  static TFT_eSprite* t2Spr;
+  static TFT_eSprite* t2Canvas;
 
   static void Draw(int16_t centerX, int16_t centerY, T2EyeConfig *cfg, uint16_t fg = TFT_WHITE) {
-    if (!t2Spr) {
-      t2Spr = new TFT_eSprite(&tft);
-      if (t2Spr) {
-        t2Spr->setColorDepth(1);
-        t2Spr->createSprite(140, 140);
-      }
-    }
-    if (!t2Spr || !t2Spr->created()) return;
-    t2Spr->setBitmapColor(fg, COLOR_BG);
-    t2Spr->fillSprite(0);
+    if (!t2Canvas || !t2Canvas->created()) return;
 
-    // Sprite local center
-    int16_t scx = 70;
-    int16_t scy = 70;
+    int32_t height = cfg->Height * 0.4;
+    int32_t width = cfg->Width * 0.4;
+    int16_t rT = cfg->Radius_Top * 0.4;
+    int16_t rB = cfg->Radius_Bottom * 0.4;
 
-    int32_t dyt = cfg->Height * cfg->Slope_Top / 2.0;
-    int32_t dyb = cfg->Height * cfg->Slope_Bottom / 2.0;
-    auto totalH = cfg->Height + dyt - dyb;
+    int16_t scx = centerX + (cfg->OffsetX * 0.4);
+    int16_t scy = centerY - UI_HEADER_H + (cfg->OffsetY * 0.4);
 
-    int16_t rT = cfg->Radius_Top;
-    int16_t rB = cfg->Radius_Bottom;
+    int32_t dyt = height * cfg->Slope_Top / 2.0;
+    int32_t dyb = height * cfg->Slope_Bottom / 2.0;
+    auto totalH = height + dyt - dyb;
+
     if (rB > 0 && rT > 0 && totalH - 1 < rB + rT) {
       int16_t crt = (float)rT * (totalH-1) / (rB+rT);
       int16_t crb = (float)rB * (totalH-1) / (rB+rT);
       rT = crt; rB = crb;
     }
 
-    int32_t TLy = scy - cfg->Height/2 + rT - dyt;
-    int32_t TLx = scx - cfg->Width/2  + rT;
-    int32_t TRy = scy - cfg->Height/2 + rT + dyt;
-    int32_t TRx = scx + cfg->Width/2  - rT;
-    int32_t BLy = scy + cfg->Height/2 - rB - dyb;
-    int32_t BLx = scx - cfg->Width/2  + rB;
-    int32_t BRy = scy + cfg->Height/2 - rB + dyb;
-    int32_t BRx = scx + cfg->Width/2  - rB;
+    int32_t TLy = scy - height/2 + rT - dyt;
+    int32_t TLx = scx - width/2  + rT;
+    int32_t TRy = scy - height/2 + rT + dyt;
+    int32_t TRx = scx + width/2  - rT;
+    int32_t BLy = scy + height/2 - rB - dyb;
+    int32_t BLx = scx - width/2  + rB;
+    int32_t BRy = scy + height/2 - rB + dyb;
+    int32_t BRx = scx + width/2  - rB;
 
     int32_t minCx = min(TLx, BLx);
     int32_t maxCx = max(TRx, BRx);
@@ -183,51 +177,49 @@ public:
     int32_t maxCy = max(BLy, BRy);
 
     // Center fill
-    FillRect(minCx, minCy, maxCx, maxCy, 1);
+    FillRect(minCx, minCy, maxCx, maxCy, fg);
     // Extend to meet rounded corners
-    FillRect(TRx, TRy, BRx + rB, BRy, 1);
-    FillRect(TLx - rT, TLy, BLx, BLy, 1);
-    FillRect(TLx, TLy - rT, TRx, TRy, 1);
-    FillRect(BLx, BLy, BRx, BRy + rB, 1);
+    FillRect(TRx, TRy, BRx + rB, BRy, fg);
+    FillRect(TLx - rT, TLy, BLx, BLy, fg);
+    FillRect(TLx, TLy - rT, TRx, TRy, fg);
+    FillRect(BLx, BLy, BRx, BRy + rB, fg);
 
     // Slanted edges (top)
     if (cfg->Slope_Top > 0) {
-      FillTri(TLx, TLy-rT, TRx, TRy-rT, 0);
-      FillTri(TRx, TRy-rT, TLx, TLy-rT, 1);
+      FillTri(TLx, TLy-rT, TRx, TRy-rT, COLOR_BG);
+      FillTri(TRx, TRy-rT, TLx, TLy-rT, fg);
     } else if (cfg->Slope_Top < 0) {
-      FillTri(TRx, TRy-rT, TLx, TLy-rT, 0);
-      FillTri(TLx, TLy-rT, TRx, TRy-rT, 1);
+      FillTri(TRx, TRy-rT, TLx, TLy-rT, COLOR_BG);
+      FillTri(TLx, TLy-rT, TRx, TRy-rT, fg);
     }
     // Slanted edges (bottom)
     if (cfg->Slope_Bottom > 0) {
-      FillTri(BRx+rB, BRy+rB, BLx-rB, BLy+rB, 0);
-      FillTri(BLx-rB, BLy+rB, BRx+rB, BRy+rB, 1);
+      FillTri(BRx+rB, BRy+rB, BLx-rB, BLy+rB, COLOR_BG);
+      FillTri(BLx-rB, BLy+rB, BRx+rB, BRy+rB, fg);
     } else if (cfg->Slope_Bottom < 0) {
-      FillTri(BLx-rB, BLy+rB, BRx+rB, BRy+rB, 0);
-      FillTri(BRx+rB, BRy+rB, BLx-rB, BLy+rB, 1);
+      FillTri(BLx-rB, BLy+rB, BRx+rB, BRy+rB, COLOR_BG);
+      FillTri(BRx+rB, BRy+rB, BLx-rB, BLy+rB, fg);
     }
 
     // Rounded corners
     if (rT > 0) {
-      FillCorner(T2_TL, TLx, TLy, rT, rT, 1);
-      FillCorner(T2_TR, TRx, TRy, rT, rT, 1);
+      FillCorner(T2_TL, TLx, TLy, rT, rT, fg);
+      FillCorner(T2_TR, TRx, TRy, rT, rT, fg);
     }
     if (rB > 0) {
-      FillCorner(T2_BL, BLx, BLy, rB, rB, 1);
-      FillCorner(T2_BR, BRx, BRy, rB, rB, 1);
+      FillCorner(T2_BL, BLx, BLy, rB, rB, fg);
+      FillCorner(T2_BR, BRx, BRy, rB, rB, fg);
     }
-
-    t2Spr->pushSprite(centerX + cfg->OffsetX - scx, centerY + cfg->OffsetY - scy);
   }
 
   static void FillRect(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint16_t color) {
     int32_t l = min(x0,x1), r = max(x0,x1);
     int32_t t = min(y0,y1), b = max(y0,y1);
-    if (r-l > 0 && b-t > 0) t2Spr->fillRect(l, t, r-l, b-t, color);
+    if (r-l > 0 && b-t > 0) t2Canvas->fillRect(l, t, r-l, b-t, color);
   }
 
   static void FillTri(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint16_t color) {
-    t2Spr->fillTriangle(x0, y0, x1, y1, x1, y0, color);
+    t2Canvas->fillTriangle(x0, y0, x1, y1, x1, y0, color);
   }
 
   static void FillCorner(T2Corner corner, int16_t x0, int16_t y0, int32_t rx, int32_t ry, uint16_t color) {
@@ -238,44 +230,52 @@ public:
 
     if (corner == T2_TR) {
       for (x=0, y=ry, s=2*ry2+rx2*(1-2*ry); ry2*x<=rx2*y; x++) {
-        t2Spr->drawFastHLine(x0, y0-y, x, color);
+        t2Canvas->drawFastHLine(x0, y0-y, x, color);
         if (s>=0) { s+=fx2*(1-y); y--; } s+=ry2*((4*x)+6);
       }
       for (x=rx, y=0, s=2*rx2+ry2*(1-2*rx); rx2*y<=ry2*x; y++) {
-        t2Spr->drawFastHLine(x0, y0-y, x, color);
+        t2Canvas->drawFastHLine(x0, y0-y, x, color);
         if (s>=0) { s+=fy2*(1-x); x--; } s+=rx2*((4*y)+6);
       }
     } else if (corner == T2_BR) {
       for (x=0, y=ry, s=2*ry2+rx2*(1-2*ry); ry2*x<=rx2*y; x++) {
-        t2Spr->drawFastHLine(x0, y0+y-1, x, color);
+        t2Canvas->drawFastHLine(x0, y0+y-1, x, color);
         if (s>=0) { s+=fx2*(1-y); y--; } s+=ry2*((4*x)+6);
       }
       for (x=rx, y=0, s=2*rx2+ry2*(1-2*rx); rx2*y<=ry2*x; y++) {
-        t2Spr->drawFastHLine(x0, y0+y-1, x, color);
+        t2Canvas->drawFastHLine(x0, y0+y-1, x, color);
         if (s>=0) { s+=fy2*(1-x); x--; } s+=rx2*((4*y)+6);
       }
     } else if (corner == T2_TL) {
       for (x=0, y=ry, s=2*ry2+rx2*(1-2*ry); ry2*x<=rx2*y; x++) {
-        t2Spr->drawFastHLine(x0-x, y0-y, x, color);
+        t2Canvas->drawFastHLine(x0-x, y0-y, x, color);
         if (s>=0) { s+=fx2*(1-y); y--; } s+=ry2*((4*x)+6);
       }
       for (x=rx, y=0, s=2*rx2+ry2*(1-2*rx); rx2*y<=ry2*x; y++) {
-        t2Spr->drawFastHLine(x0-x, y0-y, x, color);
+        t2Canvas->drawFastHLine(x0-x, y0-y, x, color);
         if (s>=0) { s+=fy2*(1-x); x--; } s+=rx2*((4*y)+6);
       }
     } else if (corner == T2_BL) {
       for (x=0, y=ry, s=2*ry2+rx2*(1-2*ry); ry2*x<=rx2*y; x++) {
-        t2Spr->drawFastHLine(x0-x, y0+y-1, x, color);
+        t2Canvas->drawFastHLine(x0-x, y0+y-1, x, color);
         if (s>=0) { s+=fx2*(1-y); y--; } s+=ry2*((4*x)+6);
       }
       for (x=rx, y=0, s=2*rx2+ry2*(1-2*rx); rx2*y<=ry2*x; y++) {
-        t2Spr->drawFastHLine(x0-x, y0+y, x, color);
+        t2Canvas->drawFastHLine(x0-x, y0+y, x, color);
         if (s>=0) { s+=fy2*(1-x); x--; } s+=rx2*((4*y)+6);
       }
     }
   }
 };
-TFT_eSprite* T2EyeDrawer::t2Spr = nullptr;
+TFT_eSprite* T2EyeDrawer::t2Canvas = nullptr;
+
+// Helper functions for memory management between themes
+TFT_eSprite* t2CanvasPtr() { return T2EyeDrawer::t2Canvas; }
+void t2CanvasSetNull() {
+  T2EyeDrawer::t2Canvas = nullptr;
+  extern bool t2_initialized;
+  t2_initialized = false;
+}
 
 // ═══════════════════════════════════════════════════════════
 // T2 EYE TRANSITION ENGINE (interpolates between presets)
@@ -291,7 +291,8 @@ struct T2Transformation {
 class T2EyeTransition {
 public:
   T2EyeConfig *Origin;
-  T2EyeConfig Destin;
+  T2EyeConfig Source = T2P_Normal;
+  T2EyeConfig Destin = T2P_Normal;
   T2Anim Animation;
   T2EyeTransition() : Origin(nullptr), Animation(500) {}
 
@@ -302,14 +303,14 @@ public:
   }
   void Apply(float t) {
     if (!Origin) return;
-    Origin->OffsetX = Origin->OffsetX*(1.0-t) + Destin.OffsetX*t;
-    Origin->OffsetY = Origin->OffsetY*(1.0-t) + Destin.OffsetY*t;
-    Origin->Height  = Origin->Height*(1.0-t)  + Destin.Height*t;
-    Origin->Width   = Origin->Width*(1.0-t)   + Destin.Width*t;
-    Origin->Slope_Top = Origin->Slope_Top*(1.0-t) + Destin.Slope_Top*t;
-    Origin->Slope_Bottom = Origin->Slope_Bottom*(1.0-t) + Destin.Slope_Bottom*t;
-    Origin->Radius_Top = Origin->Radius_Top*(1.0-t) + Destin.Radius_Top*t;
-    Origin->Radius_Bottom = Origin->Radius_Bottom*(1.0-t) + Destin.Radius_Bottom*t;
+    Origin->OffsetX = Source.OffsetX*(1.0-t) + Destin.OffsetX*t;
+    Origin->OffsetY = Source.OffsetY*(1.0-t) + Destin.OffsetY*t;
+    Origin->Height  = Source.Height*(1.0-t)  + Destin.Height*t;
+    Origin->Width   = Source.Width*(1.0-t)   + Destin.Width*t;
+    Origin->Slope_Top = Source.Slope_Top*(1.0-t) + Destin.Slope_Top*t;
+    Origin->Slope_Bottom = Source.Slope_Bottom*(1.0-t) + Destin.Slope_Bottom*t;
+    Origin->Radius_Top = Source.Radius_Top*(1.0-t) + Destin.Radius_Top*t;
+    Origin->Radius_Bottom = Source.Radius_Bottom*(1.0-t) + Destin.Radius_Bottom*t;
   }
 };
 
@@ -391,9 +392,12 @@ public:
   T2EyeBlink() : Input(nullptr), Animation(180) {}
 
   void Update() {
-    float t = Animation.GetValue();
-    if (Animation.GetElapsed() > Animation.Interval) t = 0.0;
-    Apply(t*t);
+    unsigned long elapsed = Animation.GetElapsed();
+    // Close for 40ms, hold 100ms, then reopen over 40ms.
+    float t = elapsed < 40 ? elapsed / 40.0f :
+              elapsed < 140 ? 1.0f :
+              elapsed < 180 ? (180 - elapsed) / 40.0f : 0.0f;
+    Apply(t);
   }
   void Apply(float t) {
     if (!Input) return;
@@ -466,10 +470,14 @@ public:
     Config.Slope_Bottom = IsMirrored ? preset.Slope_Bottom : -preset.Slope_Bottom;
     Config.Radius_Top = preset.Radius_Top;
     Config.Radius_Bottom = preset.Radius_Bottom;
+    Transition.Source = Config;
+    Transition.Destin = Config;
     Transition.Animation.Restart();
   }
 
   void TransitionTo(const T2EyeConfig &preset) {
+    Transition.Update();
+    Transition.Source = Config;
     Transition.Destin.OffsetX = IsMirrored ? -preset.OffsetX : preset.OffsetX;
     Transition.Destin.OffsetY = -preset.OffsetY;
     Transition.Destin.Height  = preset.Height;
@@ -486,11 +494,11 @@ public:
 // T2 FACE — The whole face with two eyes + behavior
 // ═══════════════════════════════════════════════════════════
 
-// Layout for 320×240 screen (eyes centered in content area below status bar)
-#define T2_SCREEN_CX   160
-#define T2_SCREEN_CY   130  // Slightly above center to leave room for status
-#define T2_EYE_SIZE    100
-#define T2_EYE_GAP     10   // Inter-eye distance
+// Layout: Resolution-aware (scales from 320×240 reference)
+#define T2_SCREEN_CX   (SCREEN_W / 2)
+#define T2_SCREEN_CY   (SCREEN_H / 2 + SCALE_Y(10))
+#define T2_EYE_SIZE    40
+#define T2_EYE_GAP     10
 
 T2Eye t2_leftEye;
 T2Eye t2_rightEye;
@@ -663,20 +671,7 @@ void t2_goTo_Squint() {
 // PUBLIC API — called from pages.h / CompanionOS_Main.ino
 // ═══════════════════════════════════════════════════════════
 
-void t2_initEyes() {
-  t2_leftEye.IsMirrored = true;
-  t2_leftEye.ChainOperators();
-  t2_rightEye.ChainOperators();
-  t2_leftEye.ApplyPreset(T2P_Normal);
-  t2_rightEye.ApplyPreset(T2P_Normal);
-  t2_blinkTimer.Start();
-  t2_lookTimer.Start();
-  t2_behaviorTimer.Start();
-  t2_initialized = true;
-}
-
-void t2_setEmotion(Emotion emo) {
-  currentEmotion = emo;
+static void t2_applyEmotion(Emotion emo) {
   switch(emo) {
     case EMO_HAPPY:     t2_goTo_Happy(); break;
     case EMO_SAD:       t2_goTo_Sad(); break;
@@ -687,13 +682,47 @@ void t2_setEmotion(Emotion emo) {
     case EMO_SURPRISED: t2_goTo_Awe(); break;
     default:            t2_goTo_Normal(); break;
   }
+}
+
+void t2_initEyes() {
+  extern void releaseClassicEyeSprites();
+  releaseClassicEyeSprites();
+  
+  // Free Theme 3 sprite if it exists to prevent RAM fragmentation/OOM crashes
+  extern TFT_eSprite* t3CanvasPtr();
+  TFT_eSprite* t3c = t3CanvasPtr();
+  if (t3c != nullptr) {
+    t3c->deleteSprite();
+    delete t3c;
+    extern void t3CanvasSetNull();
+    t3CanvasSetNull();
+  }
+
+  t2_leftEye.IsMirrored = true;
+  t2_leftEye.ChainOperators();
+  t2_rightEye.ChainOperators();
+  t2_leftEye.ApplyPreset(T2P_Normal);
+  t2_rightEye.ApplyPreset(T2P_Normal);
+  t2_blinkTimer.Start();
+  t2_lookTimer.Start();
+  t2_behaviorTimer.Start();
+  t2_initialized = true;
+  // Reentry restores the requested face without renewing its manual lease.
+  t2_applyEmotion(currentEmotion);
+}
+
+void t2_setEmotion(Emotion emo) {
+  lastManualEmotionTime = millis();
+  currentEmotion = emo;
+  t2_applyEmotion(emo);
   if (currentState == STATE_EYES) {
-    tft.fillRect(0, 16, SCREEN_W, SCREEN_H - 16, COLOR_BG);
+    // handled by double buffering in update/draw
   }
 }
 
 // ── Cycle all 18 expressions for taps ──
 void t2_nextExpression() {
+  lastManualEmotionTime = millis();
   t2_expressionIdx = (t2_expressionIdx + 1) % 18;
   switch (t2_expressionIdx) {
     case 0: t2_goTo_Normal(); break;
@@ -716,25 +745,41 @@ void t2_nextExpression() {
     case 17: t2_goTo_Awe(); break;
   }
   if (currentState == STATE_EYES) {
-    tft.fillRect(0, 16, SCREEN_W, SCREEN_H - 16, COLOR_BG);
+    // handled by double buffering in update/draw
   }
 }
 
 void t2_drawEyesPage() {
   if (!t2_initialized) t2_initEyes();
-  tft.fillScreen(COLOR_BG);
+  setThoughtSpriteCompositing(true);
+  
+  if (!prepareEyeCanvas(T2EyeDrawer::t2Canvas, SCREEN_W, SCREEN_H - UI_HEADER_H - UI_FOOTER_H)) {
+    setThoughtSpriteCompositing(false);
+    drawEyes(); // Low-memory fallback retains a visible face and thought lifetime.
+    tickThoughtScheduler(&tft, false);
+    return;
+  }
+  setThoughtSpriteCompositing(true);
+  
+  T2EyeDrawer::t2Canvas->fillSprite(COLOR_BG);
 
   t2_leftEye.CenterX  = T2_SCREEN_CX - T2_EYE_SIZE/2 - T2_EYE_GAP;
-  t2_leftEye.CenterY  = T2_SCREEN_CY;
+  t2_leftEye.CenterY  = UI_HEADER_H + (SCREEN_H - UI_HEADER_H - UI_FOOTER_H) / 2 + 6;
   t2_rightEye.CenterX = T2_SCREEN_CX + T2_EYE_SIZE/2 + T2_EYE_GAP;
-  t2_rightEye.CenterY = T2_SCREEN_CY;
+  t2_rightEye.CenterY = t2_leftEye.CenterY;
 
   t2_leftEye.Draw();
   t2_rightEye.Draw();
+
+  tickThoughtScheduler(T2EyeDrawer::t2Canvas, true);
+
+  T2EyeDrawer::t2Canvas->pushSprite(0, UI_HEADER_H, 0, 0, SCREEN_W,
+                                 eyeRenderBottom() - UI_HEADER_H);
 }
 
 void t2_updateEyes() {
   if (currentState != STATE_EYES) return;
+  if (customEyeActive && customEyeReady) return; // Pause animations for Memories image
   if (!t2_initialized) t2_initEyes();
 
   // Random look
@@ -755,13 +800,7 @@ void t2_updateEyes() {
   // Clear and redraw (now handled by double buffering)
   // tft.fillRect(0, 16, SCREEN_W, SCREEN_H - 16, COLOR_BG);
 
-  t2_leftEye.CenterX  = T2_SCREEN_CX - T2_EYE_SIZE/2 - T2_EYE_GAP;
-  t2_leftEye.CenterY  = T2_SCREEN_CY;
-  t2_rightEye.CenterX = T2_SCREEN_CX + T2_EYE_SIZE/2 + T2_EYE_GAP;
-  t2_rightEye.CenterY = T2_SCREEN_CY;
-
-  t2_leftEye.Draw();
-  t2_rightEye.Draw();
+  t2_drawEyesPage();
 }
 
 #endif

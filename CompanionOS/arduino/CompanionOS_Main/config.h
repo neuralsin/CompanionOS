@@ -1,57 +1,138 @@
+// ═══════════════════════════════════════════════════════════
+// COMPANION OS v7.0 — CONFIGURATION (Smart Hardware Router)
+// Auto-detects ESP32 vs ESP8266 and includes correct config.
+// ═══════════════════════════════════════════════════════════
 #ifndef CONFIG_H
 #define CONFIG_H
 
+// [LEGACY - v6.0] Original config.h contents:
+// Hardcoded for ESP8266 only with TOUCH_LEFT/TOUCH_RIGHT,
+// 320x240 ILI9341, no platform detection.
+// Now replaced with auto-routing below.
+
 // ═══════════════════════════════════════════════════════════
-// COMPANION OS - CONFIGURATION
+// HARDWARE AUTO-DETECTION ROUTER
 // ═══════════════════════════════════════════════════════════
 
-// The WiFi Manager handles credentials dynamically!
-// If it fails to connect, it will create an Access Point called "CompanionOS-Setup".
-// Connect to that AP to configure your WiFi network securely, eliminating placeholders.
+#ifdef ESP32
+  #include "config_esp32.h"
+  #define PLATFORM_NAME "ESP32"
+  #define HAS_TOUCH false
+  #define HAS_BLUETOOTH false // Set true only if using Classic BT SPP (exceeds DRAM if WiFi+BLE are also linked)
+  #define DISPLAY_DRIVER_ST7735R true
+#elif defined(ESP8266)
+  #include "config_esp8266.h"
+  #define PLATFORM_NAME "ESP8266"
+  #define HAS_TOUCH true
+  #define HAS_BLUETOOTH false
+  #define DISPLAY_DRIVER_ILI9341 true
+#else
+  #error "Unknown hardware platform. Define ESP32 or ESP8266."
+#endif
 
-// Hardcoded WiFi Credentials
-const char* WIFI_SSID = "stuart";
-const char* WIFI_PASS = "12345678";
+// ═══════════════════════════════════════════════════════════
+// SHARED CONFIG — Applies to both platforms
+// ═══════════════════════════════════════════════════════════
+
+// WiFi Credentials
+const char* WIFI_SSID = "Stuart";
+const char* WIFI_PASS = "123456789";
+
+// Priority 2 WiFi Network
+const char* WIFI_SSID2 = "P202_4G";
+const char* WIFI_PREFERRED_SSID = "P202_4G";
+const char* WIFI_PASS2 = "P202@Extreme";
+#define WIFI_SSID2_TIMEOUT_SEC 15 // Prolonged wait time for Priority 2 network (15s)
 
 // Network Settings
-// Broadcast UDP will be used initially, or you can supply the PC IP directly if stable.
-const char* DEFAULT_PC_IP = "192.168.1.100";  
+const char* DEFAULT_PC_IP = "192.168.1.100";
 const int UDP_PORT_RX = 8888;
 const int UDP_PORT_TX = 8889;
 
-// Pin Definitions (match your wiring)
-#define TOUCH_CS 15      // D8 - Touch screen chip select
-#define TOUCH_LEFT 0     // D3 - Left capacitive sensor
-#define TOUCH_RIGHT 2    // D4 - Right capacitive sensor
-#define MIC_PIN A0       // A0 - Microphone
+// Button Active Logic Defaults (if not specified by platform config)
+#ifndef BTN_ACTIVE_LEVEL
+#define BTN_ACTIVE_LEVEL      HIGH
+#endif
+#ifndef BTN_UNPRESSED_LEVEL
+#define BTN_UNPRESSED_LEVEL   LOW
+#endif
+#ifndef BTN_PIN_MODE
+#define BTN_PIN_MODE          INPUT
+#endif
+
+// NTP
+#define NTP_SERVER       "pool.ntp.org"
+#define NTP_OFFSET       19800   // IST UTC+5:30
 
 // Feature Toggles
 #define ENABLE_EYES true
 #define ENABLE_SPOTIFY true
-#define ENABLE_DIRECT_SPOTIFY true
 #define ENABLE_GALLERY true
 #define ENABLE_MIC true
 
-// Direct Spotify Credentials (standalone mode - no PC companion needed)
-const char* SPOTIFY_CLIENT_ID = "450a2e6ab1ed4ce4ac9738f654814240";
-const char* SPOTIFY_CLIENT_SECRET = "78200536e7804c8ca427102a6ba2138f";
-const char* SPOTIFY_REFRESH_TOKEN = "AQB8r90xaOmCyjq7yMJhe7ir6KYXGPGCGsh8W3gqo87ijaDZIbline98_67zEJQnf6DOiLCEhKBZszkmORPUSleKB95o1QLfME-o-6DjBJkx9zFRm39nyMG8Hia2ZPQY5EA";
+// ═══════════════════════════════════════════════════════════
+// STANDALONE DIRECT APIS (Used when host device is absent)
+// ═══════════════════════════════════════════════════════════
+
+// Spotify Web API Credentials
+#if __has_include("spotify_credentials.local.h")
+#include "spotify_credentials.local.h"
+#else
+#define SPOTIFY_CLIENT_ID ""
+#define SPOTIFY_CLIENT_SECRET ""
+#define DEFAULT_SPOTIFY_REFRESH_TOKEN ""
+#define DEFAULT_SPOTIFY_ACCESS_TOKEN ""
+#endif
+#define SPOTIFY_POLL_INTERVAL_ACTIVE_MS   3500UL  // 3.5s when on Spotify page / playing
+#define SPOTIFY_POLL_INTERVAL_IDLE_MS     10000UL // 10s when idle on another page
+
+// Standalone Weather (Open-Meteo API - No key required)
+#define WEATHER_CITY_NAME           "Delhi"
+#define WEATHER_LATITUDE            28.6139
+#define WEATHER_LONGITUDE           77.2090
+#define WEATHER_POLL_INTERVAL_MS    (15UL * 60UL * 1000UL) // 15 mins
+
+// Host Device Silence Threshold (determines when host is disconnected)
+#define HOST_TIMEOUT_MS             20000UL // 20 seconds silence -> host absent
 
 // EEPROM addresses
-#define EEPROM_EXOTIC_ADDR 0    // 1 byte: legacy
-#define EEPROM_THEME_ADDR 1     // 1 byte: unused (themes removed)
-#define EEPROM_ACTIVE_THEME_ADDR 2  // 1 byte: 0 = Theme 1, 1 = Theme 2
-#define EEPROM_SIZE 8           // Total EEPROM bytes used
+#define EEPROM_EXOTIC_ADDR 0        // 1 byte: legacy
+#define EEPROM_THEME_ADDR 1         // 1 byte: unused (themes removed)
+#define EEPROM_ACTIVE_THEME_ADDR 2  // 1 byte: 0 = Theme 1, 1 = Theme 2, 2 = Theme 3 (RoboEyes)
+#define EEPROM_WIFI_MAGIC_ADDR 10   // 2 bytes: 0xC0 0x55
+#define EEPROM_WIFI_SSID_ADDR  16   // 32 bytes (null terminated)
+#define EEPROM_WIFI_PASS_ADDR  48   // 64 bytes (null terminated)
+#define EEPROM_SIZE 512             // Total EEPROM bytes used (for up to 4 multi-wifi profiles)
 
-// Display constants
-#define SCREEN_W 320
-#define SCREEN_H 240
+// ═══════════════════════════════════════════════════════════
+// V7 COLOR SYSTEM — Layered Design Tokens
+// ═══════════════════════════════════════════════════════════
 
-// Colors
-#define COLOR_BG 0x0000      // Black
-#define COLOR_EYE 0x07FF     // Cyan
-#define COLOR_PUPIL 0x0000   // Black  
-#define COLOR_HIGHLIGHT 0xFFFF // White
-#define COLOR_ACCENT 0x051D  // Deep Blue
+// Primary palette (dark theme)
+#define CLR_BG         0x0841   // near-black with blue tint
+#define CLR_SURFACE    0x1082   // card/panel background
+#define CLR_SURFACE_2  0x18A3   // elevated card
+#define CLR_BORDER     0x2104   // subtle borders
+#define CLR_PRIMARY    0x05FF   // cyan accent (brand)
+#define CLR_SECONDARY  0xF800   // red (danger/Dr.Hack)
+#define CLR_DANGER     0xF800   // red (danger alert)
+#define CLR_SUCCESS    0x07E0   // green
+#define CLR_WARNING    0xFFE0   // yellow
+#define CLR_TEXT_HI    0xFFFF   // white (primary text)
+#define CLR_TEXT_MED   0xC618   // light gray (secondary)
+#define CLR_TEXT_LO    0x8410   // dark gray (hint text)
+
+// Accent gradient presets (for cards)
+#define CLR_GRAD_BLUE_TOP    0x041F  // deep blue
+#define CLR_GRAD_BLUE_BOT    0x001F  // midnight blue
+#define CLR_GRAD_PURPLE_TOP  0x600F
+#define CLR_GRAD_PURPLE_BOT  0x300A
+
+// Legacy color aliases (backward compatibility with v6 code)
+#define COLOR_BG        CLR_BG
+#define COLOR_EYE       CLR_PRIMARY
+#define COLOR_PUPIL     0x0000   // Black
+#define COLOR_HIGHLIGHT CLR_TEXT_HI
+#define COLOR_ACCENT    0x051D   // Deep Blue (preserved from v6)
 
 #endif

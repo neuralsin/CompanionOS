@@ -1,4 +1,9 @@
 video.mp4
 eyes.mp4
 frames
-
+RfClown/
+*.local.h
+*.pyc
+__pycache__/
+.cache
+.env

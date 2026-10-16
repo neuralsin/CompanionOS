@@ -12,14 +12,13 @@
 """
 
 import os
-import sys
+import ntpath
 import json
 import time
 import ctypes
 import ctypes.wintypes
 import psutil
 import requests
-from datetime import datetime
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -59,7 +58,29 @@ class SteamTracker:
         'Palworld-Win64-Shipping.exe': 'Palworld',
         'starfield.exe': 'Starfield',
         'sekiro.exe': 'Sekiro',
+        'League of Legends.exe': 'League of Legends',
+        'LeagueClient.exe': 'League of Legends',
+        'RobloxPlayerBeta.exe': 'Roblox',
+        'TslGame.exe': 'PUBG: BATTLEGROUNDS',
+        'cod.exe': 'Call of Duty',
+        'BlackOpsColdWar.exe': 'Call of Duty',
+        'ModernWarfare.exe': 'Call of Duty',
+        'eurotrucks2.exe': 'Euro Truck Simulator 2',
+        'FarmingSimulator2022Game.exe': 'Farming Simulator 22',
+        'rdr2.exe': 'Red Dead Redemption 2',
+        'DOOMEternalx64vk.exe': 'DOOM Eternal',
+        'Fallout4.exe': 'Fallout 4',
+        'SkyrimSE.exe': 'Skyrim',
+        'CivilizationVI.exe': 'Civilization VI',
+        'deadbydaylight-win64-shipping.exe': 'Dead by Daylight',
+        'warframe.x64.exe': 'Warframe',
+        'RustClient.exe': 'Rust',
+        'aces.exe': 'War Thunder',
+        'ForzaHorizon5.exe': 'Forza Horizon 5',
+        'HaloInfinite.exe': 'Halo Infinite',
+        'NoMansSky.exe': 'No Man\'s Sky',
     }
+    KNOWN_GAMES_LOWER = {name.lower(): title for name, title in KNOWN_GAMES.items()}
 
     # GPU-rendering DLLs (if a process loaded these, it's using the GPU)
     GPU_DLLS = {
@@ -76,11 +97,12 @@ class SteamTracker:
         'dwm.exe', 'explorer.exe', 'shellexperiencehost.exe',
         'searchhost.exe', 'startmenuexperiencehost.exe',
         'systemsettings.exe', 'textinputhost.exe', 'lockapp.exe',
-        'widgets.exe', 'windowsterminal.exe', 'wt.exe',
+        'widgets.exe', 'windowsterminal.exe', 'wt.exe', 'applicationframehost.exe',
+        'shellhost.exe', 'crossdeviceresume.exe',
         # Dev tools
         'code.exe', 'devenv.exe', 'rider64.exe', 'clion64.exe',
         'idea64.exe', 'pycharm64.exe', 'androidstudio64.exe',
-        'cursor.exe',
+        'cursor.exe', 'antigravity ide.exe', 'antigravity.exe',
         # Communication
         'discord.exe', 'slack.exe', 'teams.exe', 'zoom.exe',
         'telegram.exe', 'whatsapp.exe', 'signal.exe',
@@ -112,7 +134,8 @@ class SteamTracker:
         'wallpaperengine.exe', 'lively.exe', 'rainmeter.exe',
         'powertoys.exe', 'windowspackagemanagerserver.exe',
         'msedgewebview2.exe', 'cefsharp.browsersubprocess.exe',
-        'crashhandler64.exe', 'crashreporter.exe',
+        'crashhandler64.exe', 'crashreporter.exe', 'ds4windows.exe',
+        'nahimicsvc64.exe', 'nahimicsvc32.exe', 'cloudflare.exe', 'cloudflare warp.exe',
     }
 
     def __init__(self, steam_api_key='', steam_id=''):
@@ -219,16 +242,15 @@ class SteamTracker:
             kernel32.OpenProcess.restype = ctypes.wintypes.HANDLE
             kernel32.CloseHandle.argtypes = [ctypes.wintypes.HANDLE]
             kernel32.CloseHandle.restype = ctypes.wintypes.BOOL
-            
+            psapi.EnumProcessModulesEx.restype = ctypes.wintypes.BOOL
             psapi.EnumProcessModulesEx.argtypes = [
-                ctypes.wintypes.HANDLE, ctypes.POINTER(ctypes.wintypes.HMODULE),
+                ctypes.wintypes.HANDLE, ctypes.POINTER(ctypes.c_void_p),
                 ctypes.wintypes.DWORD, ctypes.POINTER(ctypes.wintypes.DWORD),
                 ctypes.wintypes.DWORD
             ]
-            psapi.EnumProcessModulesEx.restype = ctypes.wintypes.BOOL
             
             psapi.GetModuleBaseNameA.argtypes = [
-                ctypes.wintypes.HANDLE, ctypes.wintypes.HMODULE,
+                ctypes.wintypes.HANDLE, ctypes.c_void_p,
                 ctypes.c_char_p, ctypes.wintypes.DWORD
             ]
             psapi.GetModuleBaseNameA.restype = ctypes.wintypes.DWORD
@@ -244,7 +266,7 @@ class SteamTracker:
                 cbNeeded = ctypes.c_ulong()
 
                 success = psapi.EnumProcessModulesEx(
-                    hProcess, ctypes.byref(hMods),
+                    hProcess, hMods,
                     ctypes.sizeof(hMods), ctypes.byref(cbNeeded),
                     LIST_MODULES_ALL
                 )
@@ -255,7 +277,7 @@ class SteamTracker:
                 for i in range(min(num_mods, 1024)):
                     modname = ctypes.create_string_buffer(260)
                     psapi.GetModuleBaseNameA(
-                        hProcess, hMods[i], modname, 260
+                        hProcess, ctypes.c_void_p(hMods[i]), modname, 260
                     )
                     if modname.value.lower() in self.GPU_DLLS:
                         return True
@@ -265,38 +287,59 @@ class SteamTracker:
             pass
         return False
 
+    @staticmethod
+    def _game_install_title(exe_path):
+        """Recognize complete game-folder components, independent of DLL access."""
+        if not exe_path:
+            return None
+        parts = ntpath.normpath(exe_path).split('\\')
+        lowered = [part.lower() for part in parts]
+        roots = [('steamapps', 'common'), ('epic games',),
+                 ('xboxgames',), ('gog galaxy', 'games')]
+        for root in roots:
+            for index in range(len(parts) - len(root) - 1):
+                if tuple(lowered[index:index + len(root)]) == root:
+                    folder = parts[index + len(root)]
+                    return folder.replace('_', ' ').title()
+        return None
+
+    @staticmethod
+    def _is_minecraft_java(proc, exe_path):
+        """Use local evidence only; command lines may contain private tokens."""
+        def minecraft_path(value):
+            return any(part.lower() in {'.minecraft', 'minecraft'}
+                       for part in ntpath.normpath(value).split('\\'))
+
+        if minecraft_path(exe_path):
+            return True
+        try:
+            return any(
+                arg.lower().startswith('net.minecraft.') or
+                arg.lower() in {'net.fabricmc.loader.impl.launch.knot.knotclient',
+                                'net.fabricmc.loader.launch.knot.knotclient'} or
+                minecraft_path(arg)
+                for arg in proc.cmdline()
+            )
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            return False
+
     def _title_from_exe_path(self, exe_path):
         """Extract a clean game title from the executable path."""
         if not exe_path:
             return None
-        exe_lower = exe_path.lower()
-
-        # Steam
-        if 'steamapps\\common\\' in exe_lower:
-            folder = exe_path.split('steamapps\\common\\')[-1].split('\\')[0]
-            return folder.replace('_', ' ').title()
-        # Epic
-        if 'epic games\\' in exe_lower:
-            folder = exe_path.split('Epic Games\\')[-1].split('\\')[0]
-            return folder.replace('_', ' ').title()
-        # Xbox Game Pass
-        if 'xboxgames\\' in exe_lower:
-            folder = exe_path.split('XboxGames\\')[-1].split('\\')[0]
-            return folder.replace('_', ' ').title()
-        # GOG
-        if 'gog galaxy\\games\\' in exe_lower:
-            folder = exe_path.split('GOG Galaxy\\Games\\')[-1].split('\\')[0]
-            return folder.replace('_', ' ').title()
+        installed_title = self._game_install_title(exe_path)
+        if installed_title:
+            return installed_title
         # Generic: Program Files game folder
-        if 'program files' in exe_lower:
-            parts = exe_path.split('\\')
+        parts = ntpath.normpath(exe_path).split('\\')
+        if any(part.lower() in {'program files', 'program files (x86)'} for part in parts):
             # Find the folder after "Program Files" or "Program Files (x86)"
             for i, p in enumerate(parts):
-                if 'program files' in p.lower() and i + 1 < len(parts):
+                if p.lower() in {'program files', 'program files (x86)'} and i + 2 < len(parts):
                     return parts[i + 1].replace('_', ' ').title()
 
         # Fallback: use the exe name without extension
-        basename = os.path.splitext(os.path.basename(exe_path))[0]
+        basename = ntpath.splitext(ntpath.basename(exe_path))[0]
         # Clean up common suffixes
         for suffix in ['-Win64-Shipping', '-Win32-Shipping', 'Client',
                        'Launcher', '_BE', '-EAC', '_dx11', '_dx12']:
@@ -305,15 +348,14 @@ class SteamTracker:
 
     def detect_local_game(self):
         """
-        Detect running game using NVIDIA-style GPU DLL scanning.
+        Detect games from known names, trusted paths, or GPU module evidence.
         
         Strategy (in priority order):
-        1. Known games list (instant match by exe name)
-        2. GPU DLL scan: check every process for loaded d3d11/d3d12/vulkan
-           DLLs, filter out non-game GPU apps (browsers, editors, etc.)
-        3. Directory heuristics (Steam/Epic/Xbox/GOG paths)
+        Prefer an evidenced foreground game, then known names, trusted install
+        paths, and GPU DLL candidates. Java requires Minecraft-specific evidence.
         """
-        gpu_candidates = []
+        candidates = []
+        foreground_pid = self._foreground_process_id()
 
         for proc in psutil.process_iter(['pid', 'name', 'exe']):
             try:
@@ -326,42 +368,91 @@ class SteamTracker:
                 if not name or pid < 100:
                     continue
 
-                # 1. Known games list (instant)
-                if name in self.KNOWN_GAMES:
-                    title = self.KNOWN_GAMES[name]
+                # Known names do not need module enumeration.
+                if name_lower in self.KNOWN_GAMES_LOWER:
+                    title = self.KNOWN_GAMES_LOWER[name_lower]
+                    if name_lower == 'javaw.exe' and not self._is_minecraft_java(proc, exe):
+                        continue
                     if title:
-                        return title
+                        candidates.append((0, pid, title))
                     continue  # Skip launchers (None entries)
 
                 # Skip known non-game GPU apps
                 if name_lower in self.NON_GAME_GPU_APPS:
                     continue
 
-                # 2. GPU DLL scan — the NVIDIA approach
+                # A trusted installation path also works for protected processes
+                # whose modules cannot be enumerated.
+                installed_title = self._game_install_title(exe)
+                if installed_title:
+                    candidates.append((1, pid, installed_title))
+                    continue
+
+                # GPU rendering is the remaining evidence-based fallback.
                 if self._process_has_gpu_dlls(pid):
                     # This process is rendering with DirectX/Vulkan
-                    title = self._title_from_exe_path(exe)
+                    title = self._title_from_exe_path(exe or name)
                     if title:
-                        gpu_candidates.append((title, exe))
+                        candidates.append((2, pid, title))
 
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
 
-        # Return the best GPU candidate (prefer ones from game directories)
-        if gpu_candidates:
-            # Prioritize processes from known game directories
-            for title, exe in gpu_candidates:
-                exe_lower = (exe or '').lower()
-                if any(marker in exe_lower for marker in [
-                    'steamapps', 'epic games', 'xboxgames',
-                    'gog galaxy', 'riot games', 'ubisoft'
-                ]):
-                    return title[:23]
-
-            # Otherwise return the first GPU-using non-blocklisted process
-            return gpu_candidates[0][0][:23]
+        if candidates:
+            # Strong game evidence outranks GPU-only applications. Within each
+            # group, prefer the foreground candidate; ties retain process order.
+            priority, pid, title = min(candidates, key=lambda item: (
+                item[0] >= 2, item[1] != foreground_pid, item[0]))
+            return title if priority == 0 else title[:23]
 
         return ''
+
+    @staticmethod
+    def _foreground_process_id():
+        if os.name != 'nt':
+            return 0
+        try:
+            user32 = ctypes.windll.user32
+            user32.GetForegroundWindow.restype = ctypes.wintypes.HWND
+            user32.GetWindowThreadProcessId.argtypes = [
+                ctypes.wintypes.HWND, ctypes.POINTER(ctypes.wintypes.DWORD)]
+            user32.GetWindowThreadProcessId.restype = ctypes.wintypes.DWORD
+            hwnd = user32.GetForegroundWindow()
+            pid = ctypes.wintypes.DWORD()
+            if hwnd:
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            return pid.value
+        except Exception:
+            return 0
+
+    def _foreground_window_title(self):
+        """Read the active title; a title alone is not evidence of a game."""
+        if os.name != 'nt':
+            return ''
+        try:
+            hwnd = ctypes.windll.user32.GetForegroundWindow()
+            if not hwnd:
+                return ''
+            length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+            if length <= 0 or length > 256:
+                return ''
+            buffer = ctypes.create_unicode_buffer(length + 1)
+            ctypes.windll.user32.GetWindowTextW(hwnd, buffer, length + 1)
+            title = buffer.value.strip()
+            if not title:
+                return ''
+
+            lowered = title.lower()
+            blocked = [
+                'chrome', 'edge', 'firefox', 'visual studio code', 'cursor',
+                'discord', 'spotify', 'steam', 'settings', 'terminal',
+                'file explorer', 'windows powershell', 'antigravity'
+            ]
+            if any(word in lowered for word in blocked):
+                return ''
+            return title
+        except Exception:
+            return ''
 
     def get_session_time(self):
         """Get formatted session duration."""
@@ -375,7 +466,26 @@ class SteamTracker:
         return f'{minutes:02d}:{elapsed % 60:02d}'
 
     def get_game_cover_url(self, title):
-        """Fetch capsule image url from Steam Store API by title. No token required."""
+        """
+        V7 Cover Art Waterfall:
+        1. Steam Store Search (free, no key)
+        2. IGDB via Twitch OAuth (needs client_id + client_secret)
+        3. None (ESP shows placeholder gradient)
+        """
+        # Tier 1: Steam Store Search (free, no API key)
+        url = self._steam_cover_search(title)
+        if url:
+            return url
+
+        # Tier 2: IGDB via Twitch OAuth
+        url = self._igdb_cover_search(title)
+        if url:
+            return url
+
+        return None
+
+    def _steam_cover_search(self, title):
+        """Tier 1: Steam Store search (no key required)."""
         try:
             url = "https://store.steampowered.com/api/storesearch/"
             params = {"term": title, "l": "english", "cc": "US"}
@@ -385,18 +495,86 @@ class SteamTracker:
                 if data.get('total', 0) > 0 and 'items' in data:
                     img_url = data['items'][0].get('tiny_image')
                     if img_url:
-                        # Convert to https if it's protocol relative or http
                         if img_url.startswith('//'):
                             return 'https:' + img_url
                         return img_url
         except Exception as e:
-            print(f"Error fetching game cover for {title}: {e}")
+            print(f"Steam cover search error for '{title}': {e}")
         return None
+
+    def _igdb_cover_search(self, title):
+        """
+        Tier 2: IGDB cover art via Twitch OAuth.
+        Requires TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET env vars.
+        GAP-02: These are prompted during install.py setup flow.
+        """
+        client_id = os.environ.get('TWITCH_CLIENT_ID', '')
+        client_secret = os.environ.get('TWITCH_CLIENT_SECRET', '')
+        if not client_id or not client_secret:
+            return None
+
+        try:
+            # Get Twitch OAuth token (cached for 60 days)
+            if not hasattr(self, '_igdb_token') or not self._igdb_token:
+                token_resp = requests.post(
+                    'https://id.twitch.tv/oauth2/token',
+                    params={
+                        'client_id': client_id,
+                        'client_secret': client_secret,
+                        'grant_type': 'client_credentials'
+                    },
+                    timeout=10
+                )
+                if token_resp.status_code == 200:
+                    self._igdb_token = token_resp.json().get('access_token', '')
+                else:
+                    return None
+
+            # Query IGDB for game cover
+            headers = {
+                'Client-ID': client_id,
+                'Authorization': f'Bearer {self._igdb_token}'
+            }
+            body = f'search "{title}"; fields cover.url; limit 1;'
+            resp = requests.post(
+                'https://api.igdb.com/v4/games',
+                headers=headers,
+                data=body,
+                timeout=10
+            )
+            if resp.status_code == 200:
+                games = resp.json()
+                if games and 'cover' in games[0]:
+                    cover_url = games[0]['cover'].get('url', '')
+                    if cover_url:
+                        # IGDB returns //images.igdb.com/... → convert to https, upscale
+                        cover_url = cover_url.replace('t_thumb', 't_cover_big')
+                        if cover_url.startswith('//'):
+                            cover_url = 'https:' + cover_url
+                        return cover_url
+        except Exception as e:
+            print(f"IGDB cover search error for '{title}': {e}")
+        return None
+
+    def get_recently_played_formatted(self):
+        """
+        Get recently played games formatted for ESP recent games list.
+        Returns list of {"name": str, "time": int (minutes)} dicts.
+        """
+        recent = self.get_recently_played()
+        result = []
+        for game in recent[:3]:
+            result.append({
+                'name': game.get('name', 'Unknown')[:23],
+                'time': game.get('playtime_2weeks', 0)  # minutes
+            })
+        return result
 
     def get_gaming_state(self):
         """
-        Get complete gaming state for ESP display.
+        V7: Get complete gaming state for ESP display.
         Returns dict ready for JSON serialization.
+        Now includes 'recent' array for ESP recent games list.
         """
         result = {
             'title': '',
@@ -404,7 +582,8 @@ class SteamTracker:
             'achieve': 0,
             'friends': 0,
             'active': False,
-            'status': 'Offline'
+            'status': 'Offline',
+            'recent': []  # V7: recent games for gaming dashboard
         }
 
         # 1. Steam API check (gets game title, state, friends)
@@ -429,6 +608,12 @@ class SteamTracker:
                     result['status'] = 'Offline'
 
             result['friends'] = min(self.get_friends_online(), 255)
+
+            # V7: Get recently played for gaming dashboard
+            try:
+                result['recent'] = self.get_recently_played_formatted()
+            except Exception:
+                result['recent'] = []
 
         # 2. Local process fallback
         local_game = self.detect_local_game()

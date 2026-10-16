@@ -1,0 +1,61 @@
+{
+  "_comment": "Companion OS V6 Configuration",
+  "spotify": {
+    "client_id": "450a2e6ab1ed4ce4ac9738f654814240",
+    "client_secret": "78200536e7804c8ca427102a6ba2138f",
+    "redirect_uri": "http://127.0.0.1:8888/callback",
+    "scope": "user-read-playback-state user-modify-playback-state user-read-currently-playing user-library-read user-library-modify"
+  },
+  "github": {
+    "username": "neuralsin",
+    "token": "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"
+  },
+  "weather": {
+    "api_key": "6de5bf77b8e74ae2a71171844260101",
+    "city": "Chennai, Tamil Nadu",
+    "units": "metric"
+  },
+  "network": {
+    "esp_ip": "192.168.1.123",
+    "esp_port_rx": 8888,
+    "esp_port_tx": 8889,
+    "pc_port_rx": 8889
+  },
+  "features": {
+    "spotify_enabled": true,
+    "github_enabled": true,
+    "lyrics_enabled": true,
+    "weather_enabled": true,
+    "notifications_enabled": true,
+    "notes_web_port": 5555
+  },
+  "update_intervals": {
+    "spotify_poll_seconds": 1,
+    "github_refresh_minutes": 60,
+    "weather_refresh_minutes": 15
+  },
+  "stocks": {
+    "primary_ticker": "TATAELXSI.NS",
+    "watchlist": [
+      "TATAELXSI.NS",
+      "INDIGO.NS",
+      "TATSILV.NS"
+    ],
+    "portfolio_file": "c:\\Users\\shaan\\OneDrive\\Documents\\C++\\esp\\CompanionOS\\python\\stock_records.json",
+    "update_interval_seconds": 60
+  },
+  "gaming": {
+    "steam_api_key": "",
+    "steam_id": "",
+    "update_interval_seconds": 30
+  },
+  "productivity": {
+    "google_credentials": "credentials.json",
+    "calendar_id": "primary",
+    "update_interval_seconds": 60
+  },
+  "social": {
+    "source": "windows_notifications",
+    "update_interval_seconds": 15
+  }
+}

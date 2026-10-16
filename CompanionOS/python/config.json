@@ -12,11 +12,11 @@
   },
   "weather": {
     "api_key": "6de5bf77b8e74ae2a71171844260101",
-    "city": "Chennai, Tamil Nadu",
+    "city": "auto:ip",
     "units": "metric"
   },
   "network": {
-    "esp_ip": "192.168.1.123",
+    "esp_ip": "192.168.1.187",
     "esp_port_rx": 8888,
     "esp_port_tx": 8889,
     "pc_port_rx": 8889
@@ -27,6 +27,7 @@
     "lyrics_enabled": true,
     "weather_enabled": true,
     "notifications_enabled": true,
+    "pc_dashboard_enabled": true,
     "notes_web_port": 5555
   },
   "update_intervals": {
@@ -42,7 +43,7 @@
       "TATSILV.NS"
     ],
     "portfolio_file": "c:\\Users\\shaan\\OneDrive\\Documents\\C++\\esp\\CompanionOS\\python\\stock_records.json",
-    "update_interval_seconds": 60
+    "update_interval_seconds": 120
   },
   "gaming": {
     "steam_api_key": "",

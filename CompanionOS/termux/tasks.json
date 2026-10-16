@@ -1,0 +1,116 @@
+{
+  "tasks": [
+    {
+      "id": "morning_1",
+      "time": "06:45",
+      "title": "Wake Up",
+      "description": "wake up. stretch. existential sigh.",
+      "category": "personal",
+      "completed": false
+    },
+    {
+      "id": "morning_2",
+      "time": "07:00",
+      "title": "Get Ready",
+      "description": "get ready. music on. autopilot.",
+      "category": "personal",
+      "completed": false
+    },
+    {
+      "id": "morning_3",
+      "time": "07:20",
+      "title": "Buffer",
+      "description": "buffer / commute / mental warm-up.",
+      "category": "personal",
+      "completed": false
+    },
+    {
+      "id": "classes",
+      "time": "08:00",
+      "title": "Classes",
+      "description": "mark important stuff only. no rewriting novels.",
+      "category": "study",
+      "completed": false
+    },
+    {
+      "id": "reset",
+      "time": "17:00",
+      "title": "Post-College Reset",
+      "description": "decompress. walk / music / stare at walls.",
+      "category": "personal",
+      "completed": false
+    },
+    {
+      "id": "study_1",
+      "time": "17:30",
+      "title": "Study Block 1 (HW)",
+      "description": "college homework only. timer on. done = done.",
+      "category": "study",
+      "completed": false
+    },
+    {
+      "id": "study_2",
+      "time": "18:30",
+      "title": "Study Block 2 (ML)",
+      "description": "ML work. concepts/coding/math/experiments. keep it light but consistent.",
+      "category": "study",
+      "completed": false
+    },
+    {
+      "id": "study_3",
+      "time": "19:30",
+      "title": "Study Block 3 (Revision)",
+      "description": "revise today's notes. summarize. mark doubts. short + clean.",
+      "category": "study",
+      "completed": false
+    },
+    {
+      "id": "dinner_1",
+      "time": "20:05",
+      "title": "Mess Walk",
+      "description": "get ready / walk to mess.",
+      "category": "personal",
+      "completed": false
+    },
+    {
+      "id": "dinner_2",
+      "time": "20:20",
+      "title": "Dinner",
+      "description": "dinner. eat slow. no stress.",
+      "category": "personal",
+      "completed": false
+    },
+    {
+      "id": "night_1",
+      "time": "21:00",
+      "title": "Chill Time",
+      "description": "music / yt / series / talking / rotting peacefully.",
+      "category": "personal",
+      "completed": false
+    },
+    {
+      "id": "night_2",
+      "time": "22:15",
+      "title": "Prep Tomorrow",
+      "description": "bag, clothes, 3-point plan.",
+      "category": "personal",
+      "completed": false
+    },
+    {
+      "id": "night_3",
+      "time": "22:35",
+      "title": "Wind Down",
+      "description": "phone down. lights low.",
+      "category": "personal",
+      "completed": false
+    },
+    {
+      "id": "sleep",
+      "time": "23:00",
+      "title": "Sleep",
+      "description": "sleep.",
+      "category": "personal",
+      "completed": false
+    }
+  ]
+}

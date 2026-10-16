@@ -1,196 +1,119 @@
 #ifndef PAGE_STOCKS_H
 #define PAGE_STOCKS_H
 #include "globals.h"
+#include "ui_components.h"
 
-extern uint16_t blendColor(uint16_t c1, uint16_t c2, float t);
 extern void drawPageIndicator(int current, int total);
 
-// ═══════════════════════════════════════════════════════════
-// STOCKS DASHBOARD — V6 Premium Financial Page
-// ═══════════════════════════════════════════════════════════
+#define STK_CARD_BG  0x1082
+#define STK_BORDER   0x2945
+#define STK_GREEN    0x2E8B
+#define STK_RED      0xE8C4
+#define STK_DIM      0x4A49
+#define STK_DIVIDER  0x2104
+#define STK_BG       0x0841
 
-#define STK_PAD       10
-#define STK_CARD_BG   0x1082
-#define STK_BORDER    0x2945
-#define STK_GREEN     0x2E8B
-#define STK_RED       0xE8C4
-#define STK_DIM       0x4A49
-#define STK_DIVIDER   0x2104
-
-static char lastStockPrice[12] = "";
-static char lastStockDelta[12] = "";
-static char lastStockSymbol[8] = "";
 static bool stockPageDrawn = false;
+static String stkLastContent = "";
 
 void resetStockDrawState() {
-  lastStockPrice[0] = 0;
-  lastStockDelta[0] = 0;
-  lastStockSymbol[0] = 0;
   stockPageDrawn = false;
+  stkLastContent = "";
+}
+
+static String stk_contentKey() {
+  String key = String(uiPageGeneration) + "\n" + stockSymbol + "\n" + stockPrice + "\n" + stockDelta + "\n" +
+               stockPctChg + "/" + String(stockIsUp);
+  const int count = min((int)stockHistoryLen, (int)(sizeof(stockHistory) / sizeof(stockHistory[0])));
+  key += "/" + String(count);
+  for (int i = 0; i < count; i++) key += "/" + String(stockHistory[i]);
+  for (int i = 0; i < 3; i++) {
+    key += "\n" + String(wlSymbol[i]) + "/" + wlPrice[i] + "/" + wlDelta[i] + "/" + String(wlIsUp[i]);
+  }
+  return key;
 }
 
 void drawSparkline(int ox, int oy, int w, int h) {
-  if (stockHistoryLen < 2) {
-    tft.setTextColor(STK_DIM);
-    tft.drawCentreString("No chart data", ox + w/2, oy + h/2 - 4, 1);
+  const int count = min((int)stockHistoryLen, (int)(sizeof(stockHistory) / sizeof(stockHistory[0])));
+  if (count < 2) {
+    drawTruncatedText(ox + 2, oy + max(0, (h - tft.fontHeight(1)) / 2),
+                      "No chart data", w - 4, STK_DIM, 1, STK_BG);
     return;
   }
-
-  int16_t vMin = stockHistory[0], vMax = stockHistory[0];
-  for (int i = 1; i < stockHistoryLen; i++) {
-    if (stockHistory[i] < vMin) vMin = stockHistory[i];
-    if (stockHistory[i] > vMax) vMax = stockHistory[i];
+  if (w < 4 || h < 4) return;
+  int32_t low = stockHistory[0], high = stockHistory[0];
+  for (int i = 1; i < count; i++) {
+    low = min(low, (int32_t)stockHistory[i]);
+    high = max(high, (int32_t)stockHistory[i]);
   }
-  int16_t range = max((int16_t)1, (int16_t)(vMax - vMin));
-
-  uint16_t lineColor = stockIsUp ? STK_GREEN : STK_RED;
-  uint16_t fillColor = stockIsUp ? 0x0341 : 0x4000;
-
-  int step = w / (stockHistoryLen - 1);
-  for (int i = 0; i < stockHistoryLen - 1; i++) {
-    int x1 = ox + i * step;
-    int y1 = oy + h - (int)((long)(stockHistory[i] - vMin) * h / range);
-    int x2 = ox + (i + 1) * step;
-    int y2 = oy + h - (int)((long)(stockHistory[i+1] - vMin) * h / range);
-
-    for (int fx = x1; fx < x2; fx++) {
-      int fy = y1 + (y2 - y1) * (fx - x1) / max(1, x2 - x1);
-      if (fy < oy + h) {
-        tft.drawFastVLine(fx, fy, oy + h - fy, fillColor);
-      }
-    }
-
-    tft.drawLine(x1, y1, x2, y2, lineColor);
-    tft.drawLine(x1, y1 + 1, x2, y2 + 1, lineColor);
+  const int32_t range = max((int32_t)1, high - low);
+  const uint16_t color = stockIsUp ? STK_GREEN : STK_RED;
+  int lastX = 0, lastY = 0;
+  for (int i = 0; i < count; i++) {
+    int x = ox + 1 + (long)i * (w - 3) / (count - 1);
+    int y = high == low ? oy + h / 2 :
+            oy + h - 2 - ((int32_t)stockHistory[i] - low) * (h - 3) / range;
+    if (i > 0) tft.drawLine(lastX, lastY, x, y, color);
+    lastX = x;
+    lastY = y;
   }
-
-  int lastX = ox + (stockHistoryLen - 1) * step;
-  int lastY = oy + h - (int)((long)(stockHistory[stockHistoryLen-1] - vMin) * h / range);
-  tft.fillCircle(lastX, lastY, 3, lineColor);
   tft.fillCircle(lastX, lastY, 1, TFT_WHITE);
 }
 
-void drawStockArrow(int x, int y, bool up, uint16_t color) {
-  if (up) {
-    tft.fillTriangle(x, y - 5, x - 4, y + 2, x + 4, y + 2, color);
-  } else {
-    tft.fillTriangle(x, y + 5, x - 4, y - 2, x + 4, y - 2, color);
-  }
-}
-
 void drawStocksPage() {
-  tft.fillScreen(0x0841);
+  tft.setTextSize(1);
+  tft.setTextDatum(TL_DATUM);
+  tft.fillRect(0, UI_HEADER_H, SCREEN_W, SCREEN_H - UI_HEADER_H, STK_BG);
+  const bool compact = SCREEN_W <= 200;
+  const int pad = 4;
+  const int width = SCREEN_W - pad * 2;
+  const int lineH = tft.fontHeight(1) + 2;
+  const int symbolFont = compact ? 1 : 2;
+  const int priceFont = compact ? 1 : 4;
+  const int symbolY = UI_HEADER_H + 14;
+  const int priceY = symbolY + tft.fontHeight(symbolFont) + 2;
+  const int deltaY = priceY + tft.fontHeight(priceFont) + 2;
+  const int chartY = deltaY + lineH + 2;
+  const int watchY = SCREEN_H - UI_FOOTER_H - 4 * lineH;
+  const int chartH = watchY - chartY - 4;
+  const bool hasQuote = stockPrice[0] && strcmp(stockPrice, "---") != 0;
+  const uint16_t priceColor = hasQuote ? (stockIsUp ? STK_GREEN : STK_RED) : STK_DIM;
 
-  tft.setTextColor(STK_DIM);
-  tft.drawString("STOCKS", STK_PAD, 3, 1);
-
-  bool marketOpen = true;
-  tft.fillCircle(SCREEN_W - 20, 7, 3, marketOpen ? STK_GREEN : STK_RED);
-  tft.setTextColor(marketOpen ? STK_GREEN : STK_RED);
-  tft.drawRightString(marketOpen ? "OPEN" : "CLOSED", SCREEN_W - 28, 2, 1);
-
-  tft.drawFastHLine(0, 15, SCREEN_W, STK_DIVIDER);
-
-  tft.setTextColor(TFT_WHITE);
-  tft.drawString(stockSymbol, STK_PAD, 22, 4);
-
-  uint16_t priceColor = stockIsUp ? STK_GREEN : STK_RED;
-  tft.setTextColor(priceColor);
-  tft.drawString(stockPrice, STK_PAD, 50, 4);
-
-  int deltaY = 82;
-  drawStockArrow(STK_PAD + 6, deltaY + 6, stockIsUp, priceColor);
-  tft.setTextColor(priceColor);
-  tft.drawString(stockDelta, STK_PAD + 16, deltaY, 2);
-
-  if (stockPctChg[0]) {
-    tft.setTextColor(STK_DIM);
-    tft.drawString(stockPctChg, STK_PAD + 16, deltaY + 18, 1);
+  drawTruncatedText(pad, UI_HEADER_H + 2, "STOCKS", width, STK_DIM, 1, STK_BG);
+  drawTruncatedText(pad, symbolY, stockSymbol[0] ? stockSymbol : "No symbol selected",
+                    width, TFT_WHITE, symbolFont, STK_BG);
+  drawTruncatedText(pad, priceY, hasQuote ? stockPrice : "No quote data",
+                    width, priceColor, priceFont, STK_BG);
+  if (hasQuote && (stockDelta[0] || stockPctChg[0])) {
+    drawTruncatedText(pad, deltaY, stockDelta, width / 2 - 3, priceColor, 1, STK_BG);
+    drawTruncatedText(pad + width / 2 + 3, deltaY, stockPctChg, width / 2 - 3, STK_DIM, 1, STK_BG);
+  } else {
+    drawTruncatedText(pad, deltaY, "Change unavailable", width, STK_DIM, 1, STK_BG);
   }
-
-  tft.drawFastHLine(STK_PAD, 118, 145, STK_DIVIDER);
-  drawSparkline(STK_PAD, 124, 145, 70);
-
-  tft.setTextColor(STK_DIM);
-  tft.drawString("1D", STK_PAD, 198, 1);
-  tft.drawRightString("Now", 155, 198, 1);
-
-  int rx = 165;
-  tft.drawFastVLine(160, 16, SCREEN_H - 32, STK_DIVIDER);
-
-  tft.setTextColor(STK_DIM);
-  tft.drawString("WATCHLIST", rx, 20, 1);
-  tft.drawFastHLine(rx, 32, 145, STK_DIVIDER);
-
+  if (chartH >= tft.fontHeight(1)) drawSparkline(pad, chartY, width, chartH);
+  drawTruncatedText(pad, watchY, "WATCHLIST", width, STK_DIM, 1, STK_BG);
+  int y = watchY + lineH;
+  bool anyWatch = false;
   for (int i = 0; i < 3; i++) {
-    int wy = 40 + i * 52;
-    tft.fillRoundRect(rx, wy, 145, 44, 4, STK_CARD_BG);
-    uint16_t wColor = wlIsUp[i] ? STK_GREEN : STK_RED;
-    tft.fillRect(rx, wy, 3, 44, wColor);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawString(wlSymbol[i], rx + 10, wy + 5, 2);
-    tft.setTextColor(wColor);
-    tft.drawString(wlPrice[i], rx + 10, wy + 24, 2);
-    if (wlDelta[i][0]) {
-      tft.drawRightString(wlDelta[i], rx + 138, wy + 5, 1);
-    }
-    drawStockArrow(rx + 134, wy + 28, wlIsUp[i], wColor);
+    if (!wlSymbol[i][0]) continue;
+    anyWatch = true;
+    const bool hasPrice = wlPrice[i][0] && strcmp(wlPrice[i], "---") != 0;
+    const char* price = hasPrice ? wlPrice[i] : "--";
+    int priceW = min(width / 2, (int)tft.textWidth(price, 1));
+    drawTruncatedText(pad, y, wlSymbol[i], width - priceW - 6, TFT_WHITE, 1, STK_BG);
+    drawTruncatedText(pad + width - priceW, y, price, priceW,
+                      hasPrice ? (wlIsUp[i] ? STK_GREEN : STK_RED) : STK_DIM, 1, STK_BG);
+    y += lineH;
   }
-
+  if (!anyWatch) drawTruncatedText(pad, y, "No watchlist symbols", width, STK_DIM, 1, STK_BG);
   drawPageIndicator(STATE_STOCKS, STATE_COUNT);
-  strcpy(lastStockSymbol, stockSymbol);
   stockPageDrawn = true;
+  stkLastContent = stk_contentKey();
 }
 
 void redrawStocksPartial() {
   if (currentState != STATE_STOCKS) return;
-
-  if (strcmp(stockSymbol, lastStockSymbol) != 0) {
-    tft.fillRect(STK_PAD, 22, 140, 24, 0x0841);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawString(stockSymbol, STK_PAD, 22, 4);
-    strcpy(lastStockSymbol, stockSymbol);
-  }
-
-  if (strcmp(stockPrice, lastStockPrice) != 0) {
-    uint16_t priceColor = stockIsUp ? STK_GREEN : STK_RED;
-
-    tft.fillRect(STK_PAD, 50, 150, 26, 0x0841);
-    tft.setTextColor(priceColor);
-    tft.drawString(stockPrice, STK_PAD, 50, 4);
-
-    tft.fillRect(STK_PAD, 82, 150, 24, 0x0841);
-    drawStockArrow(STK_PAD + 6, 88, stockIsUp, priceColor);
-    tft.setTextColor(priceColor);
-    tft.drawString(stockDelta, STK_PAD + 16, 82, 2);
-
-    if (stockPctChg[0]) {
-      tft.setTextColor(STK_DIM);
-      tft.drawString(stockPctChg, STK_PAD + 16, 100, 1);
-    }
-
-    strcpy(lastStockPrice, stockPrice);
-    strcpy(lastStockDelta, stockDelta);
-
-    tft.fillRect(STK_PAD, 124, 145, 70, 0x0841);
-    drawSparkline(STK_PAD, 124, 145, 70);
-  }
-
-  int rx = 165;
-  for (int i = 0; i < 3; i++) {
-    int wy = 40 + i * 52;
-    uint16_t wColor = wlIsUp[i] ? STK_GREEN : STK_RED;
-    tft.fillRoundRect(rx, wy, 145, 44, 4, STK_CARD_BG);
-    tft.fillRect(rx, wy, 3, 44, wColor);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawString(wlSymbol[i], rx + 10, wy + 5, 2);
-    tft.setTextColor(wColor);
-    tft.drawString(wlPrice[i], rx + 10, wy + 24, 2);
-    if (wlDelta[i][0]) {
-      tft.drawRightString(wlDelta[i], rx + 138, wy + 5, 1);
-    }
-    drawStockArrow(rx + 134, wy + 28, wlIsUp[i], wColor);
-  }
+  if (!stockPageDrawn || stk_contentKey() != stkLastContent) drawStocksPage();
 }
 
 #endif

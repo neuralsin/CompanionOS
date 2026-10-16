@@ -1,0 +1,9 @@
+R_DEF: Internal format may change without notice
+local
+color bg_dark
+color primary_green
+color secondary_cyan
+id companion_webview
+layout activity_main
+string app_name
+style Theme.CompanionOS

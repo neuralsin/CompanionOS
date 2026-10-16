@@ -9,8 +9,15 @@
 #include "page_social.h"
 #include "page_productivity.h"
 #include "page_network.h"
+#include "page_pc_dash.h"
+#include "page_ruview.h"
+#include "page_clock_dashboard.h"
 #include "theme2_eyes.h"
 #include "theme2_spotify.h"
+#include "page_retro_watch.h"
+#ifdef ESP32
+#include "page_dr_hack.h"
+#endif
 
 // Data from network.h
 extern String currentTrack;
@@ -37,7 +44,7 @@ String weatherSunset = "";
 int weatherCode = 0;
 
 // Pomodoro data
-int pomoRemaining = 0;
+int pomoRemaining = 1500;
 int pomoTotal = 1500;
 bool pomoIsBreak = false;
 int pomoSessions = 0;
@@ -110,9 +117,9 @@ void drawIconHeart(int cx, int cy, uint16_t color) {
 // ═══════════════════════════════════════════════════════════
 
 // 1:1 Spotify Replication Layout Constants
-#define ALBUM_X 10
-#define ALBUM_Y 25
-#define ALBUM_SIZE 96 // Large square album
+#define ALBUM_X SCALE_X(10)
+#define ALBUM_Y SCALE_Y(25)
+#define ALBUM_SIZE SCALE_MIN(96) // Large square album
 
 // ── State Trackers for Spotify ──
 String lastTrackTitle = "";
@@ -123,213 +130,124 @@ String lastPrevLyric = "";
 bool artDrawn = false;
 static bool controlsDrawn = false;
 static bool cardDrawn = false;
+static bool lastPlaying = false;
+bool forceSpotifyRedraw = false;
 
 void redrawSpotifyPartial() {
   if (currentState != STATE_SPOTIFY) return;
-  
-  // ── LEFT COLUMN: Album Art + Track Info ──
-  int infoY = ALBUM_Y + ALBUM_SIZE + 10;
-  String title = currentTrack.substring(0, 12);
-  String artist = currentArtist.substring(0, 14);
-  
-  if (!artDrawn && albumArtReady) {
-    tft.pushImage(ALBUM_X, ALBUM_Y, ALBUM_SIZE, ALBUM_SIZE, albumArt);
-    
-    // Repaint the shadow wrap since we just pasted the square
-    int blurRadius = 4;
-    for (int i = 1; i <= blurRadius; i++) {
-      uint16_t shadeColor = (i == 1) ? 0x1042 : (i == 2) ? 0x0821 : 0x0000;
-      tft.drawFastHLine(ALBUM_X + i, ALBUM_Y + ALBUM_SIZE + i - 1, ALBUM_SIZE, shadeColor);
-      tft.drawFastVLine(ALBUM_X + ALBUM_SIZE + i - 1, ALBUM_Y + i, ALBUM_SIZE, shadeColor);
-    }
+  const int ax = 4, ay = 18, side = 64;
+  const int cx = 74, cw = SCREEN_W - cx - 4;
+  String title = currentTrack.length() ? currentTrack : "Nothing playing";
+  String artist = currentArtist.length() ? currentArtist : "Spotify";
+  bool changed = title != lastTrackTitle || artist != lastArtist;
+  static bool placeholder = false;
+  static String lastServiceStatus;
+  static uint32_t lastPage = 0, artVersion = 0;
+  static int lastProgressWidth = -1;
+  if (lastPage != uiPageGeneration || forceSpotifyRedraw || changed) {
+    placeholder = false;
+    artDrawn = false;
+    lastProgressWidth = -1;
+    lastPage = uiPageGeneration;
+  }
+  if (albumArtReady && albumArt && (!artDrawn || artVersion != albumArtRevision)) {
+    tft.setSwapBytes(true);
+    tft.pushImage(ax, ay, side, side, albumArt);
+    tft.setSwapBytes(false);
+    tft.drawRect(ax - 1, ay - 1, side + 2, side + 2, CLR_BORDER);
     artDrawn = true;
+    artVersion = albumArtRevision;
+    placeholder = false;
+  } else if (!albumArtReady && !placeholder) {
+    tft.fillRoundRect(ax, ay, side, side, 4, CLR_SURFACE);
+    tft.drawCircle(ax + 32, ay + 32, 20, CLR_BORDER);
+    tft.drawCircle(ax + 32, ay + 32, 7, CLR_TEXT_LO);
+    tft.fillCircle(ax + 32, ay + 32, 2, CLR_PRIMARY);
+    placeholder = true;
   }
-  
-  if (title != lastTrackTitle) {
-    tft.fillRect(ALBUM_X, infoY, 110, 20, COLOR_BG);
-    tft.setTextColor(TFT_WHITE, COLOR_BG);
-    tft.drawString(title, ALBUM_X, infoY, 2); // Bold white
-    lastTrackTitle = title;
-  }
-  if (artist != lastArtist) {
-    tft.fillRect(ALBUM_X, infoY + 18, 110, 16, COLOR_BG);
-    tft.setTextColor(0x8410, COLOR_BG); // Dim gray
-    tft.drawString(artist, ALBUM_X, infoY + 18, 1);
-    drawIconHeart(ALBUM_X + tft.textWidth(artist, 1) + 8, infoY + 22, TFT_WHITE);
-    lastArtist = artist;
-  }
-
-  // ── CENTER COLUMN: Playback Controls ──
-  // Raised main row slightly to fit the new bottom row
-  int ctrlY = 118;
-  int ctrlX = 160;
-  
-  
-  if (!controlsDrawn) {
-    tft.fillRect(110, ctrlY - 20, 100, 60, COLOR_BG); 
-    
-    // Main Row: Prev, (Play/Pause is drawn below), Next  — Wide spacing
-    drawIconPrev(130, ctrlY, TFT_WHITE);
-    drawIconNext(190, ctrlY, TFT_WHITE);
-    
-    // Bottom Row: Shuffle, Repeat
-    drawIconShuffle(140, ctrlY + 24, 0x6B4D);
-    drawIconRepeat(180, ctrlY + 24, 0x6B4D);
-    
-    controlsDrawn = true;
-  }
-
-  // Play/Pause Circle
-  static bool lastPlaying = false;
-  if (isPlaying != lastPlaying || true) { // Always update circle just in case
-    tft.fillCircle(ctrlX, ctrlY, 14, TFT_WHITE);
-    if (isPlaying) drawIconPause(ctrlX, ctrlY, COLOR_BG);
-    else drawIconPlay(ctrlX + 2, ctrlY, COLOR_BG);
-    lastPlaying = isPlaying;
-  }
-
-  // ── CENTER COLUMN: Progress Bar + Waveform Pulse ──
-  // SUBMISSION 2: Animated waveform pulse using sin() on song position
-  // This requires 160MHz FPU to evaluate 8 waveform bars per frame without jitter.
-  int barX = 120;
-  int barY = 150;
-  int barW = 80;
-  
-  // Draw scrubber track
-  tft.fillRect(barX, barY - 2, barW + 10, 6, COLOR_BG);
-  tft.fillRect(barX, barY, barW, 2, 0x4208);
-  if (playDuration > 0) {
-    int w = map(playProgress, 0, playDuration, 0, barW);
-    w = constrain(w, 0, barW);
-    tft.fillRect(barX, barY, w, 2, TFT_WHITE);
-    tft.fillCircle(barX + w, barY + 1, 3, TFT_WHITE);
-  }
-  
-  // SUBMISSION 2: Waveform pulse bars under the scrubber
-  // Phase offset is derived from playProgress so it moves with the song
-  float phase = (float)(playProgress % 3000) / 3000.0 * 2.0 * PI;
-  tft.fillRect(barX, barY + 6, barW, 12, COLOR_BG); // Clear waveform zone
-  int numBars = 8;
-  int barSpacing = barW / numBars;
-  for (int i = 0; i < numBars; i++) {
-    float wave = sin(phase + (float)i * 0.8f);
-    int barH = (int)(abs(wave) * 8.0f) + 2; // 2-10px tall
-    int bx = barX + i * barSpacing;
-    int by = barY + 6 + (10 - barH); // Align to bottom of zone
-    
-    // Bars left of scrubber head: bright green; right: dim
-    int scrubberX = (playDuration > 0) ? map(playProgress, 0, playDuration, barX, barX + barW) : barX;
-    uint16_t bColor = (bx < scrubberX) ? 0x07E0 : 0x2104; // Green vs dark
-    tft.fillRect(bx, by, barSpacing - 2, barH, bColor);
-  }
-  
-  // Time labels
-  char t1[16]; char t2[16];
-  sprintf(t1, "%d:%02d", (playProgress/1000)/60, (playProgress/1000)%60);
-  sprintf(t2, "%d:%02d", (playDuration/1000)/60, (playDuration/1000)%60);
-  tft.setTextColor(0x8410, COLOR_BG);
-  tft.drawString(t1, barX - 5, barY + 20, 1);
-  tft.fillRect(barX + barW - 30, barY + 20, 40, 12, COLOR_BG);
-  tft.drawRightString(t2, barX + barW + 5, barY + 20, 1);
-
-  // ── RIGHT COLUMN: Lyrics Card ──
-  int cardX = 210;
-  int cardY = 25;
-  int cardW = 105;
-  int cardH = 190;
-  
-  if (!cardDrawn) {
-    // Advanced 160MHz Premium Detailing: Drop Shadow
-    // Background is black, so to cast a shadow we drop a subtle deep grey aura 
-    tft.fillRoundRect(cardX + 4, cardY + 4, cardW, cardH, 8, 0x0821);
-    tft.fillRoundRect(cardX + 2, cardY + 2, cardW, cardH, 8, 0x1042);
-    
-    // Advanced 160MHz Premium Detailing: Metallic Glass Gradient
-    uint16_t startColor = 0x2125; // Brighter violet top highlight
-    uint16_t endColor = 0x0821;   // Darker base
-    uint16_t sr = (startColor >> 11) & 0x1F, sg = (startColor >> 5) & 0x3F, sb = startColor & 0x1F;
-    uint16_t er = (endColor >> 11) & 0x1F, eg = (endColor >> 5) & 0x3F, eb = endColor & 0x1F;
-    
-    for (int j = 0; j < cardH; j++) {
-      float t = (float)j / cardH;
-      uint16_t cr = sr + (er - sr) * t;
-      uint16_t cg = sg + (eg - sg) * t;
-      uint16_t cb = sb + (eb - sb) * t;
-      uint16_t color = (cr << 11) | (cg << 5) | cb;
-      
-      int r = 8;
-      if (j < r || j >= cardH - r) {
-        int offset = r - sqrt(r*r - pow(r - (j < r ? j : cardH - 1 - j), 2));
-        tft.drawFastHLine(cardX + offset, cardY + j, cardW - 2*offset, color);
-      } else {
-        tft.drawFastHLine(cardX, cardY + j, cardW, color);
-      }
-    }
-    
-    tft.setTextColor(0x8410, startColor); // Transparent proxy
-    tft.drawString("UP NEXT / LYRICS", cardX + 8, cardY + 10, 1);
-    
-    // Share/Options placeholder icons
-    tft.fillCircle(cardX + cardW - 18, cardY + 12, 1, 0x6B4D);
-    tft.fillCircle(cardX + cardW - 14, cardY + 12, 1, 0x6B4D);
-    tft.fillCircle(cardX + cardW - 10, cardY + 12, 1, 0x6B4D);
-    
+  bool lyricsChanged = currentLyrics != lastLyric1 || currentLyricsLine2 != lastLyric2 || forceSpotifyRedraw || changed || standaloneSpotifyStatus != lastServiceStatus || isPlaying != lastPlaying;
+  if (!cardDrawn || lyricsChanged) {
+    tft.fillRoundRect(cx, ay, cw, side, 4, CLR_SURFACE);
+    drawTruncatedText(cx + 4, ay + 4, currentLyrics.length() ? "LYRICS" : "SPOTIFY", cw - 8, CLR_PRIMARY, 1, CLR_SURFACE);
+    String text = currentLyrics.length() ? currentLyrics : (currentTrack.length() ? (isPlaying ? "Now playing" : "Paused") : (wifiConnected ? "Ready for music" : "Wi-Fi offline"));
+    if (!currentLyrics.length() && standaloneSpotifyStatus.length()) text = standaloneSpotifyStatus;
+    int used = drawWrappedText(cx + 4, ay + 18, text.c_str(), cw - 8, 30, CLR_TEXT_HI, 1, CLR_SURFACE);
+    if (currentLyricsLine2.length())
+      drawWrappedText(cx + 4, ay + 18 + used * 10, currentLyricsLine2.c_str(), cw - 8, 42 - used * 10, CLR_TEXT_LO, 1, CLR_SURFACE);
     cardDrawn = true;
-  }
-  
-  // Check if we need to redraw any lyric lines
-  if (currentLyrics != lastLyric1 || currentLyricsLine2 != lastLyric2 || prevLyricsLine != lastPrevLyric) {
-    // Clear lyrics content block gracefully with a dark solid to match gradient bottom
-    tft.fillRect(cardX + 4, cardY + 30, cardW - 8, cardH - 35, 0x0821);
-    
-    int yC = cardY + 35;
-    
-    // Previous lyric (dim)
-    if (prevLyricsLine.length() > 0) {
-      tft.setTextColor(0x4208, 0x0821);
-      String p1 = prevLyricsLine.substring(0, 12);
-      String p2 = prevLyricsLine.length() > 12 ? prevLyricsLine.substring(12, 24) : "";
-      tft.drawString(p1, cardX + 8, yC, 2); yC += 16;
-      if (p2.length() > 0) { tft.drawString(p2, cardX + 8, yC, 2); yC += 16; }
-      yC += 8; // Margin
-    } else {
-      yC += 24; // Empty line padding
-    }
-    
-    // Current lyric (bright, bold substitute)
-    tft.setTextColor(TFT_WHITE, 0x0821); // Bright white
-    String c1 = currentLyrics.substring(0, 12);
-    String c2 = currentLyrics.length() > 12 ? currentLyrics.substring(12, 24) : "";
-    tft.drawString(c1, cardX + 8, yC, 2); yC += 16;
-    if (c2.length() > 0) { tft.drawString(c2, cardX + 8, yC, 2); yC += 16; }
-    yC += 8; // Margin
-    
-    // Next lyric (dimming)
-    if (currentLyricsLine2.length() > 0) {
-      tft.setTextColor(0x4208, 0x0821); // Dim gray again
-      String n1 = currentLyricsLine2.substring(0, 12);
-      String n2 = currentLyricsLine2.length() > 12 ? currentLyricsLine2.substring(12, 24) : "";
-      tft.drawString(n1, cardX + 8, yC, 2); yC += 16;
-      if (n2.length() > 0) tft.drawString(n2, cardX + 8, yC, 2);
-    }
-    
-    // Assign tracker states to prevent re-rendering when unnecessary
     lastLyric1 = currentLyrics;
     lastLyric2 = currentLyricsLine2;
-    lastPrevLyric = prevLyricsLine;
+    lastServiceStatus = standaloneSpotifyStatus;
   }
+  if (changed || forceSpotifyRedraw) {
+    tft.fillRect(4, 85, SCREEN_W - 8, 20, COLOR_BG);
+    drawTruncatedText(4, 85, title.c_str(), SCREEN_W - 8, CLR_TEXT_HI, 1);
+    drawTruncatedText(4, 95, artist.c_str(), SCREEN_W - 8, CLR_TEXT_MED, 1);
+    lastTrackTitle = title;
+    lastArtist = artist;
+  }
+  if (!controlsDrawn || forceSpotifyRedraw || isPlaying != lastPlaying) {
+    int middle = SCREEN_W / 2;
+    tft.fillRect(0, 105, SCREEN_W, 16, COLOR_BG);
+    drawIconPrev(middle - 32, 112, CLR_TEXT_MED);
+    drawIconNext(middle + 32, 112, CLR_TEXT_MED);
+    tft.fillCircle(middle, 112, 7, CLR_TEXT_HI);
+    if (isPlaying) drawIconPause(middle, 112, COLOR_BG);
+    else drawIconPlay(middle + 1, 112, COLOR_BG);
+    lastPlaying = isPlaying;
+    controlsDrawn = true;
+  }
+  int bw = SCREEN_W - 16;
+  int w = playDuration > 0 ? (int)((int64_t)bw * constrain(playProgress, 0, playDuration) / playDuration) : 0;
+  if (lastProgressWidth != w) {
+    tft.fillRect(8, SCREEN_H - 4, bw, 2, CLR_BORDER);
+    if (w > 0) tft.fillRect(8, SCREEN_H - 4, w, 2, CLR_SUCCESS);
+    lastProgressWidth = w;
+  }
+  forceSpotifyRedraw = false;
 }
 
 // Reset static trackers when entering the Spotify page fresh
 void resetSpotifyDrawState() {
-  lastTrackTitle = "";
-  lastArtist = "";
-  lastLyric1 = "";
-  lastLyric2 = "";
-  lastPrevLyric = "";
   artDrawn = false;
   controlsDrawn = false;
   cardDrawn = false;
+  lastPlaying = !isPlaying; // Force a mismatch to ensure redraw
+  forceSpotifyRedraw = true;
+}
+
+void tickSpotifyVisuals() {
+  if (currentState != STATE_SPOTIFY) return;
+  static unsigned long lastTick = 0, scrollStart = 0;
+  static String lastTitle;
+  static uint32_t lastPage = 0;
+  if (millis() - lastTick < 50) return;
+  lastTick = millis();
+  if (lastTitle != currentTrack || lastPage != uiPageGeneration) {
+    lastTitle = currentTrack;
+    lastPage = uiPageGeneration;
+    scrollStart = millis();
+  }
+  if (activeTheme == 1) {
+    t2_redrawSpotifyPartial();
+    if (currentTrack.length())
+      drawMarqueeText(74, 18, currentTrack.c_str(), SCREEN_W - 78, TFT_WHITE, 1, &scrollStart, T2S_BG);
+  } else {
+    redrawSpotifyPartial();
+    if (currentTrack.length())
+      drawMarqueeText(4, 85, currentTrack.c_str(), SCREEN_W - 8, CLR_TEXT_HI, 1, &scrollStart);
+  }
+  // A quiet playback indicator, not a fabricated audio spectrum.
+  if (currentLyrics.length() == 0) {
+    int x = SCREEN_W - 17;
+    int y = activeTheme == 1 ? 108 : 22;
+    uint16_t bg = activeTheme == 1 ? T2S_BG : CLR_SURFACE;
+    tft.fillRect(x, y, 10, 8, bg);
+    for (int i = 0; i < 3; i++) {
+      int h = isPlaying ? 2 + (int)(2.5f * (1.0f + sinf(millis() * 0.004f + i * 1.3f))) : 2;
+      tft.fillRect(x + i * 3, y + 7 - h, 2, h, isPlaying ? CLR_SUCCESS : CLR_TEXT_LO);
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -338,50 +256,40 @@ void resetSpotifyDrawState() {
 
 
 void completeAlbumArt() {
+  if (albumArtRowsComplete != ALBUM_ART_H) return;
   receivingArt = false;
+  if (albumArt && albumArtIncoming) memcpy(albumArt, albumArtIncoming, ALBUM_ART_BYTES);
+  albumArtRevision++;
   albumArtReady = true;
-  
+  artDrawn = false;
+  t2s_artDrawn = false;
   if (currentState == STATE_SPOTIFY) {
-    if (activeTheme == 1) {
-      extern void t2_redrawSpotifyPartial();
-      t2_redrawSpotifyPartial();
-    } else {
-      // Advanced 160MHz Drop Shadow around Album Art 
-      // (We draw this strictly when album art is done, so it wraps perfectly)
-      int blurRadius = 4;
-      for (int i = 1; i <= blurRadius; i++) {
-        uint16_t shadeColor = (i == 1) ? 0x1042 : (i == 2) ? 0x0821 : 0x0000;
-        // Bottom shadow
-        tft.drawFastHLine(ALBUM_X + i, ALBUM_Y + ALBUM_SIZE + i - 1, ALBUM_SIZE, shadeColor);
-        // Right shadow
-        tft.drawFastVLine(ALBUM_X + ALBUM_SIZE + i - 1, ALBUM_Y + i, ALBUM_SIZE, shadeColor);
-      }
-      redrawSpotifyPartial(); // Redraw whole UI safely
-    }
-  } else if (currentState == STATE_GAMING) {
-    extern void redrawGamingPartial();
-    redrawGamingPartial();
+    if (activeTheme == 1) t2_redrawSpotifyPartial();
+    else redrawSpotifyPartial();
   }
 }
 
-// High-frequency trigonometric subpixel calculation for a perfectly smooth vector ring
+// CRIT-02 FIX: Fast arc drawing using line segments instead of O(n²) pixel loop.
+// Original used sqrt()+atan2() per pixel (~12,100 iterations) freezing ESP for 1-2s.
 void drawSmoothRing(int cx, int cy, int r, int thickness, float percent, uint16_t fgColor, uint16_t bgColor) {
-  float endAngle = percent * 360.0;
-  for (int y = -r; y <= r; y++) {
-    for (int x = -r; x <= r; x++) {
-      float dist = sqrt(x*x + y*y);
-      if (dist >= r - thickness && dist <= r) {
-        float angle = atan2(y, x) * 180.0 / PI;
-        angle += 90.0; // Start at 12 o'clock
-        if (angle < 0) angle += 360.0;
-        
-        if (angle <= endAngle) {
-          tft.drawPixel(cx + x, cy + y, fgColor);
-        } else {
-          tft.drawPixel(cx + x, cy + y, bgColor);
-        }
-      }
+  // Draw background ring (full circle)
+  for (int angle = 0; angle < 360; angle += 2) {
+    float rad = (angle - 90) * PI / 180.0;  // Start at 12 o'clock
+    for (int t = 0; t < thickness; t++) {
+      int px = cx + cos(rad) * (r - t);
+      int py = cy + sin(rad) * (r - t);
+      tft.drawPixel(px, py, bgColor);
     }
+  }
+  // Draw foreground arc (progress portion)
+  int endAngle = (int)(percent * 360.0);
+  for (int angle = 0; angle < endAngle; angle += 2) {
+    float rad = (angle - 90) * PI / 180.0;
+    int x1 = cx + cos(rad) * (r - thickness);
+    int y1 = cy + sin(rad) * (r - thickness);
+    int x2 = cx + cos(rad) * r;
+    int y2 = cy + sin(rad) * r;
+    tft.drawLine(x1, y1, x2, y2, fgColor);
   }
 }
 
@@ -389,23 +297,22 @@ void drawSmoothRing(int cx, int cy, int r, int thickness, float percent, uint16_
 // POMODORO TIMER PAGE 🍅
 // ═══════════════════════════════════════════════════════════
 
-static int lastPomoRemaining = -1;
-static bool lastPomoIsBreak = false;
-static int lastPomoSessions = -1;
-static bool lastPomoActive = false;
-
-void resetPomodoroDrawState() {
-  lastPomoRemaining = -1;
-  lastPomoIsBreak = false;
-  lastPomoSessions = -1;
-  lastPomoActive = false;
-}
-
 void redrawPomodoroPartial() {
   if (currentState != STATE_POMODORO) return;
   
+  static int lastRemaining = -1;
+  static bool lastIsBreak = false;
+  static int lastSessions = -1;
+  static bool lastActive = false;
+  static uint32_t lastPage = 0;
+  if (lastPage != uiPageGeneration) {
+    lastRemaining = -1;
+    lastSessions = -1;
+    lastPage = uiPageGeneration;
+  }
+  
   int cx = SCREEN_W / 2;
-  int cy = SCREEN_H / 2 - 10;
+  int cy = SCREEN_H / 2 - SCALE_Y(10);
   
   float progress = 0;
   if (pomoTotal > 0 && pomoActive) {
@@ -414,10 +321,10 @@ void redrawPomodoroPartial() {
   
   uint16_t ringColor = pomoIsBreak ? TFT_GREEN : 0xDF26; // Orange
   
-  if (lastPomoRemaining != pomoRemaining || lastPomoIsBreak != pomoIsBreak || lastPomoActive != pomoActive) {
+  if (lastRemaining != pomoRemaining || lastIsBreak != pomoIsBreak || lastActive != pomoActive || lastSessions != pomoSessions) {
     // Only clear the text area inside the ring instead of a massive 160x160 rectangle
-    tft.fillRect(cx - 50, cy - 30, 100, 60, COLOR_BG);
-    drawSmoothRing(cx, cy, 55, 6, progress, ringColor, 0x18E3);
+    tft.fillRect(cx - SCALE_X(50), cy - SCALE_Y(30), SCALE_X(100), SCALE_Y(60), COLOR_BG);
+    drawSmoothRing(cx, cy, SCALE_MIN(55), SCALE_MIN(6), progress, ringColor, 0x18E3);
     
     // Center time display
     int minutes = pomoRemaining / 60;
@@ -426,30 +333,31 @@ void redrawPomodoroPartial() {
     sprintf(timeStr, "%02d:%02d", minutes, seconds);
     
     tft.setTextColor(TFT_WHITE, COLOR_BG);
-    tft.drawCentreString(timeStr, cx, cy - 12, 4);
+    tft.drawCentreString(timeStr, cx, cy - SCALE_Y(12), (SCREEN_W > 200) ? 4 : 2);
     
     // Label
     tft.setTextColor(pomoIsBreak ? TFT_GREEN : TFT_CYAN, COLOR_BG);
-    tft.drawCentreString(pomoIsBreak ? "BREAK" : "FOCUS", cx, cy + 15, 2);
+    tft.drawCentreString(pomoIsBreak ? "BREAK" : "FOCUS", cx, cy + SCALE_Y(15), (SCREEN_W > 200) ? 2 : 1);
     
     // Session count & Status (only clear their specific lines)
-    tft.fillRect(cx - 60, cy + 55, 120, 30, COLOR_BG);
+    tft.fillRect(cx - SCALE_X(60), cy + SCALE_Y(55), SCALE_X(120), SCALE_Y(30), COLOR_BG);
     tft.setTextColor(0x8410, COLOR_BG);
     char sessStr[16];
     sprintf(sessStr, "%d sessions", pomoSessions);
-    tft.drawCentreString(sessStr, cx, cy + 55, 1);
+    tft.drawCentreString(sessStr, cx, cy + SCALE_Y(55), 1);
     
     if (!pomoActive) {
       tft.setTextColor(0x6B4D, COLOR_BG);
-      tft.drawCentreString("TAP TO START", cx, cy + 70, 1);
+      tft.drawCentreString("TAP TO START", cx, cy + SCALE_Y(70), 1);
     } else {
       tft.setTextColor(0x4208, COLOR_BG);
-      tft.drawCentreString("TAP TO PAUSE", cx, cy + 70, 1);
+      tft.drawCentreString("TAP TO PAUSE", cx, cy + SCALE_Y(70), 1);
     }
     
-    lastPomoRemaining = pomoRemaining;
-    lastPomoIsBreak = pomoIsBreak;
-    lastPomoActive = pomoActive;
+    lastRemaining = pomoRemaining;
+    lastIsBreak = pomoIsBreak;
+    lastActive = pomoActive;
+    lastSessions = pomoSessions;
   }
 }
 
@@ -458,79 +366,154 @@ void redrawPomodoroPartial() {
 // WEATHER PAGE ☀️🌧️
 // ═══════════════════════════════════════════════════════════
 
+extern String standaloneWeatherStatus;
+
+// Host WeatherAPI codes and the standalone collector's OpenWeather-style codes.
+static int weatherIconKind(int code) {
+  if (code == 1000 || code == 800) return 0;
+  if (code == 1003 || code == 801) return 1;
+  if (code == 1006 || code == 1009 || (code >= 802 && code <= 804)) return 2;
+  if ((code >= 200 && code < 300) || code == 1087 || (code >= 1273 && code <= 1282)) return 4;
+  if ((code >= 600 && code < 700) || code == 1066 || code == 1069 || code == 1114 || code == 1117 ||
+      (code >= 1204 && code <= 1237) || (code >= 1249 && code <= 1264)) return 5;
+  if ((code >= 300 && code < 600) || code == 1063 || code == 1072 ||
+      (code >= 1150 && code <= 1201) || (code >= 1240 && code <= 1246)) return 3;
+  if ((code >= 700 && code < 800) || code == 1030 || code == 1135 || code == 1147) return 6;
+  return 7;
+}
+
 uint16_t getWeatherColor(int code) {
-  // weatherapi.com condition codes
-  if (code == 1000) return TFT_YELLOW;    // Sunny
-  if (code == 1003 || code == 1006) return 0xC618;  // Partly cloudy / Cloudy
-  if (code >= 1063 && code <= 1072) return 0x5DDF;  // Rain/Drizzle
-  if (code >= 1180 && code <= 1201) return 0x031F;  // Heavy rain
-  if (code >= 1210 && code <= 1225) return TFT_WHITE; // Snow
-  if (code >= 1273 && code <= 1282) return TFT_YELLOW; // Thunder
-  return 0x8410;
+  const int kind = weatherIconKind(code);
+  if (kind == 0 || kind == 1 || kind == 4) return 0xFE60;
+  if (kind == 3) return 0x5DDF;
+  if (kind == 5) return TFT_WHITE;
+  return CLR_TEXT_MED;
+}
+
+static void drawWeatherIcon(int x, int y, int size, int kind) {
+  auto px = [&](int v) { return x + v * size / 64; };
+  auto py = [&](int v) { return y + v * size / 64; };
+  auto radius = [&](int v) { return max(1, v * size / 64); };
+  const uint16_t sun = 0xFE60, cloud = 0xBDF7, rain = 0x5DDF;
+  if (kind == 7) {
+    tft.drawCircle(px(32), py(30), radius(20), CLR_TEXT_LO);
+    tft.drawLine(px(18), py(44), px(46), py(16), CLR_TEXT_MED);
+    return;
+  }
+  if (kind == 0 || kind == 1) {
+    const int cx = kind == 0 ? 32 : 21, cy = kind == 0 ? 30 : 22;
+    for (int i = 0; i < 8; i++) {
+      float a = i * PI / 4;
+      tft.drawLine(px(cx + (int)(16 * cos(a))), py(cy + (int)(16 * sin(a))),
+                   px(cx + (int)(21 * cos(a))), py(cy + (int)(21 * sin(a))), sun);
+    }
+    tft.fillCircle(px(cx), py(cy), radius(11), sun);
+    if (kind == 0) return;
+  }
+  tft.fillCircle(px(20), py(34), radius(12), cloud);
+  tft.fillCircle(px(33), py(27), radius(15), 0xDEFB);
+  tft.fillCircle(px(47), py(35), radius(11), cloud);
+  tft.fillRoundRect(px(9), py(34), radius(49), radius(15), radius(6), cloud);
+  if (kind == 3) {
+    for (int i = 0; i < 3; i++)
+      tft.drawLine(px(20 + i * 12), py(52), px(16 + i * 12), py(60), rain);
+  } else if (kind == 4) {
+    tft.fillTriangle(px(34), py(44), px(25), py(56), px(34), py(53), sun);
+    tft.fillTriangle(px(33), py(51), px(41), py(51), px(29), py(63), sun);
+  } else if (kind == 5) {
+    for (int i = 0; i < 2; i++) {
+      const int cx = i ? 44 : 20;
+      tft.drawLine(px(cx - 4), py(56), px(cx + 4), py(56), TFT_WHITE);
+      tft.drawLine(px(cx - 2), py(52), px(cx + 2), py(60), TFT_WHITE);
+      tft.drawLine(px(cx - 2), py(60), px(cx + 2), py(52), TFT_WHITE);
+    }
+  } else if (kind == 6) {
+    for (int row = 0; row < 3; row++)
+      tft.drawFastHLine(px(12 + row * 3), py(51 + row * 5), radius(40 - row * 3), CLR_TEXT_LO);
+  }
 }
 
 void redrawWeatherPartial() {
   if (currentState != STATE_WEATHER) return;
-  
-  tft.fillRect(0, 18, SCREEN_W, SCREEN_H - 35, COLOR_BG);
-  
-  // City name
-  tft.setTextColor(0x8410);
-  tft.drawString(weatherCity, 15, 22, 2);
-  
-  // Big temperature
-  char tempStr[8];
-  sprintf(tempStr, "%d", weatherTemp);
-  tft.setTextColor(TFT_WHITE);
-  tft.drawString(tempStr, 15, 48, 7);  // Font 7 = big numbers
-  
-  // Degree symbol + C
-  int tw = tft.textWidth(tempStr, 7);
-  tft.setTextColor(0x8410);
-  tft.drawString("C", 15 + tw + 8, 48, 4);
-  tft.drawCircle(15 + tw + 4, 50, 3, 0x8410);
-  
-  // Condition text
-  uint16_t condColor = getWeatherColor(weatherCode);
-  tft.setTextColor(condColor);
-  tft.drawString(weatherCondition, 15, 110, 2);
-  
-  // Details column
-  int dx = 175;
-  tft.setTextColor(0x6B4D);
-  tft.drawString("Feels like", dx, 30, 1);
-  tft.setTextColor(TFT_WHITE);
-  char fb[8]; sprintf(fb, "%d C", weatherFeels);
-  tft.drawString(fb, dx, 42, 2);
-  
-  tft.setTextColor(0x6B4D);
-  tft.drawString("Humidity", dx, 65, 1);
-  tft.setTextColor(TFT_CYAN);
-  char hb[8]; sprintf(hb, "%d%%", weatherHumidity);
-  tft.drawString(hb, dx, 77, 2);
-  
-  tft.setTextColor(0x6B4D);
-  tft.drawString("Wind", dx, 100, 1);
-  tft.setTextColor(TFT_WHITE);
-  char wb[12]; sprintf(wb, "%d km/h", weatherWind);
-  tft.drawString(wb, dx, 112, 2);
-  
-  tft.setTextColor(0x6B4D);
-  tft.drawString("Hi / Lo", dx, 135, 1);
-  tft.setTextColor(TFT_WHITE);
-  char hlb[12]; sprintf(hlb, "%d / %d", weatherHigh, weatherLow);
-  tft.drawString(hlb, dx, 147, 2);
-  
-  // Sunrise/Sunset
-  tft.setTextColor(TFT_YELLOW);
-  tft.drawString("^", 15, 145, 2);
-  tft.setTextColor(0x8410);
-  tft.drawString(weatherSunrise, 30, 145, 1);
-  
-  tft.setTextColor(0xFBE0);
-  tft.drawString("v", 15, 160, 2);
-  tft.setTextColor(0x8410);
-  tft.drawString(weatherSunset, 30, 160, 1);
+  tft.setTextSize(1);
+  tft.setTextDatum(TL_DATUM);
+  tft.fillRect(0, UI_HEADER_H, SCREEN_W, SCREEN_H - UI_HEADER_H - UI_FOOTER_H, COLOR_BG);
+  const bool compact = SCREEN_W <= 200;
+  const int pad = compact ? 6 : 12;
+  String condition = uiText(weatherCondition.c_str());
+  condition.trim();
+  if (!condition.length()) {
+    const int iconSize = compact ? 44 : 88;
+    drawWeatherIcon(compact ? 8 : 32, compact ? 40 : 65, iconSize, 7);
+    const int textX = compact ? 64 : 144;
+    drawTruncatedText(textX, compact ? 40 : 80, "No forecast", SCREEN_W - textX - pad,
+                      CLR_TEXT_HI, compact ? 1 : 2);
+    String status = !wifiConnected ? "Wi-Fi offline" :
+      (standaloneWeatherStatus.length() ? standaloneWeatherStatus : "No forecast received");
+    drawWrappedText(textX, compact ? 56 : 106, status.c_str(), SCREEN_W - textX - pad,
+                    compact ? 50 : 80, CLR_TEXT_MED);
+    drawPageIndicator(STATE_WEATHER, STATE_COUNT);
+    return;
+  }
+
+  const char* status = !wifiConnected ? "Offline" : standaloneWeatherStatus.length() ? "Saved" : "";
+  const int statusW = tft.textWidth(status, 1);
+  drawTruncatedText(pad, compact ? 20 : 24, weatherCity.length() ? weatherCity.c_str() : "Location unavailable",
+                    SCREEN_W - 2 * pad - (statusW ? statusW + 8 : 0), CLR_TEXT_MED, compact ? 1 : 2);
+  if (statusW) {
+    tft.setTextColor(0xFE60, COLOR_BG);
+    tft.drawRightString(status, SCREEN_W - pad, compact ? 20 : 28, 1);
+  }
+
+  drawWeatherIcon(compact ? 6 : 18, compact ? 34 : 50, compact ? 46 : 86, weatherIconKind(weatherCode));
+  const int tempX = compact ? 60 : 120, tempY = compact ? 33 : 52;
+  String temp = String(weatherTemp) + " C";
+  tft.setTextSize(compact ? 1 : 2);
+  drawTruncatedText(tempX, tempY, temp.c_str(), SCREEN_W - tempX - pad, CLR_TEXT_HI, 4);
+  tft.setTextSize(1);
+  drawWrappedText(tempX, compact ? 62 : 110, condition.c_str(), SCREEN_W - tempX - pad,
+                  compact ? 20 : 36, getWeatherColor(weatherCode), compact ? 1 : 2);
+
+  if (compact) {
+    tft.drawFastHLine(pad, 82, SCREEN_W - 2 * pad, CLR_BORDER);
+    const int rightX = SCREEN_W / 2 + 6, leftW = SCREEN_W / 2 - pad - 4;
+    String feels = String("Feels ") + String(weatherFeels) + " C";
+    String humid = String("RH ") + String(weatherHumidity) + "%";
+    String wind = String(weatherWind) + " km/h";
+    String range = String("H") + String(weatherHigh) + " L" + String(weatherLow);
+    drawTruncatedText(pad, 86, feels.c_str(), leftW, CLR_TEXT_HI, 1);
+    drawTruncatedText(rightX, 86, humid.c_str(), SCREEN_W - rightX - pad, 0x5DDF, 1);
+    drawTruncatedText(pad, 98, wind.c_str(), leftW, CLR_TEXT_MED, 1);
+    drawTruncatedText(rightX, 98, range.c_str(), SCREEN_W - rightX - pad, CLR_TEXT_MED, 1);
+    tft.drawFastHLine(pad, 108, SCREEN_W - 2 * pad, CLR_BORDER);
+    for (int i = 0; i < 2; i++) {
+      const int x = i ? rightX : pad;
+      tft.drawFastHLine(x, 116, 9, 0xFE60);
+      tft.drawLine(x + 4, 110, x + 4, 114, 0xFE60);
+      tft.drawLine(x + 1, i ? 111 : 113, x + 4, i ? 114 : 110, 0xFE60);
+      tft.drawLine(x + 7, i ? 111 : 113, x + 4, i ? 114 : 110, 0xFE60);
+      String value = i ? weatherSunset : weatherSunrise;
+      drawTruncatedText(x + 14, 110, value.length() ? value.c_str() : "--",
+                        i ? SCREEN_W - x - pad - 14 : leftW - 14, CLR_TEXT_LO, 1);
+    }
+  } else {
+    tft.drawFastHLine(pad, 148, SCREEN_W - 2 * pad, CLR_BORDER);
+    const int colW = (SCREEN_W - 2 * pad) / 3;
+    const char* labels[] = {"FEELS LIKE", "HUMIDITY", "WIND"};
+    const String values[] = {String(weatherFeels) + " C", String(weatherHumidity) + "%", String(weatherWind) + " km/h"};
+    const char* lower[] = {"HIGH / LOW", "SUNRISE", "SUNSET"};
+    const String detail[] = {String(weatherHigh) + " / " + String(weatherLow) + " C",
+      weatherSunrise.length() ? weatherSunrise : "--", weatherSunset.length() ? weatherSunset : "--"};
+    for (int i = 0; i < 3; i++) {
+      const int x = pad + i * colW;
+      drawTruncatedText(x, 156, labels[i], colW - 6, CLR_TEXT_LO, 1);
+      drawTruncatedText(x, 169, values[i].c_str(), colW - 6, i == 1 ? 0x5DDF : CLR_TEXT_HI, 2);
+      drawTruncatedText(x, 199, lower[i], colW - 6, CLR_TEXT_LO, 1);
+      drawTruncatedText(x, 212, detail[i].c_str(), colW - 6, i ? 0xFE60 : CLR_TEXT_MED, 1);
+    }
+    tft.drawFastHLine(pad, 191, SCREEN_W - 2 * pad, CLR_BORDER);
+  }
+  drawPageIndicator(STATE_WEATHER, STATE_COUNT);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -547,70 +530,35 @@ uint16_t getNotifColor(String app) {
 
 void redrawNotificationsPartial() {
   if (currentState != STATE_NOTIFICATIONS) return;
-  
-  tft.fillRect(0, 18, SCREEN_W, SCREEN_H - 35, COLOR_BG);
-  
-  if (notifTotal == 0) {
-    tft.setTextColor(0x4208);
-    tft.drawCentreString("No notifications", SCREEN_W/2, SCREEN_H/2 - 10, 2);
-    tft.drawCentreString("All caught up!", SCREEN_W/2, SCREEN_H/2 + 10, 1);
-    return;
+  tft.fillRect(0, UI_HEADER_H, SCREEN_W, SCREEN_H - UI_HEADER_H, COLOR_BG);
+  int pad = 5, top = UI_HEADER_H + 4;
+  int bottom = SCREEN_H - UI_FOOTER_H - 14;
+  if (notifTotal <= 0) {
+    drawWrappedText(pad, SCREEN_H / 2 - 12, "No notifications\nAll caught up", SCREEN_W - 2 * pad, 30, CLR_TEXT_MED);
+  } else {
+    int rowH = (bottom - top) / 3;
+    for (int i = 0; i < min(notifTotal, 3); i++) {
+      int y = top + i * rowH;
+      uint16_t accent = getNotifColor(notifApps[i]);
+      tft.fillRoundRect(pad, y, SCREEN_W - pad * 2, rowH - 3, 3, CLR_SURFACE);
+      tft.fillRect(pad, y + 3, 2, rowH - 9, accent);
+      String stamp = fitUiText(notifTimes[i].c_str(), 42, 1);
+      int stampW = tft.textWidth(stamp, 1);
+      drawTruncatedText(pad + 6, y + 3, notifApps[i].c_str(), SCREEN_W - 2 * pad - stampW - 15, accent, 1, CLR_SURFACE);
+      tft.setTextColor(CLR_TEXT_LO, CLR_SURFACE);
+      tft.drawRightString(stamp, SCREEN_W - pad - 4, y + 3, 1);
+      drawWrappedText(pad + 6, y + 14, notifTitles[i].c_str(), SCREEN_W - 2 * pad - 12, rowH - 14, TFT_WHITE, 1, CLR_SURFACE);
+    }
   }
-  
-  for (int i = 0; i < min(notifTotal, 3); i++) {
-    int cardY = 22 + (i * 58);
-    uint16_t borderColor = getNotifColor(notifApps[i]);
-    
-    // Card background
-    tft.fillRoundRect(10, cardY, SCREEN_W - 20, 52, 4, 0x1082);
-    // Left color accent bar
-    tft.fillRect(10, cardY, 4, 52, borderColor);
-    
-    // App name (small, colored)
-    tft.setTextColor(borderColor);
-    tft.drawString(notifApps[i], 20, cardY + 5, 1);
-    
-    // Time (right aligned, dim)
-    tft.setTextColor(0x4208);
-    tft.drawRightString(notifTimes[i], SCREEN_W - 15, cardY + 5, 1);
-    
-    // Title (white, larger)
-    tft.setTextColor(TFT_WHITE);
-    tft.drawString(notifTitles[i].substring(0, 28), 20, cardY + 22, 2);
-    
-    // Dismiss X
-    tft.setTextColor(0x4208);
-    tft.drawString("x", SCREEN_W - 22, cardY + 22, 2);
-  }
-  
-  // Flash notification toggle at bottom
-  tft.setTextColor(0x4208);
-  tft.drawCentreString(flashNotifEnabled ? "Flash: ON" : "Flash: OFF", SCREEN_W/2, SCREEN_H - 28, 1);
-}
-
-// Flash notification overlay (shows for 5s on eyes page)
-void showFlashNotification(String text) {
-  if (!flashNotifEnabled) return;
-  flashNotifActive = true;
-  flashNotifStart = millis();
-  flashNotifText = text;
-  
-  if (currentState == STATE_EYES) {
-    // Draw overlay at top
-    tft.fillRoundRect(10, 5, SCREEN_W - 20, 35, 6, 0x1082);
-    tft.fillRect(10, 5, 4, 35, TFT_CYAN);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawString(text.substring(0, 30), 20, 14, 2);
-  }
+  drawTruncatedText(pad, SCREEN_H - UI_FOOTER_H - 10, flashNotifEnabled ? "Alerts on" : "Alerts off", SCREEN_W - 2 * pad, CLR_TEXT_LO, 1);
+  drawPageIndicator(STATE_NOTIFICATIONS, STATE_COUNT);
 }
 
 void updateFlashNotification() {
-  if (flashNotifActive && millis() - flashNotifStart > 5000) {
+  if (flashNotifActive && millis() - flashNotifStart >= 3000) {
     flashNotifActive = false;
     if (currentState == STATE_EYES) {
-      // Clear overlay area and redraw eyes
-      tft.fillRect(0, 0, SCREEN_W, 45, COLOR_BG);
-      drawEyes();
+      renderCurrentPage();
     }
   }
 }
@@ -621,21 +569,19 @@ void updateFlashNotification() {
 
 void redrawNotesPartial() {
   if (currentState != STATE_NOTES) return;
-  
-  tft.fillRect(0, 18, SCREEN_W, SCREEN_H - 35, COLOR_BG);
-  
-  tft.setTextColor(TFT_WHITE);
+  tft.fillRect(0, UI_HEADER_H, SCREEN_W, SCREEN_H - UI_HEADER_H, COLOR_BG);
+  int top = UI_HEADER_H + 5;
+  int rowH = (SCREEN_H - UI_FOOTER_H - top) / 4;
+  bool any = false;
   for (int i = 0; i < 4; i++) {
-    if (currentNotes[i].length() > 0) {
-      // Bullet point style
-      tft.fillCircle(15, 42 + (i * 35), 2, TFT_CYAN);
-      tft.drawString(currentNotes[i].substring(0, 35), 22, 35 + (i * 35), 2);
-    }
+    if (!currentNotes[i].length()) continue;
+    any = true;
+    int y = top + i * rowH;
+    tft.fillCircle(7, y + 4, 2, CLR_PRIMARY);
+    drawWrappedText(15, y, currentNotes[i].c_str(), SCREEN_W - 21, rowH - 2, CLR_TEXT_HI);
   }
-  
-  tft.setTextColor(0x4208);
-  String notesUrl = "Edit at http://" + WiFi.localIP().toString() + ":5555";
-  tft.drawCentreString(notesUrl, SCREEN_W/2, SCREEN_H - 28, 1);
+  if (!any) drawWrappedText(8, SCREEN_H / 2 - 5, "No notes yet", SCREEN_W - 16, 20, CLR_TEXT_MED);
+  drawPageIndicator(STATE_NOTES, STATE_COUNT);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -646,141 +592,55 @@ int settingsScrollY = 0;
 
 void redrawSettingsPartial() {
   if (currentState != STATE_SETTINGS) return;
-  
-  tft.fillRect(0, 18, SCREEN_W, SCREEN_H - 35, COLOR_BG);
-  
-  int y = 25 - settingsScrollY;
-  
-  // Network
-  if (y > -20 && y < SCREEN_H) {
-    tft.setTextColor(TFT_CYAN);
-    tft.drawString("NETWORK", 10, y, 2);
+  const int contentH = SCREEN_H - UI_HEADER_H - UI_FOOTER_H;
+  settingsScrollY = constrain(settingsScrollY, 0, max(0, 228 - contentH));
+  tft.setViewport(0, UI_HEADER_H, SCREEN_W, contentH, false);
+  tft.fillRect(0, UI_HEADER_H, SCREEN_W, contentH, COLOR_BG);
+  int y = UI_HEADER_H + 5 - settingsScrollY;
+  drawTruncatedText(6, y, "APPEARANCE", SCREEN_W - 12, CLR_PRIMARY, 1);
+  y += 13;
+  const char* names[] = {"Classic", "Soft", "Robo"};
+  int segment = (SCREEN_W - 12) / 3;
+  for (int i = 0; i < THEME_COUNT; i++) {
+    uint16_t bg = activeTheme == i ? CLR_PRIMARY : CLR_SURFACE;
+    uint16_t fg = activeTheme == i ? TFT_BLACK : CLR_TEXT_MED;
+    tft.fillRoundRect(6 + i * segment, y, segment - 3, 16, 3, bg);
+    drawTruncatedText(9 + i * segment, y + 4, names[i], segment - 9, fg, 1, bg);
   }
-  y += 20;
-  if (y > -20 && y < SCREEN_H) {
-    tft.setTextColor(0x8410);
-    tft.drawString("IP:", 10, y, 1);
-    tft.setTextColor(TFT_GREEN);
-    tft.drawString(WiFi.localIP().toString(), 30, y, 1);
+  y += 24;
+  auto row = [&](const char* label, const String& value, uint16_t color) {
+    drawTruncatedText(6, y, label, 45, CLR_TEXT_LO, 1);
+    drawTruncatedText(54, y, value.c_str(), SCREEN_W - 60, color, 1);
+    y += 13;
+  };
+  row("Wi-Fi", wifiConnected ? WiFi.SSID() : "Offline", CLR_TEXT_HI);
+  row("IP", wifiConnected ? WiFi.localIP().toString() : "--", CLR_TEXT_MED);
+  row("Signal", wifiConnected ? String(WiFi.RSSI()) + " dBm" : "--", CLR_TEXT_MED);
+  y += 5;
+  row("CPU", String(ESP.getCpuFreqMHz()) + " MHz", CLR_TEXT_HI);
+  row("Memory", String(ESP.getFreeHeap() / 1024) + " KB free", CLR_TEXT_HI);
+  row("Uptime", String(millis() / 60000) + " min", CLR_TEXT_MED);
+  row("Light", String(ldrValue), CLR_TEXT_MED);
+  row("Input", HAS_TOUCH ? "Touch" : "L / R / Select", CLR_TEXT_MED);
+  #ifdef ESP32
+  // Probe once, outside the repeated scroll paint path.
+  static int nrf1 = -1, nrf2 = -1;
+  if (nrf1 < 0) {
+    digitalWrite(TFT_CS, HIGH);
+    pinMode(CC1101_CSN_PIN, OUTPUT);
+    digitalWrite(CC1101_CSN_PIN, HIGH);
+    pinMode(NRF1_CSN_PIN, OUTPUT); digitalWrite(NRF1_CSN_PIN, HIGH);
+    pinMode(NRF2_CSN_PIN, OUTPUT); digitalWrite(NRF2_CSN_PIN, HIGH);
+    RF24 radio1(NRF1_CE_PIN, NRF1_CSN_PIN), radio2(NRF2_CE_PIN, NRF2_CSN_PIN);
+    nrf1 = radio1.begin(); nrf2 = radio2.begin();
+    if (nrf1) radio1.powerDown();
+    if (nrf2) radio2.powerDown();
   }
-  y += 14;
-  if (y > -20 && y < SCREEN_H) {
-    tft.setTextColor(0x8410);
-    tft.drawString("RSSI:", 10, y, 1);
-    tft.setTextColor(TFT_WHITE);
-    char rssi[8]; sprintf(rssi, "%d dBm", WiFi.RSSI());
-    tft.drawString(rssi, 45, y, 1);
-  }
-  
-  y += 20;
-  // System
-  if (y > -20 && y < SCREEN_H) {
-    tft.setTextColor(TFT_CYAN);
-    tft.drawString("SYSTEM", 10, y, 2);
-  }
-  y += 20;
-  if (y > -20 && y < SCREEN_H) {
-    tft.setTextColor(0x8410);
-    tft.drawString("CPU:", 10, y, 1);
-    tft.setTextColor(TFT_WHITE);
-    char cpu[16]; sprintf(cpu, "%d MHz", ESP.getCpuFreqMHz());
-    tft.drawString(cpu, 35, y, 1);
-  }
-  y += 14;
-  if (y > -20 && y < SCREEN_H) {
-    tft.setTextColor(0x8410);
-    tft.drawString("RAM:", 10, y, 1);
-    tft.setTextColor(TFT_WHITE);
-    char ram[16]; sprintf(ram, "%d bytes", ESP.getFreeHeap());
-    tft.drawString(ram, 35, y, 1);
-  }
-  y += 14;
-  if (y > -20 && y < SCREEN_H) {
-    tft.setTextColor(0x8410);
-    tft.drawString("Uptime:", 10, y, 1);
-    unsigned long secs = millis() / 1000;
-    char up[16]; sprintf(up, "%02dh%02dm%02ds", (int)(secs/3600), (int)((secs%3600)/60), (int)(secs%60));
-    tft.setTextColor(TFT_WHITE);
-    tft.drawString(up, 50, y, 1);
-  }
-  
-  y += 20;
-  // Sensors
-  if (y > -20 && y < SCREEN_H) {
-    tft.setTextColor(TFT_CYAN);
-    tft.drawString("SENSORS", 10, y, 2);
-  }
-  y += 20;
-  if (y > -20 && y < SCREEN_H) {
-    tft.setTextColor(0x8410);
-    tft.drawString("LDR:", 10, y, 1);
-    tft.setTextColor(TFT_YELLOW);
-    char ld[8]; sprintf(ld, "%d", ldrValue);
-    tft.drawString(ld, 35, y, 1);
-    // Visual bar
-    int barLen = map(ldrValue, 0, 1024, 0, 100);
-    tft.fillRect(65, y + 1, barLen, 6, TFT_YELLOW);
-    tft.fillRect(65 + barLen, y + 1, 100 - barLen, 6, 0x2104);
-  }
-  y += 14;
-  if (y > -20 && y < SCREEN_H) {
-    tft.setTextColor(0x8410);
-    tft.drawString("Touch L:", 10, y, 1);
-    tft.setTextColor(digitalRead(TOUCH_LEFT) ? TFT_GREEN : TFT_RED);
-    tft.drawString(digitalRead(TOUCH_LEFT) ? "HIGH" : "LOW", 60, y, 1);
-    tft.setTextColor(0x8410);
-    tft.drawString("Touch R:", 120, y, 1);
-    tft.setTextColor(digitalRead(TOUCH_RIGHT) ? TFT_GREEN : TFT_RED);
-    tft.drawString(digitalRead(TOUCH_RIGHT) ? "HIGH" : "LOW", 170, y, 1);
-  }
-  
-  y += 20;
-  // Time
-  if (y > -20 && y < SCREEN_H) {
-    tft.setTextColor(TFT_CYAN);
-    tft.drawString("TIME", 10, y, 2);
-  }
-  y += 20;
-  if (y > -20 && y < SCREEN_H) {
-    if (timeReceived) {
-      char tb[8]; sprintf(tb, "%02d:%02d", displayHour, displayMinute);
-      tft.setTextColor(TFT_YELLOW);
-      tft.drawString(tb, 10, y, 4);
-    } else {
-      tft.setTextColor(0x4208);
-      tft.drawString("--:--", 10, y, 4);
-    }
-  }
-
-  // ── Theme Switcher ──
-  y += 40;
-  if (y > -20 && y < SCREEN_H) {
-    tft.setTextColor(TFT_CYAN);
-    tft.drawString("THEME", 10, y, 2);
-  }
-  y += 22;
-  if (y > -20 && y < SCREEN_H) {
-    // Pill-shaped slider track
-    int sliderX = 10, sliderW = 120, sliderH = 24;
-    int thumbW = 54, thumbH = 20;
-    int thumbX = activeTheme == 0 ? sliderX + 2 : sliderX + sliderW - thumbW - 2;
-    
-    // Track background (purple-tinted for T2, dark for T1)
-    tft.fillRoundRect(sliderX, y, sliderW, sliderH, sliderH/2,
-                      activeTheme == 0 ? 0x2104 : 0x4810);
-    // Thumb
-    tft.fillRoundRect(thumbX, y + 2, thumbW, thumbH, thumbH/2, TFT_WHITE);
-    
-    // Labels
-    tft.setTextColor(activeTheme == 0 ? TFT_BLACK : 0x4208);
-    tft.drawCentreString("OG", sliderX + 29, y + 5, 2);
-    tft.setTextColor(activeTheme == 1 ? TFT_BLACK : 0x4208);
-    tft.drawCentreString("T2", sliderX + sliderW - 29, y + 5, 2);
-    
-    // Current theme label
-    tft.setTextColor(0x8410);
-    tft.drawString(activeTheme == 0 ? "Original" : "Alternate", sliderX + sliderW + 10, y + 4, 2);
-  }
+  row("Radio 1", nrf1 ? "Detected" : "Not detected", nrf1 ? CLR_SUCCESS : CLR_TEXT_LO);
+  row("Radio 2", nrf2 ? "Detected" : "Not detected", nrf2 ? CLR_SUCCESS : CLR_TEXT_LO);
+  #endif
+  tft.resetViewport();
+  drawPageIndicator(STATE_SETTINGS, STATE_COUNT);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -788,8 +648,16 @@ void redrawSettingsPartial() {
 // ═══════════════════════════════════════════════════════════
 
 void drawEyesPage() {
-  if (activeTheme == 1) { t2_drawEyesPage(); drawStatusBar(); return; }
-  tft.fillScreen(COLOR_BG);
+  if (customEyeActive && customEyeReady && customEyeImg != nullptr) {
+    tft.setSwapBytes(true); // Ensure correct endianness for image
+    tft.pushImage(0, 0, 160, 128, customEyeImg);
+    tft.setSwapBytes(false);
+    return;
+  }
+  
+  if (activeTheme == 2) { tft.fillScreen(COLOR_BG); t3_drawEyesPage(); drawStatusBar(); return; }
+  if (activeTheme == 1) { tft.fillScreen(COLOR_BG); t2_drawEyesPage(); drawStatusBar(); return; }
+  tft.fillRect(0, 16, SCREEN_W, SCREEN_H - 16, COLOR_BG);
   drawStarfield();
   drawEyes();
   drawStatusBar();
@@ -805,7 +673,6 @@ void drawSpotifyPage() {
 
 void drawPomodoroPage() {
   tft.fillScreen(COLOR_BG);
-  resetPomodoroDrawState();
   redrawPomodoroPartial();
   drawPageHeader("Pomodoro");
   drawStatusBar();
@@ -875,7 +742,41 @@ void drawNetworkPageFull() {
   drawStatusBar();
 }
 
+void drawClockDashboardPageFull() {
+  resetClockDashboardDrawState();
+  drawClockDashboardPage();
+  drawStatusBar();
+}
+
+void drawRetroWatchPageFull() {
+  resetRetroWatchDrawState();
+  drawRetroWatchPage();
+  drawStatusBar();
+}
+
 void renderCurrentPage() {
+  uiPageGeneration++;
+  tft.resetViewport();
+  tft.setTextSize(1);
+  tft.setTextDatum(TL_DATUM);
+  tft.setTextPadding(0);
+  tft.setTextWrap(false, false);
+  #ifdef ESP32
+  if (currentState != STATE_EYES) {
+    releaseClassicEyeSprites();
+    if (T2EyeDrawer::t2Canvas) {
+      T2EyeDrawer::t2Canvas->deleteSprite();
+      delete T2EyeDrawer::t2Canvas;
+      t2CanvasSetNull();
+    }
+    if (t3_canvas) {
+      t3_canvas->deleteSprite();
+      delete t3_canvas;
+      t3CanvasSetNull();
+    }
+    setThoughtSpriteCompositing(true);
+  }
+  #endif
   switch(currentState) {
     case STATE_EYES: drawEyesPage(); break;
     case STATE_SPOTIFY: drawSpotifyPage(); break;
@@ -889,15 +790,117 @@ void renderCurrentPage() {
     case STATE_PRODUCTIVITY: drawProductivityPageFull(); break;
     case STATE_NETWORK: drawNetworkPageFull(); break;
     case STATE_SETTINGS: drawSettingsPage(); break;
+    case STATE_PC_DASH: drawPcDashPageFull(); break;
+    case STATE_RUVIEW:
+      #ifdef ESP32
+      {
+        extern void resumeCSICollector();
+        resumeCSICollector();
+      }
+      #endif
+      drawRuviewPageFull();
+      break;
+    case STATE_CLOCK_DASHBOARD: drawClockDashboardPageFull(); break;
+    case STATE_RETRO_WATCH: drawRetroWatchPageFull(); break;
+    #ifdef ESP32
+    case STATE_DR_HACK: initDrHack(); break;
+    #endif
     default: break;
   }
 }
 
 void changePage(int direction) {
+  #ifdef ESP32
+  AppState prevState = currentState;
+  #endif
   int next = (int)currentState + direction;
-  if (next >= STATE_COUNT) next = 0;
-  if (next < 0) next = STATE_COUNT - 1;
+  // Compute effective max page count
+  int maxPage = STATE_COUNT;
+  #ifndef ESP32
+  // ESP8266: skip Dr. Hack (STATE_DR_HACK) — it's ESP32-only
+  maxPage = STATE_DR_HACK; // stop before DR_HACK
+  #endif
+  if (next >= maxPage) next = 0;
+  if (next < 0) next = maxPage - 1;
   currentState = (AppState)next;
+
+  if (currentState != STATE_EYES) {
+    customEyeActive = false;
+  }
+  // Reset all page draw states on page change to prevent stale partial redraws
+  resetSpotifyDrawState();
+  resetClockDashboardDrawState();
+  resetRetroWatchDrawState();
+  resetPcDashDrawState();
+  extern void t2_resetSpotifyDrawState();
+  t2_resetSpotifyDrawState();
+  settingsScrollY = 0;
+  #ifdef ESP32
+  // Reset Dr. Hack state when leaving
+  if (currentState != STATE_DR_HACK) {
+    extern DrHackSubState dhCurrentState;
+    dhCurrentState = DH_MENU;
+  }
+  // Manage RuView CSI hardware state: pause when leaving, resume when entering
+  if (prevState == STATE_RUVIEW && currentState != STATE_RUVIEW) {
+    extern void pauseCSICollector();
+    pauseCSICollector();
+  } else if (currentState == STATE_RUVIEW) {
+    extern void resumeCSICollector();
+    resumeCSICollector();
+  }
+  #endif
+  
+  extern ThoughtBubble activeBubble;
+  activeBubble.active = false;
+  activeBubble.fadingOut = false;
+  activeBubble.fadeAlpha = 0;
+  // Explicit full screen clear on page transition
+  tft.fillScreen(COLOR_BG);
+  
+  renderCurrentPage();
+}
+
+void setPage(int targetPage) {
+  int maxPage = STATE_COUNT;
+  #ifndef ESP32
+  maxPage = STATE_DR_HACK;
+  #endif
+  if (targetPage < 0 || targetPage >= maxPage) return;
+  if (targetPage == (int)currentState) return;
+  if (targetPage != (int)STATE_EYES) {
+    customEyeActive = false;
+  }
+  #ifdef ESP32
+  AppState prevState = currentState;
+  #endif
+  currentState = (AppState)targetPage;
+  resetSpotifyDrawState();
+  resetClockDashboardDrawState();
+  resetRetroWatchDrawState();
+  resetPcDashDrawState();
+  extern void t2_resetSpotifyDrawState();
+  t2_resetSpotifyDrawState();
+  settingsScrollY = 0;
+  #ifdef ESP32
+  if (currentState != STATE_DR_HACK) {
+    extern DrHackSubState dhCurrentState;
+    dhCurrentState = DH_MENU;
+  }
+  // Manage RuView CSI hardware state: pause when leaving, resume when entering
+  if (prevState == STATE_RUVIEW && currentState != STATE_RUVIEW) {
+    extern void pauseCSICollector();
+    pauseCSICollector();
+  } else if (currentState == STATE_RUVIEW) {
+    extern void resumeCSICollector();
+    resumeCSICollector();
+  }
+  #endif
+  extern ThoughtBubble activeBubble;
+  activeBubble.active = false;
+  activeBubble.fadingOut = false;
+  activeBubble.fadeAlpha = 0;
+  tft.fillScreen(COLOR_BG);
   renderCurrentPage();
 }
 

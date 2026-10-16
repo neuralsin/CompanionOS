@@ -2,6 +2,8 @@
 #define EYES_H
 
 #include "globals.h"
+#include "ui_components.h"
+#include "thought_engine.h"
 #include <math.h>
 
 // ═══════════════════════════════════════════════════════════
@@ -21,14 +23,14 @@
 extern Emotion currentEmotion;
 Emotion autoEmotion = EMO_NEUTRAL;  // Time/LDR suggested emotion
 
-// ── Layout Constants ─────────────────────────────────────
-#define EYE_Y        110
-#define LEFT_EYE_X   95
-#define RIGHT_EYE_X  225
-#define EYE_W        90     // Full width of almond
-#define EYE_H        38     // Baseline height
-#define PUPIL_W      10
-#define PUPIL_H      28
+// ── Layout Constants (v7: SCALE-aware) ──────────────────
+#define EYE_Y        (SCREEN_W > 200 ? SCALE_Y(110) : 70)
+#define LEFT_EYE_X   (SCREEN_W > 200 ? SCALE_X(95) : 45)
+#define RIGHT_EYE_X  (SCREEN_W > 200 ? SCALE_X(225) : 115)
+#define EYE_W        (SCREEN_W > 200 ? 90 : 45)   // Full width of almond
+#define EYE_H        (SCREEN_W > 200 ? 38 : 26)   // Baseline height
+#define PUPIL_W      (SCREEN_W > 200 ? 10 : 6)
+#define PUPIL_H      (SCREEN_W > 200 ? 28 : 20)
 
 // ── Animation State ──────────────────────────────────────
 extern unsigned long lastBlink;
@@ -55,8 +57,8 @@ void drawStarfield() {
   
   // Stars in the center zone between the two eyes
   for (int i = 0; i < 40; i++) {
-    uint32_t rX = xorshift(seed) % 320;
-    uint32_t rY = xorshift(seed) % 150 + 30;
+    uint32_t rX = xorshift(seed) % SCREEN_W;
+    uint32_t rY = xorshift(seed) % (SCREEN_H - 50) + 20;  // below status bar, above bottom
     uint8_t  brightness = xorshift(seed) % 3;
     
     // Skip pixels that overlap the eye bounding boxes
@@ -65,7 +67,7 @@ void drawStarfield() {
     bool inRightEye = (rX >= RIGHT_EYE_X - EYE_W/2 - 8) && (rX <= RIGHT_EYE_X + EYE_W/2 + 8)
                    && (rY >= EYE_Y - EYE_H - 8) && (rY <= EYE_Y + EYE_H + 8);
     
-    if (!inLeftEye && !inRightEye) {
+    if (!inLeftEye && !inRightEye && rY < (uint32_t)eyeRenderBottom()) {
       uint16_t col = brightness == 2 ? 0x4208 : brightness == 1 ? 0x2104 : 0x10A2;
       tft.drawPixel(rX, rY, col);
     }
@@ -79,23 +81,29 @@ extern bool timeReceived;
 
 extern void drawStatusBar();
 
-// ── Color Interpolation ──────────────────────────────────
-uint16_t blendColor(uint16_t c1, uint16_t c2, float t) {
-  if (t <= 0) return c1;
-  if (t >= 1) return c2;
-  uint8_t r1 = (c1 >> 11) & 0x1F, g1 = (c1 >> 5) & 0x3F, b1 = c1 & 0x1F;
-  uint8_t r2 = (c2 >> 11) & 0x1F, g2 = (c2 >> 5) & 0x3F, b2 = c2 & 0x1F;
-  uint8_t r = r1 + (r2 - r1) * t;
-  uint8_t g = g1 + (g2 - g1) * t;
-  uint8_t b = b1 + (b2 - b1) * t;
-  return (r << 11) | (g << 5) | b;
-}
+// blendColor() is defined in ui_components.h — using that version.
+// Removed duplicate to avoid linker errors.
 
 // ── Core Almond Eye Renderer ────────────────────────────
 float currentBlinkMod = 1.0;
 
-void drawAlmondEye(int cx, int cy, int w, int h, float pX, float pY,
-                   uint16_t c1, uint16_t c2, uint16_t c3, float tiltL, float tiltR) {
+TFT_eSprite eyeSpr = TFT_eSprite(&tft);
+bool eyeSprAllocated = false;
+bool eyeSprAllocationAttempted = false;
+TFT_eSprite zSpr(&tft);
+bool zSprAttempted = false;
+
+void releaseClassicEyeSprites() {
+  eyeSpr.deleteSprite();
+  eyeSprAllocated = false;
+  eyeSprAllocationAttempted = false;
+  zSpr.deleteSprite();
+  zSprAttempted = false;
+}
+
+template <typename T>
+void drawAlmondEyeOn(T* display, int scx, int scy, int w, int h, float pX, float pY,
+                    uint16_t c1, uint16_t c2, uint16_t c3, float tiltL, float tiltR) {
   h = (int)((float)h * currentBlinkMod);
   if (h < 2) h = 2; // Prevent division by zero and inversion
   
@@ -111,7 +119,7 @@ void drawAlmondEye(int cx, int cy, int w, int h, float pX, float pY,
       int yt = (int)(-(h + ring) * curve + tmod);
       int yb = (int)((h + ring) * curve - tmod);
       if (yb - yt > 0) {
-        tft.drawFastVLine(cx + x, cy + yt, yb - yt, glowColor);
+        display->drawFastVLine(scx + x, scy + yt, yb - yt, glowColor);
       }
     }
   }
@@ -129,43 +137,70 @@ void drawAlmondEye(int cx, int cy, int w, int h, float pX, float pY,
     int totalH = yb - yt;
     
     if (totalH > 0) {
-      uint16_t colBuf[90];
-      int nPix = min(totalH, 90);
-      for (int py = 0; py < nPix; py++) {
+      for (int py = 0; py < totalH; py++) {
         float t = (float)py / totalH;
-        if (t < 0.33f) {
-          colBuf[py] = blendColor(c1, c2, t / 0.33f);
-        } else if (t < 0.66f) {
-          colBuf[py] = blendColor(c2, c3, (t - 0.33f) / 0.33f);
+        uint16_t color;
+        if (t < 0.33) {
+          color = blendColor(c1, c2, t / 0.33);
+        } else if (t < 0.66) {
+          color = blendColor(c2, c3, (t - 0.33) / 0.33);
         } else {
-          colBuf[py] = blendColor(c3, c2, (t - 0.66f) / 0.34f);
+          color = blendColor(c3, c2, (t - 0.66) / 0.34);
         }
+        display->drawPixel(scx + x, scy + yt + py, color);
       }
-      tft.pushImage(cx + x, cy + yt, 1, nPix, colBuf);
     }
   }
 
+  if (h <= 2) return;
+
   // Vertical Cat Pupil
-  int px = cx + (int)pX;
-  int py = cy + (int)pY;
+  int px = scx + (int)pX;
+  int py = scy + (int)pY;
   
   float squish = (float)h / EYE_H;
   int p_h = (int)(PUPIL_H * squish);
   if (p_h < 2) p_h = 2;
   
   // Advanced Detailing: Rich Iris depth ring
-  tft.fillRoundRect(px - PUPIL_W/2 - 2, py - p_h/2 - 2, PUPIL_W + 4, p_h + 4, (PUPIL_W+4)/2, 0xFEA0);
-  tft.drawRoundRect(px - PUPIL_W/2 - 3, py - p_h/2 - 3, PUPIL_W + 6, p_h + 6, (PUPIL_W+6)/2, 0x8260);
+  display->fillRoundRect(px - PUPIL_W/2 - 2, py - p_h/2 - 2, PUPIL_W + 4, p_h + 4, (PUPIL_W+4)/2, 0xFEA0);
+  display->drawRoundRect(px - PUPIL_W/2 - 3, py - p_h/2 - 3, PUPIL_W + 6, p_h + 6, (PUPIL_W+6)/2, 0x8260);
   
   // Deep Black pill pupil
-  tft.fillRoundRect(px - PUPIL_W/2, py - p_h/2, PUPIL_W, p_h, PUPIL_W/2, TFT_BLACK);
+  display->fillRoundRect(px - PUPIL_W/2, py - p_h/2, PUPIL_W, p_h, PUPIL_W/2, TFT_BLACK);
   
   // Primary reflection (top-right curved glass highlight)
   if (squish > 0.3) {
-    tft.fillCircle(px + 4, py - (int)(6 * squish), 3, TFT_WHITE);
-    tft.fillCircle(px + 3, py - (int)(9 * squish), 2, TFT_WHITE);
+    display->fillCircle(px + 4, py - (int)(6 * squish), 3, TFT_WHITE);
+    display->fillCircle(px + 3, py - (int)(9 * squish), 2, TFT_WHITE);
     // Secondary bounce reflection (bottom-left)
-    tft.fillCircle(px - 2, py + (int)(6 * squish), 2, 0x6B4D);
+    display->fillCircle(px - 2, py + (int)(6 * squish), 2, 0x6B4D);
+  }
+
+}
+
+void drawAlmondEye(int cx, int cy, int w, int h, float pX, float pY,
+                   uint16_t c1, uint16_t c2, uint16_t c3, float tiltL, float tiltR) {
+  // A constant footprint covers every emotion and blink, erasing the previous
+  // frame without reallocating or moving the sprite origin as the lids close.
+  const int sprW = EYE_W + 16;
+  const int sprH = (EYE_H + 18 + 8) * 2;
+  if (!eyeSprAllocationAttempted) {
+    eyeSprAllocationAttempted = true;
+    eyeSpr.setColorDepth(16);
+    eyeSprAllocated = eyeSpr.createSprite(sprW, sprH) != nullptr;
+    if (!eyeSprAllocated) {
+      eyeSpr.setColorDepth(8);
+      eyeSprAllocated = eyeSpr.createSprite(sprW, sprH) != nullptr;
+    }
+  }
+  if (eyeSprAllocated) {
+    eyeSpr.fillSprite(COLOR_BG);
+    drawAlmondEyeOn(&eyeSpr, sprW / 2, sprH / 2, w, h, pX, pY, c1, c2, c3, tiltL, tiltR);
+    eyeSpr.pushSprite(cx - sprW / 2, cy - sprH / 2);
+  } else {
+    tft.fillRect(cx - sprW / 2, cy - sprH / 2, sprW, sprH, COLOR_BG);
+    drawAlmondEyeOn(&tft, cx, cy, w, h, pX, pY, c1, c2, c3, tiltL, tiltR);
   }
 }
 
@@ -218,20 +253,32 @@ void drawHeartEyes(int cx, int cy, uint16_t color) {
 }
 
 void drawZzz(int cx, int cy) {
-  // Clear previous Z's
-  tft.fillRect(cx + 35, cy - 75, 45, 65, COLOR_BG);
+  // Independent 4.8KB RAM physics buffer for Zzz particles
+  const int sprH = SCREEN_W > 200 ? 60 : 38;
+  if (!zSprAttempted) {
+    zSprAttempted = true;
+    if (!zSpr.createSprite(40, sprH)) {
+      zSpr.setColorDepth(8);
+      zSpr.createSprite(40, sprH);
+    }
+  }
+  if (!zSpr.created()) return;
+  zSpr.fillSprite(COLOR_BG);
   
   // Oscillating anime floating phase
   float phase = (millis() % 3000) / 3000.0 * 2 * PI;
   
-  int y1 = 45 - (int)(sin(phase) * 6);
-  int y2 = 30 - (int)(sin(phase - 1.0) * 8);
-  int y3 = 10 - (int)(sin(phase - 2.0) * 12);
+  int y1 = sprH - 12 - (int)(sin(phase) * 3);
+  int y2 = sprH / 2 - 4 - (int)(sin(phase - 1.0) * 3);
+  int y3 = 4 - (int)(sin(phase - 2.0) * 3);
   
-  tft.setTextColor(0x8410, COLOR_BG);
-  tft.drawString("z", cx + 35 + 5, cy - 70 + y1, 1);
-  tft.drawString("Z", cx + 35 + 15, cy - 70 + y2, 2);
-  tft.drawString("Z", cx + 35 + 25, cy - 70 + y3, 2); 
+  zSpr.setTextColor(0x8410);
+  zSpr.drawString("z", 5, y1, 1);
+  zSpr.drawString("Z", 15, y2, SCREEN_W > 200 ? 2 : 1);
+  zSpr.drawString("Z", 25, y3, SCREEN_W > 200 ? 2 : 1);
+  
+  zSpr.pushSprite(min(cx + 35, SCREEN_W - 40), max(UI_HEADER_H, cy - 70));
+  invalidateThoughtBubble();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -313,7 +360,77 @@ void drawSurprisedEyes() {
   drawAlmondEye(RIGHT_EYE_X, EYE_Y, EYE_W - 20, EYE_H + 18, 0, 0,
                 0x8260, 0xCCA0, TFT_YELLOW, 0.0, 0.0);
   // Open mouth
-  tft.drawCircle(SCREEN_W/2, EYE_Y + 58, 6, 0x8410);
+  tft.drawCircle(SCREEN_W/2, EYE_Y + SCALE_Y(58), SCALE_MIN(6), 0x8410);
+}
+
+// ═══════════════════════════════════════════════════════════
+// V7: SHOOTING STAR ANIMATION — diagonal streak across bg
+// ═══════════════════════════════════════════════════════════
+
+static unsigned long lastShootingStar = 0;
+static int starX = -1, starY = -1, starLen = 0;
+static bool starActive = false;
+
+static void updateShootingStar() {
+  unsigned long now = millis();
+  
+  if (!starActive) {
+    // Trigger a new shooting star every 8-15 seconds
+    if (now - lastShootingStar > (uint32_t)(8000 + random(7000))) {
+      starX = random(SCALE_X(20), SCREEN_W - SCALE_X(20));
+      starY = random(SCALE_Y(20), SCALE_Y(50));
+      starLen = 0;
+      starActive = true;
+    }
+    return;
+  }
+  
+  // Animate the streak
+  int maxLen = SCALE_X(40);
+  if (starLen < maxLen) {
+    int drawX = starX + starLen;
+    int drawY = starY + starLen / 3;
+    if (drawX < SCREEN_W && drawY < SCREEN_H) {
+      // Bright head
+      tft.drawPixel(drawX, drawY, TFT_WHITE);
+      // Dim tail (fade previous pixels)
+      if (starLen > 2) {
+        tft.drawPixel(drawX - 2, drawY - 1, 0x4208);
+      }
+      if (starLen > 5) {
+        tft.drawPixel(drawX - 5, drawY - 2, COLOR_BG);
+      }
+    }
+    starLen += 2;
+  } else {
+    // Erase remaining tail
+    for (int i = max(0, starLen - 6); i <= starLen; i++) {
+      int ex = starX + i;
+      int ey = starY + i / 3;
+      if (ex < SCREEN_W && ey < SCREEN_H) {
+        tft.drawPixel(ex, ey, COLOR_BG);
+      }
+    }
+    starActive = false;
+    lastShootingStar = now;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// V7: HEARTBEAT PULSE — subtle glow ring around eyes on LOVE
+// ═══════════════════════════════════════════════════════════
+
+static void drawHeartbeatPulse() {
+  if (currentEmotion != EMO_LOVE) return;
+  EyeRenderViewport viewport;
+  
+  float beat = (sin(millis() * 0.006f) + 1.0f) * 0.5f;
+  uint16_t glowCol = blendColor(COLOR_BG, TFT_MAGENTA, beat * 0.25f);
+  
+  // Soft glow ring around each eye
+  int r = EYE_W / 2 + SCALE_X(12);
+  tft.drawCircle(LEFT_EYE_X, EYE_Y, r, glowCol);
+  tft.drawCircle(RIGHT_EYE_X, EYE_Y, r, glowCol);
 }
 
 
@@ -323,7 +440,7 @@ void drawSurprisedEyes() {
 // ═══════════════════════════════════════════════════════════
 
 Emotion getAutoEmotion() {
-  // LDR-based: very dark = sleepy
+  // Both platforms supply a normalized 0..1023 LDR value.
   if (ldrEnabled && ldrValue < 100) return EMO_SLEEPY;
   
   // Time-based defaults
@@ -343,7 +460,21 @@ Emotion getAutoEmotion() {
 // MAIN DRAW & UPDATE
 // ═══════════════════════════════════════════════════════════
 
+static int pupilRenderedX = 0, pupilRenderedY = 0;
+
 void drawEyes() {
+  if (activeTheme == 0) {
+    extern TFT_eSprite* t2CanvasPtr();
+    extern TFT_eSprite* t3CanvasPtr();
+    extern void t2CanvasSetNull();
+    extern void t3CanvasSetNull();
+    TFT_eSprite* t2 = t2CanvasPtr();
+    TFT_eSprite* t3 = t3CanvasPtr();
+    if (t2) { t2->deleteSprite(); delete t2; t2CanvasSetNull(); }
+    if (t3) { t3->deleteSprite(); delete t3; t3CanvasSetNull(); }
+    setThoughtSpriteCompositing(false);
+  }
+  EyeRenderViewport viewport;
   switch (currentEmotion) {
     case EMO_HAPPY:     drawHappyEyes(); break;
     case EMO_SAD:       drawSadEyes(); break;
@@ -354,15 +485,19 @@ void drawEyes() {
     case EMO_SURPRISED: drawSurprisedEyes(); break;
     default:            drawNeutralEyes(); break;
   }
+  pupilRenderedX = (int)pupilOffsetX;
+  pupilRenderedY = (int)pupilOffsetY;
+  invalidateThoughtBubble();
 }
 
 void setEmotion(Emotion newEmotion) {
+  lastManualEmotionTime = millis();
   if (currentEmotion != newEmotion) {
     currentEmotion = newEmotion;
     if (currentState == STATE_EYES) {
       // CRITICAL FIX: Only clear the safe eye zone, NOT the entire screen.
-      int eyeZoneY = 16;  // Below status bar
-      int eyeZoneH = SCREEN_H - 16;
+      int eyeZoneY = UI_HEADER_H;
+      int eyeZoneH = eyeRenderBottom() - UI_HEADER_H;
       tft.fillRect(0, eyeZoneY, SCREEN_W, eyeZoneH, COLOR_BG);
       drawStarfield();
       drawEyes();
@@ -373,28 +508,33 @@ void setEmotion(Emotion newEmotion) {
 
 void updateEyes() {
   if (currentState != STATE_EYES) return;
+  if (customEyeActive && customEyeReady) return; // Pause animations for Memories image
   
   unsigned long now = millis();
+  setThoughtSpriteCompositing(false);
   
-  // Read LDR (on A0)
+  // Read LDR (platform-aware: ESP32=GPIO36/VP, ESP8266=A0)
   static unsigned long lastLDR = 0;
   if (now - lastLDR > 5000) {
     lastLDR = now;
-    ldrValue = analogRead(A0);
+    #ifdef ESP32
+      ldrValue = analogRead(LDR_PIN) >> 2; // Match main's 12-bit to 10-bit normalization.
+    #else
+      ldrValue = analogRead(A0);
+    #endif
     
-    // Auto-emotion based on LDR + time (only if no manual emotion override recently)
-    Emotion suggested = getAutoEmotion();
-    if (suggested != autoEmotion) {
-      autoEmotion = suggested;
-      // Only apply if emotion hasn't been manually overridden in last 30 seconds
-      static unsigned long lastManualEmotion = 0;
-      if (now - lastManualEmotion > 30000) {
-        setEmotion(autoEmotion);
-      }
-    }
+    // Main owns ambient dispatch for all themes. This sensor tick must not
+    // turn an automatic context change into a new manual-emotion lease.
+    autoEmotion = getAutoEmotion();
   }
   
-  // Pupil drift (High-speed 160MHz mode)
+  static uint32_t lastAnimationFrame = 0;
+  uint32_t frameElapsed = (uint32_t)now - lastAnimationFrame;
+  if (frameElapsed < 33) return;
+  lastAnimationFrame = now;
+  float frameScale = min(2.0f, frameElapsed / 50.0f);
+
+  // Pupil drift
   if (now - lastPupilMove > 3500) {
     if (random(100) > 35) {
       pupilTargetX = random(-14, 14);
@@ -419,51 +559,50 @@ void updateEyes() {
   
   if (abs(dX) > moveThreshold || abs(dY) > moveThreshold ||
       abs(pupilVelX) > velDeadzone || abs(pupilVelY) > velDeadzone) {
-    float prevX = pupilOffsetX, prevY = pupilOffsetY;
     // Euler integration of spring + damper
     float ax = (k * dX) - (c * pupilVelX);
     float ay = (k * dY) - (c * pupilVelY);
-    pupilVelX += ax;
-    pupilVelY += ay;
-    pupilOffsetX += pupilVelX;
-    pupilOffsetY += pupilVelY;
-    // Only mark moved if we physically moved more than 1 pixel
-    if (abs(pupilOffsetX - prevX) > 1.0f || abs(pupilOffsetY - prevY) > 1.0f) {
-      moved = true;
-    }
+    pupilVelX += ax * frameScale;
+    pupilVelY += ay * frameScale;
+    pupilOffsetX += pupilVelX * frameScale;
+    pupilOffsetY += pupilVelY * frameScale;
   } else {
     // Snap to rest and kill velocity when close enough
     pupilVelX = 0; pupilVelY = 0;
     pupilOffsetX = pupilTargetX;
     pupilOffsetY = pupilTargetY;
   }
+  // Compare against the last painted pixels, so subpixel steps accumulate.
+  moved = (int)pupilOffsetX != pupilRenderedX || (int)pupilOffsetY != pupilRenderedY;
   
   // Blinking 
-  if (now - lastBlink > 4500 && !isBlinking && random(10) > 4) {
-    isBlinking = true;
-    blinkPhase = 0;
+  static uint32_t blinkStarted = 0;
+  if (now - lastBlink >= 4500 && !isBlinking) {
+    lastBlink = now;
+    if (random(10) > 4) {
+      isBlinking = true;
+      blinkStarted = now;
+      blinkPhase = 0;
+    }
   }
   
   if (isBlinking) {
-    blinkPhase++;
-    
-    // Physics-based rapid blink speed for 160MHz tickrate
-    if (blinkPhase <= 2) {
-      currentBlinkMod = 1.0 - ((float)blinkPhase / 2.0);
-    } else if (blinkPhase <= 4) {
-      currentBlinkMod = (float)(blinkPhase - 2) / 2.0;
+    uint32_t elapsed = (uint32_t)now - blinkStarted;
+    blinkPhase = elapsed / 50;
+    if (elapsed < 100) {
+      currentBlinkMod = 1.0f - elapsed / 100.0f;
+    } else if (elapsed < 200) {
+      currentBlinkMod = (elapsed - 100) / 100.0f;
     } else {
       currentBlinkMod = 1.0;
       isBlinking = false;
       lastBlink = now;
     }
     
-    // Clear eye area cleanly during blink and redraw
-    tft.fillRect(LEFT_EYE_X - EYE_W/2 - 6, EYE_Y - EYE_H - 6, EYE_W + 12, (EYE_H + 6) * 2, COLOR_BG);
-    tft.fillRect(RIGHT_EYE_X - EYE_W/2 - 6, EYE_Y - EYE_H - 6, EYE_W + 12, (EYE_H + 6) * 2, COLOR_BG);
+    // Smoothly push the modified sprite to screen, zero flicker!
     drawEyes();
   } else if (moved) {
-    // Redraw directly with new pupil position - no black wipe = zero strobe flicker!
+    // Redraw natively - no fillScreen = zero frame strobe.
     drawEyes();
   }
   
@@ -471,16 +610,15 @@ void updateEyes() {
   if (currentEmotion == EMO_SLEEPY && !isBlinking) {
     drawZzz(RIGHT_EYE_X, EYE_Y); 
   }
+  
+  // V7: Shooting star animation (background, non-blocking)
+  // updateShootingStar();
+  
+  // V7: Heartbeat glow ring on LOVE emotion
+  drawHeartbeatPulse();
 }
 
-void updateTimeFromUDP(String timeStr) {
-  int colonIndex = timeStr.indexOf(':');
-  if (colonIndex > 0) {
-    displayHour = timeStr.substring(0, colonIndex).toInt();
-    displayMinute = timeStr.substring(colonIndex + 1).toInt();
-    timeReceived = true;
-    // UI drawing is handled by ui.h globally now
-  }
-}
+// updateTimeFromUDP() is defined in CompanionOS_Main.ino
+// Removed duplicate to avoid linker errors.
 
 #endif
