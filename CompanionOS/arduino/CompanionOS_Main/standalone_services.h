@@ -306,6 +306,14 @@ static Response request(const String& url, const char* method, const String& aut
     http.setTimeout(8000);
     http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
     if (!httpsOriginLength(target.c_str())) { response.status = UnsafeRedirect; break; }
+    int hostEnd = target.indexOf('/', 8);
+    String host = hostEnd > 0 ? target.substring(8, hostEnd) : target.substring(8);
+    int colonIdx = host.indexOf(':');
+    if (colonIdx > 0) host = host.substring(0, colonIdx);
+    IPAddress resolvedIP;
+    if (!WiFi.hostByName(host.c_str(), resolvedIP)) {
+      Serial.printf("[standalone:%s] DNS failed for %s\n", serviceName(), host.c_str());
+    }
     if (!http.begin(client, target)) { response.status = -1; logHttpFailure(http, response.status); break; }
     const char* headers[] = {"Retry-After", "Content-Encoding", "Location"};
     http.collectHeaders(headers, 3);

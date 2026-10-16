@@ -521,6 +521,9 @@ void setupWiFi() {
       currentWiFiSSID = wifiProfiles[p].ssid;
       currentWiFiPASS = wifiProfiles[p].pass;
       Serial.printf(" Connected to Priority #%d: %s\n", p + 1, currentWiFiSSID.c_str());
+#ifdef ESP32
+      WiFi.setDNS(IPAddress(8, 8, 8, 8), IPAddress(1, 1, 1, 1));
+#endif
       break;
     }
   }
@@ -755,6 +758,9 @@ void tickWiFiConnectivity() {
       wifiConnected = true;
       Serial.print(F("WiFi reconnected! IP: "));
       Serial.println(WiFi.localIP());
+#ifdef ESP32
+      WiFi.setDNS(IPAddress(8, 8, 8, 8), IPAddress(1, 1, 1, 1));
+#endif
     } else {
       Serial.println(F("WiFi offline, attempting async reconnect..."));
       extern String currentWiFiSSID;
