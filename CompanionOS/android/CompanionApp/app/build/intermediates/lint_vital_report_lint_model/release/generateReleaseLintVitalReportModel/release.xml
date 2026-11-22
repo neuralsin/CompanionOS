@@ -27,6 +27,6 @@
       applicationId="com.companionos.app"
       generatedSourceFolders="build\generated\ap_generated_sources\release\out"
       generatedResourceFolders="build\generated\res\resValues\release"
-      desugaredMethodsFiles="C:\Users\shaan\.gradle\caches\8.9\transforms\bbea2d80ebe3f52f4203e6e333d27d79\transformed\D8BackportedDesugaredMethods.txt">
+      desugaredMethodsFiles="C:\Users\shaan\.gradle\caches\transforms-4\6e0076e3b78a638668037f9969295295\transformed\D8BackportedDesugaredMethods.txt">
   </artifact>
 </variant>

@@ -1,5 +1,10 @@
 # Dr. Hack Integration Audit Report
 
+> Historical comparison, not a current capability or hardware sign-off.
+> Several statements below predate the present 48-entry module tree.
+> See [the 2026-10-25 diagnostic repair audit](dr_hack_diagnostics_audit_2026-10-25.md)
+> for the current changes, test evidence and explicitly excluded operations.
+
 This report compares the original **ESP32-TOOLS-PRO-480x320-V2.0** firmware (located in `hack update files`) against what is currently implemented in **CompanionOS v7.0** (`page_dr_hack.h`).
 
 ## Summary of Findings

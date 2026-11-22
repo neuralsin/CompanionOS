@@ -1,0 +1,3 @@
+Spotify: cached authorization unavailable; browser sign-in can reconnect it
+Open http://127.0.0.1:8888/login
+Spotify authorization: authorized

@@ -11,134 +11,87 @@
 extern int displayHour;
 extern int displayMinute;
 extern bool timeReceived;
+extern bool flashNotifActive;
 
 // ═══════════════════════════════════════════════════════════
 // V7 STATUS BAR — Redesigned: clock, WiFi+BT, music, notif
 // ═══════════════════════════════════════════════════════════
 
+static TFT_eSprite statusBarCanvas(&tft);
+static bool statusBarBuffered = false;
+inline void releaseStatusBarBuffer() {
+  if (statusBarBuffered) statusBarCanvas.deleteSprite();
+  statusBarBuffered = false;
+}
 void drawStatusBar() {
-  int barH = SCALE_Y(15);
-  tft.fillRect(0, 0, SCR_W, barH, CLR_BG);
-
-  // ── Compute layout zones to prevent overlap ──
-  // Right zone: time string (always rightmost), then indicator icons to its left.
-  // Left zone: song name (eyes page) or clock (other pages).
-
-  // Time string width: "HH:MM" in font 1 ≈ 30px on 160px screen
-  int timeW = 30; // approximate width of "HH:MM" in font 1
-
+  if (currentState == STATE_DR_HACK || currentState == STATE_RUVIEW ||
+      currentState == STATE_PC_DASH || currentState == STATE_LYRICS || (customEyeActive && customEyeReady)) return;
+  const char* titles[] = {"CompanionOS", "Spotify", "Lyrics", "Focus", "Weather",
+    "Notifications", "Notes", "Stocks", "Gaming", "Social", "Schedule", "Network", "System",
+    "PC dashboard", "RuView", "Clock", "Watch", "Dr.Hack", "Calendar", "Timetable"};
+  String title = (int)currentState < STATE_COUNT ? titles[(int)currentState] : "CompanionOS";
+  const bool nowPlaying = currentState == STATE_EYES && musicPlaying && currentTrack.length();
+  const bool night = timeReceived && (displayHour >= 20 || displayHour < 6);
   if (currentState == STATE_EYES) {
-    // ── EYES PAGE LAYOUT ──
-    // Far right: Clock
-    // Right of center: indicator icons
-    // Left: Song info (truncated to avoid overlap)
-
-    // 1. Clock on far RIGHT
-    if (timeReceived) {
-      char timeStr[6];
-      sprintf(timeStr, "%02d:%02d", displayHour, displayMinute);
-      tft.setTextColor(CLR_TEXT_HI, CLR_BG);
-      tft.drawRightString(timeStr, SCR_W - SCALE_X(2), SCALE_Y(2), 1);
-    } else {
-      tft.setTextColor(CLR_TEXT_LO, CLR_BG);
-      tft.drawRightString("--:--", SCR_W - SCALE_X(2), SCALE_Y(2), 1);
-    }
-
-    // 2. Indicator icons in a zone just left of the clock
-    int iconZoneRight = SCR_W - timeW - SCALE_X(4); // leave gap before clock
-    int iconX = iconZoneRight;
-    int iconY = SCALE_Y(5);
-
-    // WiFi icon
-    if (wifiConnected) {
-      tft.fillCircle(iconX, iconY + SCALE_Y(4), 1, CLR_PRIMARY);
-      tft.drawFastHLine(iconX - SCALE_X(2), iconY + SCALE_Y(2), SCALE_X(5), CLR_PRIMARY);
-      tft.drawFastHLine(iconX - SCALE_X(3), iconY, SCALE_X(7), CLR_PRIMARY);
-    } else {
-      tft.fillCircle(iconX, iconY + SCALE_Y(4), 1, CLR_SECONDARY);
-      tft.drawLine(iconX - 2, iconY, iconX + 2, iconY + 4, CLR_SECONDARY);
-    }
-    iconX -= SCALE_X(12);
-
-    // BT icon (ESP32 only)
-    #ifdef ESP32
-    if (btConnected) {
-      tft.drawFastVLine(iconX, iconY - SCALE_Y(4), SCALE_Y(8), 0x001F);
-      tft.drawLine(iconX - 2, iconY - 2, iconX + 2, iconY + 2, 0x001F);
-      tft.drawLine(iconX - 2, iconY + 2, iconX + 2, iconY - 2, 0x001F);
-      iconX -= SCALE_X(10);
-    }
-    #endif
-
-    // Music note icon
-    if (musicPlaying) {
-      tft.drawFastVLine(iconX, iconY - SCALE_Y(3), SCALE_Y(6), CLR_SUCCESS);
-      tft.drawFastVLine(iconX + SCALE_X(2), iconY - SCALE_Y(4), SCALE_Y(7), CLR_SUCCESS);
-      tft.fillCircle(iconX, iconY + SCALE_Y(3), 1, CLR_SUCCESS);
-      tft.fillCircle(iconX + SCALE_X(2), iconY + SCALE_Y(3), 1, CLR_SUCCESS);
-      iconX -= SCALE_X(10);
-    }
-
-    // Notification dot
-    if (notifCount > 0) {
-      tft.fillCircle(iconX, iconY, SCALE_X(3), TFT_MAGENTA);
-      iconX -= SCALE_X(8);
-    }
-
-    // 3. Song name on LEFT — truncate before icons
-    if (musicPlaying) {
-      extern String currentTrack;
-      extern String currentArtist;
-      int maxSongW = iconX - SCALE_X(4); // all space left of icons
-      String songInfo = (currentArtist.length() > 0) ? (currentTrack + " - " + currentArtist) : currentTrack;
-      tft.setTextColor(CLR_TEXT_LO, CLR_BG);
-      drawTruncatedText(SCALE_X(2), SCALE_Y(2), songInfo.c_str(), maxSongW, CLR_TEXT_LO, 1);
-    }
-
-  } else {
-    // ── NON-EYES PAGE LAYOUT ──
-    // Left: clock, Center: song snippet, Right: indicator icons
-
-    // Clock on left
-    if (timeReceived) {
-      char timeStr[6];
-      sprintf(timeStr, "%02d:%02d", displayHour, displayMinute);
-      tft.setTextColor(CLR_TEXT_HI, CLR_BG);
-      tft.drawString(timeStr, SCALE_X(4), SCALE_Y(2), 1);
-    } else {
-      tft.setTextColor(CLR_TEXT_LO, CLR_BG);
-      tft.drawString("--:--", SCALE_X(4), SCALE_Y(2), 1);
-    }
-
-    // Right-side indicator icons
-    int iconX = SCR_W - SCALE_X(5);
-    int iconY = SCALE_Y(5);
-
-    // WiFi icon (rightmost)
-    if (wifiConnected) {
-      tft.fillCircle(iconX, iconY + SCALE_Y(4), 1, CLR_PRIMARY);
-      tft.drawFastHLine(iconX - SCALE_X(2), iconY + SCALE_Y(2), SCALE_X(5), CLR_PRIMARY);
-      tft.drawFastHLine(iconX - SCALE_X(3), iconY, SCALE_X(7), CLR_PRIMARY);
-      tft.drawFastHLine(iconX - SCALE_X(4), iconY - SCALE_Y(2), SCALE_X(9), CLR_PRIMARY);
-    } else {
-      tft.fillCircle(iconX, iconY + SCALE_Y(4), 1, CLR_SECONDARY);
-      tft.drawLine(iconX - 2, iconY, iconX + 2, iconY + 4, CLR_SECONDARY);
-      tft.drawLine(iconX + 2, iconY, iconX - 2, iconY + 4, CLR_SECONDARY);
-    }
-
-    // Song name in center on non-eyes pages (Song - Artist), skip on Spotify/Clock dashboard to prevent overlap
-    if (musicPlaying && currentState != STATE_SPOTIFY && currentState != STATE_CLOCK_DASHBOARD && currentState != STATE_RETRO_WATCH) {
-      extern String currentTrack;
-      extern String currentArtist;
-      String songSnippet = (currentArtist.length() > 0) ? (currentTrack + " - " + currentArtist) : currentTrack;
-      tft.setTextColor(CLR_TEXT_LO, CLR_BG);
-      int songX = 36; // Clock is ~30px, so start song at 36px
-      int maxSongW = iconX - SCALE_X(12) - songX;
-      if (maxSongW > 20) {
-        drawTruncatedText(songX, SCALE_Y(2), songSnippet.c_str(), maxSongW, CLR_TEXT_LO, 1);
+    if (nowPlaying) {
+      title = currentArtist.length() && (millis() / 6000) % 2 ? currentArtist : currentTrack;
+    } else if (!timeReceived) title = "Hello there";
+    else if (displayHour < 6 || displayHour >= 22) title = "Quiet hours";
+    else if (displayHour < 12) title = "Good morning";
+    else if (displayHour < 18) title = "Good afternoon";
+    else title = "Good evening";
+  }
+  char clock[12];
+  snprintf(clock, sizeof(clock), "%02d:%02d", constrain(displayHour, 0, 23), constrain(displayMinute, 0, 59));
+  if (!timeReceived) strcpy(clock, "--:--");
+  String key = title + clock + String(wifiConnected) + String(musicPlaying) +
+               String(notifCount) + String(uiPageGeneration) + String(night);
+  const int progressWidth = nowPlaying && playDuration > 0 ?
+      (int)((int64_t)constrain(playProgress, 0, playDuration) * (SCR_W - 8) / playDuration) : 0;
+  key += String(progressWidth);
+  static String previous;
+  if (key == previous) return;
+  previous = key;
+  TFT_eSprite& canvas = statusBarCanvas;
+  bool& buffered = statusBarBuffered;
+  static bool tried = false;
+  static uint32_t lastAttempt = 0;
+  if (!buffered && (!tried || uint32_t(millis() - lastAttempt) >= 2000)) {
+    tried = true;
+    lastAttempt = millis();
+    buffered = companion_memory::createSprite(canvas, SCR_W, UI_HEADER_H);
+  }
+  auto paint = [&](auto& target) {
+    target.fillRect(0, 0, SCR_W, UI_HEADER_H, CLR_BG);
+    target.setTextSize(1);
+    int titleX = 4;
+    if (currentState == STATE_EYES) {
+      titleX = 17;
+      if (nowPlaying) {
+        target.drawFastVLine(8, 3, 7, CLR_SUCCESS);
+        target.drawFastHLine(8, 3, 5, CLR_SUCCESS);
+        target.fillCircle(6, 10, 2, CLR_SUCCESS);
+      } else if (night) {
+        target.fillCircle(8, 7, 4, CLR_PRIMARY);
+        target.fillCircle(10, 5, 3, CLR_BG);
+      } else {
+        target.drawCircle(8, 7, 3, CLR_WARNING);
+        target.drawFastVLine(8, 1, 2, CLR_WARNING);
+        target.drawFastVLine(8, 12, 2, CLR_WARNING);
+        target.drawFastHLine(2, 7, 2, CLR_WARNING);
+        target.drawFastHLine(13, 7, 2, CLR_WARNING);
       }
     }
-  }
+    target.setTextColor(nowPlaying ? CLR_TEXT_HI : CLR_TEXT_MED, CLR_BG);
+    target.drawString(fitUiText(title.c_str(), SCR_W - 47 - titleX, 1), titleX, 4, 1);
+    target.setTextColor(CLR_TEXT_HI, CLR_BG);
+    target.drawRightString(clock, SCR_W - 13, 4, 1);
+    target.fillCircle(SCR_W - 6, 7, 2, wifiConnected ? CLR_SUCCESS : CLR_TEXT_LO);
+    target.drawFastHLine(4, UI_HEADER_H - 1, SCR_W - 8, CLR_BORDER);
+    if (progressWidth > 0) target.drawFastHLine(4, UI_HEADER_H - 1, progressWidth, CLR_SUCCESS);
+  };
+  if (buffered) { paint(canvas); canvas.pushSprite(0, 0); }
+  else paint(tft);
 }
 
 
@@ -201,9 +154,8 @@ void drawPageIndicator(int current, int total) {
 // ═══════════════════════════════════════════════════════════
 
 void drawPageHeader(const char* title) {
-  tft.fillRect(0, 0, SCR_W - SCALE_X(40), SCALE_Y(16), CLR_BG);
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawString(title, SCALE_X(4), SCALE_Y(4), 1);
+  // The shared bar owns its title and clock so refreshes cannot erase titles.
+  (void)title;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -222,49 +174,21 @@ void drawButton(int x, int y, int w, int h, const char* label, uint16_t color) {
 
 void drawAgentOverlay() {
   if (!agentOverlayActive) return;
-
-  uint16_t bgColor = CLR_SURFACE;
-  uint16_t accentColor = CLR_PRIMARY;
-  if (agentStatus == "error") {
-    accentColor = CLR_SECONDARY;
-  } else if (agentStatus == "done") {
-    accentColor = CLR_SUCCESS;
-  }
-
-  int oy = SCR_H - SCALE_Y(42);
-  int oh = SCALE_Y(34);
-  int ox = SCALE_X(4);
-  int ow = SCR_W - SCALE_X(8);
-
-  tft.fillRoundRect(ox, oy, ow, oh, 4, bgColor);
-  tft.fillRect(ox, oy, SCALE_X(3), oh, accentColor);
-
-  if (agentStatus == "thinking") {
-    float pulse = (sin(millis() * 0.005) + 1.0) * 0.5;
-    uint16_t dotColor = blendColor(CLR_BORDER, accentColor, pulse);
-    tft.fillCircle(ox + SCALE_X(10), oy + oh / 2, SCALE_X(3), dotColor);
-  } else {
-    tft.fillCircle(ox + SCALE_X(10), oy + oh / 2, SCALE_X(3), accentColor);
-  }
-
-  tft.setTextColor(CLR_TEXT_HI);
-  int textX = ox + SCALE_X(18);
-  int maxTextW = ow - SCALE_X(22);
-  String displayText = agentStatusText.substring(0, (SCR_W < 200) ? 24 : 32);
-  tft.drawString(displayText, textX, oy + SCALE_Y(4), 1);
-  if (agentStatusText.length() > (unsigned int)((SCR_W < 200) ? 24 : 32)) {
-    tft.drawString(agentStatusText.substring((SCR_W < 200) ? 24 : 32, (SCR_W < 200) ? 48 : 64), textX, oy + SCALE_Y(16), 1);
-  }
-
-  if (agentStatus == "done" && millis() - agentStatusStart > 5000) {
+  unsigned long elapsed = millis() - agentStatusStart;
+  unsigned long duration = agentStatus == "done" ? 5000UL : agentStatus == "error" ? 8000UL : 15000UL;
+  if (elapsed >= duration) {
     agentOverlayActive = false;
+    return;
   }
-  if (agentStatus == "error" && millis() - agentStatusStart > 8000) {
-    agentOverlayActive = false;
-  }
-  if (agentStatus == "thinking" && millis() - agentStatusStart > 15000) {
-    agentOverlayActive = false;
-  }
+  if (flashNotifActive) return;
+  uint16_t accent = agentStatus == "error" ? CLR_DANGER :
+                    agentStatus == "done" ? CLR_SUCCESS : CLR_PRIMARY;
+  int x = 4, h = 28, y = SCR_H - h - UI_FOOTER_H, w = SCR_W - 8;
+  tft.fillRoundRect(x, y, w, h, 4, CLR_SURFACE);
+  tft.fillRect(x, y + 4, 2, h - 8, accent);
+  int dot = 2 + (agentStatus == "thinking" ? (millis() / 400) % 3 : 0);
+  tft.fillCircle(x + 8, y + 8, dot, accent);
+  drawWrappedText(x + 16, y + 4, agentStatusText.c_str(), w - 21, 22, CLR_TEXT_HI, 1, CLR_SURFACE);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -284,35 +208,15 @@ void showFlashNotification(String text) {
 }
 
 void drawFlashNotification() {
-  if (!flashNotifActive) return;
-
-  int bannerH = SCALE_Y(30);
-  int bannerY = SCR_H - bannerH;
-
+  if (!flashNotifActive || currentState != STATE_EYES) return;
   unsigned long elapsed = millis() - flashNotifStart;
-  if (elapsed > 3000) {
-    flashNotifActive = false;
-    tft.fillRect(0, bannerY, SCR_W, bannerH, CLR_BG);
-    return;
-  }
-
-  // Pulsing notification banner at bottom
-  float alpha = 1.0f;
-  if (elapsed < 300) alpha = elapsed / 300.0f;
-  else if (elapsed > 2700) alpha = (3000 - elapsed) / 300.0f;
-
-  uint16_t bgColor = blendColor(CLR_BG, 0x600F, alpha * 0.8f);
-  uint16_t textColor = blendColor(CLR_BG, CLR_TEXT_HI, alpha);
-
-  tft.fillRect(0, bannerY, SCR_W, bannerH, bgColor);
-  tft.drawFastHLine(0, bannerY, SCR_W, blendColor(CLR_BG, TFT_MAGENTA, alpha));
-
-  tft.setTextColor(textColor);
-  drawTruncatedText(SCALE_X(8), bannerY + SCALE_Y(6), flashNotifText.c_str(), 
-                    SCR_W - SCALE_X(16), textColor, 1);
-
-  tft.setTextColor(blendColor(CLR_BG, CLR_TEXT_LO, alpha));
-  tft.drawString("New notification", SCALE_X(8), bannerY + SCALE_Y(18), 1);
+  if (elapsed >= 3000) return;
+  const int h = 28;
+  int slide = elapsed < 180 ? (int)((180 - elapsed) * h / 180) : 0;
+  int y = SCR_H - h + slide;
+  tft.fillRect(0, y, SCR_W, h - slide, CLR_SURFACE_2);
+  tft.drawFastHLine(0, y, SCR_W, CLR_PRIMARY);
+  drawWrappedText(6, y + 4, flashNotifText.c_str(), SCR_W - 12, max(0, h - slide - 4), CLR_TEXT_HI, 1, CLR_SURFACE_2);
 }
 
 #endif

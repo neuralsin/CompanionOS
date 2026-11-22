@@ -6,79 +6,39 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 object StockRelay {
-
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(6, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
-        .build()
-
-    // Default monitored watchlist
-    var symbols = listOf("BTC", "ETH", "AAPL", "NVDA", "TSLA")
-
+    private val client = OkHttpClient.Builder().callTimeout(10, TimeUnit.SECONDS).build()
+    private val ids = mapOf("BTC" to "bitcoin", "ETH" to "ethereum", "SOL" to "solana")
+    @Volatile var symbols = listOf("BTC", "ETH", "SOL")
+    fun setSymbols(value: String) { symbols = value.uppercase(Locale.ROOT).split(',').map { it.trim() }.filter { it in ids }.distinct().take(3) }
     suspend fun fetchAndSendStocks() = withContext(Dispatchers.IO) {
+        val selected = symbols.toList()
+        if (selected.isEmpty()) return@withContext
         try {
-            // CoinGecko public market API for crypto prices
-            val cryptoUrl = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true"
-            val request = Request.Builder().url(cryptoUrl).build()
-            val response = httpClient.newCall(request).execute()
-
-            val items = JSONArray()
-
-            if (response.isSuccessful) {
-                val body = response.body?.string()
-                if (!body.isNullOrEmpty()) {
-                    val root = JSONObject(body)
-                    
-                    if (root.has("bitcoin")) {
-                        val btc = root.getJSONObject("bitcoin")
-                        val item = JSONObject().apply {
-                            put("symbol", "BTC")
-                            put("price", String.format("$%.0f", btc.optDouble("usd", 64000.0)))
-                            put("change", String.format("%+.2f%%", btc.optDouble("usd_24h_change", 1.5)))
-                        }
-                        items.put(item)
-                    }
-
-                    if (root.has("ethereum")) {
-                        val eth = root.getJSONObject("ethereum")
-                        val item = JSONObject().apply {
-                            put("symbol", "ETH")
-                            put("price", String.format("$%.0f", eth.optDouble("usd", 3500.0)))
-                            put("change", String.format("%+.2f%%", eth.optDouble("usd_24h_change", 0.8)))
-                        }
-                        items.put(item)
-                    }
+            val url = "https://api.coingecko.com/api/v3/simple/price?ids=${selected.mapNotNull { ids[it] }.joinToString(",")}&vs_currencies=usd&include_24hr_change=true"
+            client.newCall(Request.Builder().url(url).build()).execute().use { response ->
+                if (!response.isSuccessful) return@withContext
+                val root = JSONObject(response.body?.string() ?: return@withContext)
+                val items = JSONArray()
+                for (symbol in selected) {
+                    val quote = root.optJSONObject(ids[symbol]!!) ?: continue
+                    if (!quote.has("usd") || quote.isNull("usd")) continue
+                    items.put(JSONObject().put("s", symbol)
+                        .put("p", String.format(Locale.US, "$%.2f", quote.getDouble("usd")))
+                        .put("u", quote.optDouble("usd_24h_change", 0.0) >= 0)
+                        .put("d", if (quote.isNull("usd_24h_change")) "--" else String.format(Locale.US, "%+.2f%%", quote.getDouble("usd_24h_change"))))
+                }
+                if (items.length() > 0) {
+                    val first = items.getJSONObject(0)
+                    CompanionForegroundService.sendUdp("STOCKS:" + JSONObject().put("wl", items)
+                        .put("symbol", first.getString("s")).put("price", first.getString("p"))
+                        .put("delta", "").put("hist", JSONArray())
+                        .put("pct", first.getString("d")).put("up", first.getBoolean("u")))
                 }
             }
-
-            // Fallback / Market index values for traditional equities
-            val equityDefaults = listOf(
-                Triple("NVDA", "$128.50", "+3.2%"),
-                Triple("AAPL", "$224.20", "+0.9%"),
-                Triple("TSLA", "$218.40", "-1.4%")
-            )
-
-            for ((sym, prc, chg) in equityDefaults) {
-                if (items.length() < 5) {
-                    val item = JSONObject().apply {
-                        put("symbol", sym)
-                        put("price", prc)
-                        put("change", chg)
-                    }
-                    items.put(item)
-                }
-            }
-
-            val payload = JSONObject().apply {
-                put("items", items)
-            }
-
-            CompanionForegroundService.sendUdp("STOCKS:$payload")
-        } catch (e: Exception) {
-            // Network fallback resilience
-        }
+        } catch (_: Exception) { /* Keep last verified data; never synthesize market quotes. */ }
     }
 }

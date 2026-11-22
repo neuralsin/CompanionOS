@@ -74,7 +74,15 @@ void handleTouch() {
       // TAP detection - wider threshold for noisy touchscreens
       else if (abs(deltaX) < 25 && abs(deltaY) < 25) {
         if (millis() - lastTouchTime > 300) {
-          if (currentState == STATE_SPOTIFY) {
+          if (currentState == STATE_LYRICS) {
+            const int ctrlY = SCREEN_H - (SCREEN_W < 240 ? 12 : 28);
+            const int ctrlX = SCREEN_W / 2;
+            if (abs(lastTouchY - ctrlY) <= 12) {
+              if (abs(lastTouchX - (ctrlX - 32)) <= 14) sendCommand("PREV");
+              else if (abs(lastTouchX - ctrlX) <= 14) sendCommand("PLAY_PAUSE");
+              else if (abs(lastTouchX - (ctrlX + 32)) <= 14) sendCommand("NEXT");
+            }
+          } else if (currentState == STATE_SPOTIFY) {
             #define TOUCH_CIRCLE(tx, ty, cx, cy, r) (((tx - (cx)) * (tx - (cx)) + (ty - (cy)) * (ty - (cy))) <= ((r) * (r)))
 
             if (activeTheme == 1) {
@@ -165,12 +173,17 @@ void handleTouch() {
               sendCommand("TASK:DONE");
             }
           }
+          else if (currentState == STATE_PC_DASH) {
+            extern void nextPcDashSubPage();
+            nextPcDashSubPage();
+          }
           // Theme toggle in settings
           else if (currentState == STATE_SETTINGS) {
             int themeSliderY = 25 - settingsScrollY + 20 + 14 + 20 + 20 + 14 + 14 + 20 + 20 + 14 + 20 + 20 + 40 + 22;
             if (lastTouchY >= themeSliderY && lastTouchY < themeSliderY + 28
                 && lastTouchX >= 10 && lastTouchX <= 130) {
               activeTheme = (activeTheme + 1) % THEME_COUNT;
+              wakeForManualAppearance();
               EEPROM.begin(EEPROM_SIZE);
               EEPROM.write(EEPROM_ACTIVE_THEME_ADDR, activeTheme);
               EEPROM.commit();

@@ -1,6 +1,8 @@
 #ifndef PAGE_RUVIEW_H
 #define PAGE_RUVIEW_H
 #include "globals.h"
+#include "ui_components.h"
+#include <math.h>
 
 extern void drawPageIndicator(int current, int total);
 extern void drawStatusBar();
@@ -37,16 +39,27 @@ char    rvZoneLabel[16] = "Room";
 
 // Track whether initial full draw has been done
 static bool rvPageDrawn = false;
-// Previous state for partial redraws
-static char rvLastStatus[24] = "";
-static float rvLastConfidence = -1.0f;
-static float rvLastVariance   = -1.0f;
+static bool rvHasPacket = false;
+static uint32_t rvLastPacket = 0, rvLastCheck = 0;
+static char rvDrawKey[192] = {};
+constexpr uint32_t RV_TIMEOUT_MS = 12000;
+void noteRuviewPacket() { rvHasPacket = true; rvLastPacket = millis(); }
+static void rvExpire() {
+  if (rvHasPacket && uint32_t(millis() - rvLastPacket) >= RV_TIMEOUT_MS) {
+    rvOccupied = rvMotion = rvCalibrating = false;
+    rvConfidence = rvPPS = 0;
+    strcpy(rvStatus, "CSI offline");
+  }
+}
+static void rvContentKey(char (&key)[192]) {
+  snprintf(key, sizeof(key), "%s|%s|%d%d%d|%.1f|%.5f|%d|%.1f|%d|%lu",
+    rvStatus, rvZoneLabel, rvOccupied, rvMotion, rvCalibrating,
+    rvConfidence, rvVariance, rvRSSI, rvPPS, rvSubcarriers, (unsigned long)uiPageGeneration);
+}
 
 void resetRuviewDrawState() {
   rvPageDrawn = false;
-  memset(rvLastStatus, 0, sizeof(rvLastStatus));
-  rvLastConfidence = -1.0f;
-  rvLastVariance   = -1.0f;
+  rvDrawKey[0] = 0;
 }
 
 // ── Status icon drawing ──
@@ -83,6 +96,7 @@ void drawPresenceIcon(int cx, int cy, bool occupied, bool motion, bool calibrati
 
 // ── Confidence bar ──
 void drawConfidenceBar(int x, int y, int w, int h, float confidence) {
+  confidence = isfinite(confidence) ? constrain(confidence, 0.0f, 100.0f) : 0;
   tft.fillRoundRect(x, y, w, h, 2, RV_BORDER);
   int fillW = (int)(w * confidence / 100.0f);
   if (fillW > w) fillW = w;
@@ -99,11 +113,44 @@ void drawConfidenceBar(int x, int y, int w, int h, float confidence) {
 // ═══════════════════════════════════════════════════════════
 
 void drawRuviewPage() {
-  tft.fillScreen(RV_BG);
+  rvExpire();
+  tft.setTextSize(1); tft.setTextDatum(TL_DATUM); tft.setTextPadding(0);
+  if (!rvPageDrawn) tft.fillScreen(RV_BG);
 
   int pad = 4;
   int cardW = SCREEN_W - pad * 2;
   char buf[32];
+
+  if (SCREEN_W <= 200) {
+    drawTruncatedText(5, 4, "RUVIEW", 100, RV_CYAN, 1, RV_BG);
+    tft.drawFastHLine(4, 15, SCREEN_W - 8, RV_BORDER);
+    tft.fillRoundRect(4, 20, SCREEN_W - 8, 38, 3, RV_CARD);
+    // Keep the motion icon and its rays entirely inside the status area.
+    drawPresenceIcon(28, 39, rvOccupied, rvMotion, rvCalibrating);
+    drawTruncatedText(52, 25, rvZoneLabel, SCREEN_W - 60, RV_WHITE, 1, RV_CARD);
+    uint16_t accent = rvCalibrating ? RV_YELLOW : rvMotion ? RV_RED : rvOccupied ? RV_GREEN : RV_DIM;
+    drawTruncatedText(52, 40, rvStatus, SCREEN_W - 60, accent, 1, RV_CARD);
+    tft.fillRect(4, 63, SCREEN_W - 8, 10, RV_BG);
+    tft.setTextColor(RV_DIM, RV_BG);
+    tft.drawString("Confidence", 6, 63, 1);
+    snprintf(buf, sizeof(buf), "%.0f%%", constrain(rvConfidence, 0.0f, 100.0f));
+    tft.setTextColor(RV_WHITE, RV_BG);
+    tft.drawRightString(buf, SCREEN_W - 6, 63, 1);
+    drawConfidenceBar(6, 76, SCREEN_W - 12, 4, rvConfidence);
+    tft.fillRect(4, 86, SCREEN_W - 8, 30, RV_BG);
+    snprintf(buf, sizeof(buf), "Var %.3f", rvVariance);
+    drawTruncatedText(6, 86, buf, SCREEN_W / 2 - 8, RV_WHITE, 1, RV_BG);
+    snprintf(buf, sizeof(buf), rvRSSI ? "%d dBm" : "-- dBm", rvRSSI);
+    drawTruncatedText(SCREEN_W / 2 + 2, 86, buf, SCREEN_W / 2 - 8, RV_DIM, 1, RV_BG);
+    snprintf(buf, sizeof(buf), "%.0f pkt/s", rvPPS);
+    drawTruncatedText(6, 101, buf, SCREEN_W / 2 - 8, RV_CYAN, 1, RV_BG);
+    snprintf(buf, sizeof(buf), "%d sub", rvSubcarriers);
+    drawTruncatedText(SCREEN_W / 2 + 2, 101, buf, SCREEN_W / 2 - 8, RV_DIM, 1, RV_BG);
+    drawPageIndicator(STATE_RUVIEW, STATE_COUNT);
+    rvPageDrawn = true;
+    rvContentKey(rvDrawKey); rvLastCheck = millis();
+    return;
+  }
 
   if (SCREEN_W > 200) {
     // ── LARGE SCREEN (320×240) ──
@@ -119,7 +166,7 @@ void drawRuviewPage() {
     tft.setTextColor(RV_DIM);
     tft.drawString("ZONE", 16, 25, 1);
     tft.setTextColor(RV_CYAN);
-    tft.drawString(rvZoneLabel, 16, 38, 2);
+    drawTruncatedText(16, 38, rvZoneLabel, 134, RV_CYAN, 2, RV_CARD);
 
     // Status icon (centered in left card)
     drawPresenceIcon(82, 75, rvOccupied, rvMotion, rvCalibrating);
@@ -130,7 +177,8 @@ void drawRuviewPage() {
     else if (rvMotion) statusColor = RV_RED;
     else if (rvOccupied) statusColor = RV_GREEN;
     tft.setTextColor(statusColor);
-    tft.drawCentreString(rvStatus, 82, 95, 1);
+    String status = fitUiText(rvStatus, 134, 1);
+    tft.drawCentreString(status, 82, 95, 1);
 
     // Right card — metrics
     tft.fillRoundRect(166, 20, 146, 90, 5, RV_CARD);
@@ -149,9 +197,9 @@ void drawRuviewPage() {
 
     tft.setTextColor(RV_DIM);
     tft.drawString("Variance", 174, ry, 1);
-    sprintf(buf, "%.3f", rvVariance);
+    snprintf(buf, sizeof(buf), "%.3f", rvVariance);
     tft.setTextColor(RV_WHITE);
-    tft.drawRightString(buf, 304, ry, 1);
+    drawTruncatedText(232, ry, buf, 72, RV_WHITE, 1, RV_BG);
     ry += rowH;
 
     tft.setTextColor(RV_DIM);
@@ -168,7 +216,7 @@ void drawRuviewPage() {
     tft.drawString("PPS", bx, by, 1);
     sprintf(buf, "%.0f", rvPPS);
     tft.setTextColor(RV_CYAN);
-    tft.drawString(buf, bx + 30, by, 1);
+    drawTruncatedText(bx + 30, by, buf, 42, RV_CYAN, 1, RV_CARD);
 
     tft.setTextColor(RV_DIM);
     tft.drawString("Subcarriers", bx + 80, by, 1);
@@ -263,25 +311,19 @@ void drawRuviewPage() {
 
   drawPageIndicator(STATE_RUVIEW, STATE_COUNT);
   rvPageDrawn = true;
-  strncpy(rvLastStatus, rvStatus, sizeof(rvLastStatus));
-  rvLastConfidence = rvConfidence;
-  rvLastVariance = rvVariance;
+  rvContentKey(rvDrawKey); rvLastCheck = millis();
 }
 
 // ── Partial redraw (called from loop) ──
 void redrawRuviewPartial() {
   if (currentState != STATE_RUVIEW) return;
-  if (!rvPageDrawn) return;
-
-  // Only redraw if state changed
-  bool statusChanged = (strcmp(rvStatus, rvLastStatus) != 0);
-  bool confChanged = (fabs(rvConfidence - rvLastConfidence) > 1.0f);
-  bool varChanged = (fabs(rvVariance - rvLastVariance) > 0.001f);
-
-  if (!statusChanged && !confChanged && !varChanged) return;
-
-  // Full redraw on state change (simpler and more reliable than surgical updates)
-  drawRuviewPage();
+  rvExpire();
+  if (!rvPageDrawn) { drawRuviewPage(); return; }
+  if (uint32_t(millis() - rvLastCheck) < 250) return;
+  rvLastCheck = millis();
+  char key[192];
+  rvContentKey(key);
+  if (strcmp(rvDrawKey, key)) drawRuviewPage();
 }
 
 // ── Full draw wrapper ──

@@ -510,6 +510,7 @@ class PresenceClassifier:
         now = time.time()
         if now - self.last_frame_time > 3.0:
             self.pps = 0.0
+        live = self.pps > 0.0
 
         if self.pps == 0.0:
             if self.last_frame_time == 0.0:
@@ -527,13 +528,13 @@ class PresenceClassifier:
             status = "Empty"
 
         return {
-            'occupied': self.occupied,
-            'motion': self.motion,
-            'confidence': round(self.confidence, 1),
+            'occupied': self.occupied if live else False,
+            'motion': self.motion if live else False,
+            'confidence': round(self.confidence, 1) if live else 0.0,
             'status': status,
             'variance': round(self.current_variance, 3),
             'rssi': self.rssi,
-            'calibrating': self.calibrating,
+            'calibrating': self.calibrating if live else False,
             'subcarriers': self.n_subcarriers,
             'pps': round(self.pps, 1),
             'frames': self.frames_processed,
@@ -612,7 +613,8 @@ class ZoneManager:
 zone_manager = ZoneManager()
 
 # Toggle: enable/disable CSI processing
-ruview_enabled = False
+# Enabled does not start collection: the controller also supplies a view lease.
+ruview_enabled = True
 
 # Global stats for diagnostics
 ruview_stats = {
@@ -622,7 +624,7 @@ ruview_stats = {
 }
 
 
-def ruview_listener_loop(port: int = 8890):
+def ruview_listener_loop(port: int = 8890, active_fn=None):
     """
     Background thread: listens for ADR-018 CSI frames on UDP.
     Parses both CSI frames (0xC5110001) and vitals packets (0xC5110002).
@@ -635,11 +637,9 @@ def ruview_listener_loop(port: int = 8890):
     except Exception:
         pass
 
-    bound = False
     for attempt in range(5):
         try:
             sock.bind(('0.0.0.0', port))
-            bound = True
             break
         except OSError as e:
             if attempt < 4:
@@ -653,12 +653,15 @@ def ruview_listener_loop(port: int = 8890):
     print(f"📡 RuView CSI listener started on UDP port {port}")
 
     while True:
-        if not ruview_enabled:
-            time.sleep(1)
+        if not ruview_enabled or (active_fn is not None and not active_fn()):
+            time.sleep(0.25)
             continue
 
         try:
             data, addr = sock.recvfrom(2048)
+            if data == b"COMPANION_CSI_PING":
+                sock.sendto(b"COMPANION_CSI_PONG", addr)
+                continue
             ruview_stats['packets_rx'] += 1
             ruview_stats['last_rx_time'] = time.time()
         except socket.timeout:
@@ -690,7 +693,7 @@ def ruview_listener_loop(port: int = 8890):
             ruview_stats['invalid_rx'] += 1
 
 
-def ruview_push_loop(send_udp_fn, interval: float = 2.0):
+def ruview_push_loop(send_udp_fn, interval: float = 2.0, active_fn=None):
     """
     Background thread: periodically pushes zone states to the ESP32
     display unit via the existing UDP send function.
@@ -704,7 +707,9 @@ def ruview_push_loop(send_udp_fn, interval: float = 2.0):
     print("📡 RuView push loop started")
 
     while True:
-        if not ruview_enabled:
+        if not ruview_enabled or (active_fn is not None and not active_fn()):
+            last_state_str = ''
+            last_push_at = 0.0
             time.sleep(interval)
             continue
 
@@ -769,7 +774,7 @@ def ruview_push_loop(send_udp_fn, interval: float = 2.0):
 if __name__ == '__main__':
     print("RuView CSI Processor — Standalone Test Mode")
     print("=" * 50)
-    print(f"Listening on UDP port 8890 for ADR-018 frames...")
+    print("Listening on UDP port 8890 for ADR-018 frames...")
     print(f"Expected magic: 0x{CSI_MAGIC:08X}")
     print()
 

@@ -12,6 +12,8 @@
 #include "ui_components.h"
 #include <SPI.h>
 #include <RF24.h>
+#include <memory>
+#include <new>
 
 // ═══════════════════════════════════════════════════════════
 // TOOL: 2.4GHz BlueJammer — 6-mode nRF24L01 channel jammer
@@ -481,7 +483,7 @@ static void dhRunRfClownJammer() {
 
 // ═══════════════════════════════════════════════════════════
 // TOOL: Radio Scanner — 2.4GHz spectrum analyzer
-// Sweeps all 126 nRF24 channels, shows RSSI as bar graph
+// Sweeps nRF24 receive channels, showing relative energy-detector hit counts.
 // ═══════════════════════════════════════════════════════════
 
 #define DH_SCAN_CHANNELS 126
@@ -492,12 +494,14 @@ static uint8_t dhScanPeaks[DH_SCAN_CHANNELS];
 
 static void dhRunRadioScanner() {
   RF24 radio(NRF1_CE_PIN, NRF1_CSN_PIN);
+  extern unsigned long virtualSelectHoldUntil;
 
   pinMode(TFT_CS, OUTPUT); digitalWrite(TFT_CS, HIGH);
   pinMode(NRF1_CSN_PIN, OUTPUT); digitalWrite(NRF1_CSN_PIN, HIGH);
   pinMode(NRF2_CSN_PIN, OUTPUT); digitalWrite(NRF2_CSN_PIN, HIGH);
   pinMode(NRF1_CE_PIN, OUTPUT); digitalWrite(NRF1_CE_PIN, LOW);
   pinMode(NRF2_CE_PIN, OUTPUT); digitalWrite(NRF2_CE_PIN, LOW);
+  pinMode(CC1101_CSN_PIN, OUTPUT); digitalWrite(CC1101_CSN_PIN, HIGH);
 
   // SPI initialized globally
 
@@ -524,12 +528,16 @@ static void dhRunRadioScanner() {
   // Waterfall buffer: 40 rows of compressed data
   #define DH_WF_ROWS 40
   #define DH_WF_COLS 80
-  static uint8_t waterfall[DH_WF_ROWS][DH_WF_COLS];
+  std::unique_ptr<uint8_t[]> waterfall(new (std::nothrow) uint8_t[DH_WF_ROWS * DH_WF_COLS]());
+  if (!waterfall) { radio.powerDown(); dhShowError("Not enough memory for spectrum history"); return; }
   int wfHead = 0;
-  memset(waterfall, 0, sizeof(waterfall));
 
-  while (true) {
+  while (currentState == STATE_DR_HACK) {
     extern void handleNetwork(); handleNetwork();
+    if (currentState != STATE_DR_HACK || virtualSelectPressed) {
+      virtualSelectPressed = false; virtualSelectHoldUntil = 0;
+      break;
+    }
     // Sweep all channels
     for (int ch = 0; ch < DH_SCAN_CHANNELS; ch++) {
       radio.setChannel(ch);
@@ -550,7 +558,7 @@ static void dhRunRadioScanner() {
     // Store waterfall row (compress 126→80)
     for (int i = 0; i < DH_WF_COLS; i++) {
       int srcCh = (i * DH_SCAN_CHANNELS) / DH_WF_COLS;
-      waterfall[wfHead][i] = dhScanValues[srcCh];
+      waterfall[wfHead * DH_WF_COLS + i] = dhScanValues[srcCh];
     }
     wfHead = (wfHead + 1) % DH_WF_ROWS;
 
@@ -558,13 +566,12 @@ static void dhRunRadioScanner() {
     tft.fillScreen(CLR_BG);
     drawGradientCard(0, 0, SCR_W, SCALE_Y(12), CLR_SUCCESS, darkenColor(CLR_SUCCESS, 50), 0);
     tft.setTextColor(CLR_TEXT_HI);
-    char hdr[24]; sprintf(hdr, "%s #%lu", showWaterfall ? "WATERFALL" : "SPECTRUM", sweepCount);
-    tft.drawString(hdr, SCALE_X(2), SCALE_Y(1), 1);
+    char hdr[32]; snprintf(hdr, sizeof(hdr), "%s #%lu", showWaterfall ? "WATERFALL" : "SPECTRUM", (unsigned long)sweepCount);
+    drawTruncatedText(SCALE_X(2), SCALE_Y(1), hdr, SCR_W - SCALE_X(4), CLR_TEXT_HI, 1);
 
     if (!showWaterfall) {
       // Spectrum bar view
       int plotY = SCALE_Y(16), plotH = SCALE_Y(80);
-      int barW = max(1, (int)(SCR_W / DH_SCAN_CHANNELS));
       int maxVal = 1;
       for (int i = 0; i < DH_SCAN_CHANNELS; i++)
         if (dhScanValues[i] > maxVal) maxVal = dhScanValues[i];
@@ -578,7 +585,7 @@ static void dhRunRadioScanner() {
           tft.drawFastVLine(x, plotY + plotH - h, h, col);
         }
         // Peak dot
-        int ph = (dhScanPeaks[i] * plotH) / max(maxVal, 1);
+        int ph = constrain((dhScanPeaks[i] * plotH) / max(maxVal, 1), 0, plotH);
         if (ph > 0) tft.drawPixel(x, plotY + plotH - ph, CLR_TEXT_LO);
       }
 
@@ -601,7 +608,7 @@ static void dhRunRadioScanner() {
         int y = plotY + (row * plotH) / DH_WF_ROWS;
         for (int col = 0; col < DH_WF_COLS; col++) {
           int x = (col * SCR_W) / DH_WF_COLS;
-          uint8_t v = waterfall[r][col];
+          uint8_t v = waterfall[r * DH_WF_COLS + col];
           if (v > 0) {
             uint16_t c = v > 5 ? CLR_SECONDARY : (v > 2 ? CLR_WARNING : CLR_SUCCESS);
             tft.drawPixel(x, y, c);
@@ -618,16 +625,20 @@ static void dhRunRadioScanner() {
       showWaterfall = !showWaterfall;
       delay(200);
     }
-    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if (digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) {
-        radio.powerDown();
-        return;
+        break;
       }
     } else { holding = false; }
 
     delay(5);
   }
+  radio.stopListening();
+  radio.powerDown();
+  digitalWrite(NRF1_CSN_PIN, HIGH);
+  virtualLeftPressed = virtualRightPressed = false;
+  virtualSelectHoldUntil = 0;
 }
 
 #endif // ESP32

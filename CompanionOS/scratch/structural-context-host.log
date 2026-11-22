@@ -1,0 +1,16 @@
+Building eyes-thought-context-160x128-esp8266
+PASS offline scheduling for all three themes
+PASS 24-hour mood dispatch, light override, 60-second manual lease, 5-second cadence
+368 context checks, 0 failures (160x128)
+Building eyes-thought-context-160x128-esp32
+PASS offline scheduling for all three themes
+PASS 24-hour mood dispatch, light override, 60-second manual lease, 5-second cadence
+368 context checks, 0 failures (160x128)
+Building eyes-thought-context-320x240-esp8266
+PASS offline scheduling for all three themes
+PASS 24-hour mood dispatch, light override, 60-second manual lease, 5-second cadence
+368 context checks, 0 failures (320x240)
+Building eyes-thought-context-320x240-esp32
+PASS offline scheduling for all three themes
+PASS 24-hour mood dispatch, light override, 60-second manual lease, 5-second cadence
+368 context checks, 0 failures (320x240)

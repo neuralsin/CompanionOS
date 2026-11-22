@@ -36,6 +36,16 @@ object WeatherRelay {
 
     suspend fun fetchAndSendWeather() = withContext(Dispatchers.IO) {
         try {
+            if (defaultCity != cityName) {
+                val name = java.net.URLEncoder.encode(defaultCity, "UTF-8")
+                httpClient.newCall(Request.Builder().url("https://geocoding-api.open-meteo.com/v1/search?name=$name&count=1").build()).execute().use { response ->
+                    if (!response.isSuccessful) return@withContext
+                    val found = JSONObject(response.body?.string() ?: return@withContext).optJSONArray("results")
+                    val place = found?.optJSONObject(0) ?: return@withContext
+                    latitude = place.getDouble("latitude"); longitude = place.getDouble("longitude")
+                    cityName = defaultCity
+                }
+            }
             val url = "https://api.open-meteo.com/v1/forecast?latitude=$latitude&longitude=$longitude&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto"
             val request = Request.Builder().url(url).build()
             val response = httpClient.newCall(request).execute()

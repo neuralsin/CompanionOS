@@ -110,6 +110,14 @@ static uint8_t dhCcRead(uint8_t reg, bool* ready = nullptr) {
   return value;
 }
 
+static bool dhProbeCc1101() {
+  dhCcInitPins();
+  bool partReady = false, versionReady = false;
+  const uint8_t part = dhCcRead(CC_PARTNUM, &partReady);
+  const uint8_t version = dhCcRead(CC_VERSION, &versionReady);
+  return partReady && versionReady && part == 0 && version != 0 && version != 0xFF;
+}
+
 static void dhCcWrite(uint8_t reg, uint8_t value) {
   dhCcSelect();
   SPI.transfer(reg);

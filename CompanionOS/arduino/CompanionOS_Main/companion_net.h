@@ -4,15 +4,19 @@
 // ═══════════════════════════════════════════════════════════
 #ifndef COMPANION_NET_H
 #define COMPANION_NET_H
+#include "lyrics_state.h"
 
 // [LEGACY - v6.0] Original included ESP8266WiFi.h unconditionally.
 // Now uses platform-conditional includes.
 
 #ifdef ESP32
 #include <WiFi.h>
+#if HAS_BLUETOOTH
 #include <BluetoothSerial.h>
+#endif
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <time.h>
 #elif defined(ESP8266)
 #include <ESP8266WiFi.h>
 #include <WiFiManager.h>
@@ -21,6 +25,7 @@
 #endif
 
 #include "globals.h"
+#include <utility>
 #include <WiFiUdp.h>
 #include <NTPClient.h>
 #ifdef ESP32
@@ -45,6 +50,7 @@ String pcIPStr = DEFAULT_PC_IP;
 #else
   static ESP8266WebServer sysWebServer(8080);
 #endif
+static bool memoryUploadValid = false;
 static const char MEMORIES_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html><head><title>CompanionOS Memories</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -113,15 +119,19 @@ extern String currentLyrics;
 extern String currentLyricsLine2;
 extern String prevLyricsLine;
 int playProgress = 0;
-int playDuration = 100;
+int playDuration = 0;
+unsigned long spotifyProgressUpdatedAt = 0;
 bool isPlaying = false;
 extern bool artDrawn;
+extern bool prepareCustomEyeImage();
 
 String currentNotes[4] = { "", "", "", "" };
 
 // ESP32 Bluetooth Serial
 #ifdef ESP32
+#if HAS_BLUETOOTH
 BluetoothSerial btSerial;
+#endif
 bool btInitialized = false;
 #endif
 
@@ -149,6 +159,10 @@ extern void t2_nextExpression();
 extern void t2_setEmotion(Emotion e);
 extern void t3_nextExpression();
 extern void t3_setEmotion(Emotion e);
+extern void nextPcDashSubPage();
+extern void resetSpotifyDrawState();
+extern void t2_resetSpotifyDrawState();
+extern bool t2_initialized;
 extern bool flashNotifEnabled;
 
 // Safe string extraction to prevent nullptr crash
@@ -189,10 +203,22 @@ extern int notifTotal;
 
 void handleCommand(String msg);
 void sendCommand(String cmd);
+bool isHostActive();
+bool isHostPlaybackActive();
+bool isHostWeatherActive();
+bool isHostPomodoroActive();
+void tickWiFiConnectivity();
+bool queueStandaloneCommand(const String& cmd);
+unsigned long pomoClockBaseline = 0;
 
 void handleVirtualButton(String btn) {
+  extern bool dismissEyesOverlays();
+  extern bool plannerButton(int step);
   btn.trim();
   btn.toUpperCase();
+  if (btn == "DISMISS") { dismissEyesOverlays(); return; }
+  if ((btn == "UP" || btn == "DOWN" || btn == "SELECT") && plannerButton(btn == "UP" ? -1 : 1)) return;
+  if (btn == "SELECT_LONG" && currentState == STATE_EYES && dismissEyesOverlays()) return;
 
   if (btn == "HOME") {
     virtualHomePressed = true;
@@ -204,7 +230,8 @@ void handleVirtualButton(String btn) {
   }
 
   if (btn == "LEFT_LONG") {
-    if (currentState == STATE_SPOTIFY) sendCommand("PREV");
+    if (currentState == STATE_SPOTIFY || currentState == STATE_LYRICS) sendCommand("PREV");
+    else if (currentState != STATE_EYES) changePage(-(int)currentState);
     lastInteractionTime = millis();
     return;
   }
@@ -215,7 +242,10 @@ void handleVirtualButton(String btn) {
     if (currentState == STATE_DR_HACK) {
       extern void dhNavigate(int delta);
       extern DrHackSubState dhCurrentState;
-      if (dhCurrentState == DH_MENU) dhNavigate(-1);
+      if (dhCurrentState == DH_MENU || dhUsesPageInput(dhCurrentState)) {
+        virtualLeftPressed = false;
+        dhNavigate(-1);
+      }
       lastInteractionTime = millis();
       return;
     }
@@ -227,7 +257,8 @@ void handleVirtualButton(String btn) {
   }
 
   if (btn == "RIGHT_LONG") {
-    if (currentState == STATE_SPOTIFY) sendCommand("NEXT");
+    if (currentState == STATE_SPOTIFY || currentState == STATE_LYRICS) sendCommand("NEXT");
+    else if (currentState != STATE_SETTINGS) changePage(STATE_SETTINGS - (int)currentState);
     lastInteractionTime = millis();
     return;
   }
@@ -238,7 +269,10 @@ void handleVirtualButton(String btn) {
     if (currentState == STATE_DR_HACK) {
       extern void dhNavigate(int delta);
       extern DrHackSubState dhCurrentState;
-      if (dhCurrentState == DH_MENU) dhNavigate(1);
+      if (dhCurrentState == DH_MENU || dhUsesPageInput(dhCurrentState)) {
+        virtualRightPressed = false;
+        dhNavigate(1);
+      }
       lastInteractionTime = millis();
       return;
     }
@@ -250,7 +284,7 @@ void handleVirtualButton(String btn) {
   }
 
   if (btn == "UP") {
-    virtualLeftPressed = true;
+    virtualUpPressed = true;
     if (currentState == STATE_SETTINGS) {
       extern int settingsScrollY;
       settingsScrollY = max(0, settingsScrollY - 20);
@@ -263,7 +297,7 @@ void handleVirtualButton(String btn) {
   }
 
   if (btn == "DOWN") {
-    virtualRightPressed = true;
+    virtualDownPressed = true;
     if (currentState == STATE_SETTINGS) {
       extern int settingsScrollY;
       settingsScrollY = min(120, settingsScrollY + 20);
@@ -281,14 +315,28 @@ void handleVirtualButton(String btn) {
       extern void dhSelect();
       extern DrHackSubState dhCurrentState;
       if (dhCurrentState == DH_MENU) {
+        changePage(-(int)currentState);
+      } else if (dhCurrentState == DH_BLE_INSPECTOR) {
+        dhCurrentState = DH_MENU;
+        renderCurrentPage();
+      } else if (dhUsesPageInput(dhCurrentState)) {
+        virtualSelectPressed = false;
         dhSelect();
       } else {
         extern unsigned long virtualSelectHoldUntil;
         virtualSelectPressed = true;
         virtualSelectHoldUntil = millis() + 850;
       }
-    }
+    } else
 #endif
+    if (currentState == STATE_EYES) {
+      Emotion next = (Emotion)((currentEmotion + 1) % EMO_COUNT);
+      if (activeTheme == 2) t3_setEmotion(next);
+      else if (activeTheme == 1) t2_setEmotion(next);
+      else setEmotion(next);
+    } else if (currentState == STATE_SPOTIFY || currentState == STATE_LYRICS) sendCommand("SHUFFLE:TOGGLE");
+    else if (currentState == STATE_POMODORO) sendCommand("POMO:RESET");
+    else changePage(-(int)currentState);
     lastInteractionTime = millis();
     return;
   }
@@ -300,6 +348,7 @@ void handleVirtualButton(String btn) {
       extern void dhSelect();
       extern DrHackSubState dhCurrentState;
       if (dhCurrentState == DH_MENU) dhSelect();
+      else if (dhUsesPageInput(dhCurrentState)) { virtualSelectPressed = false; dhSelect(); }
       else virtualSelectPressed = true;
       lastInteractionTime = millis();
       return;
@@ -307,278 +356,42 @@ void handleVirtualButton(String btn) {
 #endif
 
     if (currentState == STATE_EYES) {
-      if (activeTheme == 2) t3_nextExpression();
+      if (customEyeActive) { customEyeActive = false; renderCurrentPage(); }
+      else if (activeTheme == 2) t3_nextExpression();
       else if (activeTheme == 1) t2_nextExpression();
       else setEmotion((Emotion)((currentEmotion + 1) % EMO_COUNT));
-    } else if (currentState == STATE_SPOTIFY) {
+    } else if (currentState == STATE_SPOTIFY || currentState == STATE_LYRICS) {
       sendCommand("PLAY_PAUSE");
     } else if (currentState == STATE_POMODORO) {
       sendCommand(pomoActive ? "POMO:PAUSE" : "POMO:START");
     } else if (currentState == STATE_NOTIFICATIONS) {
       flashNotifEnabled = !flashNotifEnabled;
       redrawNotificationsPartial();
+    } else if (currentState == STATE_PC_DASH) {
+      nextPcDashSubPage();
     } else if (currentState == STATE_SETTINGS) {
       activeTheme = (activeTheme + 1) % THEME_COUNT;
       EEPROM.begin(EEPROM_SIZE);
       EEPROM.write(EEPROM_ACTIVE_THEME_ADDR, activeTheme);
       EEPROM.commit();
       EEPROM.end();
+      resetSpotifyDrawState(); t2_resetSpotifyDrawState(); t2_initialized = false;
       renderCurrentPage();
     }
     lastInteractionTime = millis();
     return;
   }
 
-  if (btn == "UP") {
-    virtualUpPressed = true;
-    if (currentState == STATE_SETTINGS) {
-      extern int settingsScrollY;
-      settingsScrollY -= 20;
-      if (settingsScrollY < 0) settingsScrollY = 0;
-      renderCurrentPage();
-    }
-    lastInteractionTime = millis();
-    return;
-  }
-
-  if (btn == "DOWN") {
-    virtualDownPressed = true;
-    if (currentState == STATE_SETTINGS) {
-      extern int settingsScrollY;
-      settingsScrollY += 20;
-      renderCurrentPage();
-    }
-    lastInteractionTime = millis();
-    return;
-  }
 }
 
-struct WiFiProfile {
-  String ssid;
-  String pass;
-};
-
-#define MAX_WIFI_PROFILES 4
-WiFiProfile wifiProfiles[MAX_WIFI_PROFILES];
-int wifiProfileCount = 0;
-String currentWiFiSSID = WIFI_SSID;
-String currentWiFiPASS = WIFI_PASS;
-
-void loadWiFiCredentials() {
-  wifiProfileCount = 0;
-  EEPROM.begin(EEPROM_SIZE);
-  if (EEPROM.read(EEPROM_WIFI_MAGIC_ADDR) == 0xC0 && EEPROM.read(EEPROM_WIFI_MAGIC_ADDR + 1) == 0x56) {
-    int count = EEPROM.read(EEPROM_WIFI_MAGIC_ADDR + 2);
-    if (count > MAX_WIFI_PROFILES) count = MAX_WIFI_PROFILES;
-    int addr = EEPROM_WIFI_SSID_ADDR;
-    for (int p = 0; p < count; p++) {
-      char s[33]; char passBuf[65];
-      for (int i = 0; i < 32; i++) s[i] = (char)EEPROM.read(addr++);
-      s[32] = 0;
-      for (int i = 0; i < 64; i++) passBuf[i] = (char)EEPROM.read(addr++);
-      passBuf[64] = 0;
-      bool valid = true;
-      for (int i = 0; s[i] != 0; i++) {
-        if ((unsigned char)s[i] < 32 || (unsigned char)s[i] > 126) {
-          valid = false;
-          break;
-        }
-      }
-      if (valid && strlen(s) > 0) {
-        wifiProfiles[wifiProfileCount].ssid = String(s);
-        wifiProfiles[wifiProfileCount].pass = String(passBuf);
-        wifiProfileCount++;
-      }
-    }
-  } else if (EEPROM.read(EEPROM_WIFI_MAGIC_ADDR) == 0xC0 && EEPROM.read(EEPROM_WIFI_MAGIC_ADDR + 1) == 0x55) {
-    char s[33]; char passBuf[65];
-    for (int i = 0; i < 32; i++) s[i] = (char)EEPROM.read(EEPROM_WIFI_SSID_ADDR + i);
-    s[32] = 0;
-    for (int i = 0; i < 64; i++) passBuf[i] = (char)EEPROM.read(EEPROM_WIFI_PASS_ADDR + i);
-    passBuf[64] = 0;
-    bool valid = true;
-    for (int i = 0; s[i] != 0; i++) {
-      if ((unsigned char)s[i] < 32 || (unsigned char)s[i] > 126) {
-        valid = false;
-        break;
-      }
-    }
-    if (valid && strlen(s) > 0) {
-      wifiProfiles[0].ssid = String(s);
-      wifiProfiles[0].pass = String(passBuf);
-      wifiProfileCount = 1;
-    }
-  }
-  EEPROM.end();
-
-  if (wifiProfileCount == 0) {
-    wifiProfiles[0].ssid = WIFI_SSID;
-    wifiProfiles[0].pass = WIFI_PASS;
-    wifiProfiles[1].ssid = WIFI_SSID2;
-    wifiProfiles[1].pass = WIFI_PASS2;
-    wifiProfileCount = 2;
-  } else if (wifiProfileCount == 1 && wifiProfiles[0].ssid != WIFI_SSID2) {
-    wifiProfiles[1].ssid = WIFI_SSID2;
-    wifiProfiles[1].pass = WIFI_PASS2;
-    wifiProfileCount = 2;
-  }
-  currentWiFiSSID = wifiProfiles[0].ssid;
-  currentWiFiPASS = wifiProfiles[0].pass;
-}
-
-void saveMultiWiFiCredentials(const std::vector<std::pair<String, String>>& nets) {
-  EEPROM.begin(EEPROM_SIZE);
-  EEPROM.write(EEPROM_WIFI_MAGIC_ADDR, 0xC0);
-  EEPROM.write(EEPROM_WIFI_MAGIC_ADDR + 1, 0x56);
-  int count = min((int)nets.size(), MAX_WIFI_PROFILES);
-  EEPROM.write(EEPROM_WIFI_MAGIC_ADDR + 2, count);
-  int addr = EEPROM_WIFI_SSID_ADDR;
-  for (int p = 0; p < count; p++) {
-    String s = nets[p].first;
-    String pw = nets[p].second;
-    for (int i = 0; i < 32; i++) EEPROM.write(addr++, (i < s.length()) ? s[i] : 0);
-    for (int i = 0; i < 64; i++) EEPROM.write(addr++, (i < pw.length()) ? pw[i] : 0);
-  }
-  EEPROM.commit();
-  EEPROM.end();
-  loadWiFiCredentials();
-}
-
-void saveWiFiCredentials(String newSSID, String newPASS) {
-  std::vector<std::pair<String, String>> singleNet;
-  singleNet.push_back({newSSID, newPASS});
-  saveMultiWiFiCredentials(singleNet);
-}
-
-void setupWiFi() {
-  loadWiFiCredentials();
-  Serial.print(F("WiFi setup..."));
-
-  WiFi.mode(WIFI_STA);
-  WiFi.setAutoReconnect(true);
-  #if defined(ESP8266)
-  WiFi.persistent(true);
-  #endif
-
-  wifiConnected = false;
-
-  for (int p = 0; p < wifiProfileCount; p++) {
-    if (wifiProfiles[p].ssid.length() == 0) continue;
-
-    tft.fillScreen(COLOR_BG);
-    tft.setTextColor(TFT_CYAN);
-    tft.drawCentreString("WiFi Priority #" + String(p + 1), SCR_CX, SCR_CY - SCALE_Y(30), 2);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawCentreString(wifiProfiles[p].ssid, SCR_CX, SCR_CY - SCALE_Y(8), 2);
-    tft.setTextColor(TFT_DARKGREY);
-    tft.drawCentreString("Connecting...", SCR_CX, SCR_CY + SCALE_Y(16), 1);
-
-    WiFi.disconnect();
-    delay(100);
-    WiFi.begin(wifiProfiles[p].ssid.c_str(), wifiProfiles[p].pass.c_str());
-
-    int timeout = 0;
-    while (WiFi.status() != WL_CONNECTED && timeout < 20) { // ~5 seconds per network
-      delay(250);
-      yield();
-      Serial.print(".");
-      timeout++;
-    }
-
-    if (WiFi.status() == WL_CONNECTED) {
-      wifiConnected = true;
-      currentWiFiSSID = wifiProfiles[p].ssid;
-      currentWiFiPASS = wifiProfiles[p].pass;
-      Serial.printf(" Connected to Priority #%d: %s\n", p + 1, currentWiFiSSID.c_str());
-      break;
-    }
-  }
-
-  if (wifiConnected) {
-    Serial.println(F(" OK"));
-    Serial.print(F("IP: "));
-    Serial.println(WiFi.localIP());
-
-    // Start System Web Server
-    sysWebServer.on("/", HTTP_GET, [](){
-      sysWebServer.send(200, "text/html", MEMORIES_HTML);
-    });
-    sysWebServer.on("/memories", HTTP_GET, [](){
-      sysWebServer.send(200, "text/html", MEMORIES_HTML);
-    });
-    sysWebServer.on("/upload", HTTP_POST, [](){
-      sysWebServer.send(200, "text/plain", "OK");
-    }, [](){
-      HTTPUpload& upload = sysWebServer.upload();
-      if (upload.status == UPLOAD_FILE_START) {
-        if (!customEyeImg) {
-          customEyeImg = (uint16_t*)malloc(160 * 128 * 2);
-        }
-        customEyeActive = false;
-        customEyeReady = false;
-      } else if (upload.status == UPLOAD_FILE_WRITE) {
-        if (customEyeImg && (upload.totalSize + upload.currentSize <= 160 * 128 * 2)) {
-          memcpy((uint8_t*)customEyeImg + upload.totalSize, upload.buf, upload.currentSize);
-        }
-      } else if (upload.status == UPLOAD_FILE_END) {
-        customEyeActive = true;
-        customEyeReady = true;
-        extern void renderCurrentPage();
-        renderCurrentPage();
-      }
-    });
-    sysWebServer.begin();
-    Serial.println(F("SysWebServer started on port 8080"));
-
-    tft.fillScreen(COLOR_BG);
-    tft.setTextColor(TFT_GREEN);
-    tft.drawCentreString("WiFi Connected!", SCR_CX, SCR_CY - SCALE_Y(20), 2);
-    tft.drawCentreString(WiFi.localIP().toString(), SCR_CX, SCR_CY + SCALE_Y(10), 2);
-
-    // NTP Time Sync
-    timeClient.begin();
-    if (timeClient.update()) {
-      displayHour = timeClient.getHours();
-      displayMinute = timeClient.getMinutes();
-      displaySecond = timeClient.getSeconds();
-      timeReceived = true;
-      lastTimeUpdateMillis = millis();
-      lastNTPSync = millis();
-      Serial.printf("NTP synced: %02d:%02d:%02d IST\n", displayHour, displayMinute, displaySecond);
-    } else {
-      Serial.println(F("NTP initial sync failed, will retry"));
-    }
-  } else {
-    Serial.println(F(" OFFLINE (Disabling WiFi radio before Bluetooth)"));
-    WiFi.disconnect(true);
-    WiFi.mode(WIFI_OFF);
-    wifiConnected = false;
-    delay(100);
-    yield();
-    tft.fillScreen(COLOR_BG);
-    tft.setTextColor(TFT_YELLOW);
-    tft.drawCentreString("WiFi Offline", SCR_CX, SCR_CY - SCALE_Y(20), 2);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawCentreString("Bluetooth Ready", SCR_CX, SCR_CY + SCALE_Y(10), 1);
-  }
-
-  udp.begin(UDP_PORT_RX);
-  delay(500);
-
-  // Auto-discovery handshake
-  if (wifiConnected) {
-    udp.beginPacket("255.255.255.255", UDP_PORT_TX);
-    const char* hello = "HELLO_COMPANION";
-    udp.write((const uint8_t*)hello, strlen(hello));
-    udp.endPacket();
-  }
-}
+#include "wifi_connectivity.h"
 
 // ═══════════════════════════════════════════════════════════
 // ESP32 BLUETOOTH TRANSPORT
 // ═══════════════════════════════════════════════════════════
 
 #ifdef ESP32
+#if HAS_BLUETOOTH
 void setupBluetooth() {
   if (!btInitialized) {
     // 1. Completely disconnect and power down WiFi radio to prevent coexistence panic
@@ -636,21 +449,46 @@ void handleBluetoothData() {
     }
   }
 }
-#endif
+#else
+void setupBluetooth() {}
+void startBluetoothExplicit() {}
+void handleBluetoothData() {}
+#endif // HAS_BLUETOOTH
+#endif // ESP32
 
 // ═══════════════════════════════════════════════════════════
 // SEND COMMAND — Dual transport (WiFi preferred, BT fallback)
 // ═══════════════════════════════════════════════════════════
 
 void sendCommand(String cmd) {
+  if (!isHostPomodoroActive() && cmd.startsWith("POMO:")) {
+    if (cmd == "POMO:RESET") {
+      pomoActive = false;
+      pomoIsBreak = false;
+      pomoRemaining = pomoTotal = 1500;
+    } else if (cmd == "POMO:START") {
+      if (pomoRemaining <= 0) pomoRemaining = max(1, pomoTotal);
+      pomoActive = true;
+    } else if (cmd == "POMO:PAUSE") {
+      pomoActive = false;
+    } else return;
+    pomoClockBaseline = millis();
+    redrawPomodoroPartial();
+    return;
+  }
+  #ifdef ESP32
+  if (queueStandaloneCommand(cmd)) return;
+  #endif
   // Match legacy: use pcIPStr.c_str() directly
   udp.beginPacket(pcIPStr.c_str(), UDP_PORT_TX);
   udp.write((const uint8_t*)cmd.c_str(), cmd.length());
   udp.endPacket();
 #ifdef ESP32
+  #if HAS_BLUETOOTH
   if (btConnected && btInitialized) {
     btSerial.println(cmd);
   }
+#endif
 #endif
   Serial.print(F("Sent: "));
   Serial.println(cmd);
@@ -661,11 +499,28 @@ void sendCommand(String cmd) {
 // ═══════════════════════════════════════════════════════════
 
 unsigned long lastHostPacketMillis = 0;
+unsigned long lastHostPlaybackMillis = 0;
 bool isHostAndroid = false;
 
 bool isHostActive() {
   return (lastHostPacketMillis > 0 && (millis() - lastHostPacketMillis < HOST_TIMEOUT_MS));
 }
+
+bool isHostPlaybackActive() {
+  return lastHostPlaybackMillis > 0 && millis() - lastHostPlaybackMillis < HOST_TIMEOUT_MS;
+}
+
+unsigned long lastHostWeatherMillis = 0;
+unsigned long lastHostPomodoroMillis = 0;
+
+bool isHostWeatherActive() {
+  return lastHostWeatherMillis > 0 && millis() - lastHostWeatherMillis < WEATHER_POLL_INTERVAL_MS;
+}
+
+bool isHostPomodoroActive() {
+  return isHostActive() && lastHostPomodoroMillis > 0 && (millis() - lastHostPomodoroMillis < HOST_TIMEOUT_MS);
+}
+
 
 // Standalone Spotify state
 String spotifyAccessToken = DEFAULT_SPOTIFY_ACCESS_TOKEN;
@@ -692,6 +547,13 @@ static inline String encodeBase64(const String& input) {
   return out;
 }
 
+#ifdef ESP32
+#include "standalone_services.h"
+#else
+String standaloneSpotifyStatus;
+String standaloneWeatherStatus;
+String standaloneLyricsStatus;
+bool standaloneLyricsSynced = true;
 bool refreshSpotifyToken() {
   if (spotifyRefreshToken.length() == 0 || spotifyClientId.length() == 0 || spotifyClientSecret.length() == 0) {
     return false;
@@ -708,7 +570,7 @@ bool refreshSpotifyToken() {
     return false;
   }
 
-  https.setTimeout(4000);
+  https.setTimeout(8000);
   https.addHeader("Content-Type", "application/x-www-form-urlencoded");
   String authBasic = encodeBase64(spotifyClientId + ":" + spotifyClientSecret);
   https.addHeader("Authorization", "Basic " + authBasic);
@@ -762,7 +624,7 @@ void pollSpotifyStandalone() {
     return;
   }
 
-  https.setTimeout(2500);
+  https.setTimeout(8000);
   https.addHeader("Authorization", "Bearer " + spotifyAccessToken);
   int httpCode = https.GET();
 
@@ -840,7 +702,7 @@ void fetchWeatherStandalone() {
     return;
   }
 
-  https.setTimeout(3500);
+  https.setTimeout(8000);
   int httpCode = https.GET();
 
   if (httpCode == 200) {
@@ -916,6 +778,8 @@ void fetchWeatherStandalone() {
 // HANDLE NETWORK — Main loop
 // ═══════════════════════════════════════════════════════════
 
+#endif  // ESP32 background worker / ESP8266 legacy fallback
+
 // Network state trackers
 // ═══════════════════════════════════════════════════════════
 
@@ -923,7 +787,16 @@ bool pcFound = false;
 unsigned long lastDiscoveryShout = 0;
 
 void handleNetwork() {
+  if (!wifiServicesStarted) {
+    #ifdef ESP32
+    tickStandaloneServices();
+    #endif
+    return;
+  }
   if (dhNetPaused) {
+    #ifdef ESP32
+    tickStandaloneServices();
+    #endif
     return; // Pause background services during intense RF/WiFi Dr. Hack operations
   }
 
@@ -932,6 +805,20 @@ void handleNetwork() {
   }
 
   // Periodic NTP re-sync (every 5 minutes)
+  #ifdef ESP32
+  static unsigned long lastClockRead = 0;
+  if (wifiConnected && millis() - lastClockRead >= 1000) {
+    lastClockRead = millis();
+    struct tm clock;
+    if (getLocalTime(&clock, 0)) {
+      displayHour = clock.tm_hour;
+      displayMinute = clock.tm_min;
+      displaySecond = clock.tm_sec;
+      timeReceived = true;
+      lastTimeUpdateMillis = millis();
+    }
+  }
+  #else
   if (wifiConnected && millis() - lastNTPSync >= 300000) {
     if (timeClient.update()) {
       displayHour = timeClient.getHours();
@@ -943,9 +830,10 @@ void handleNetwork() {
     }
     lastNTPSync = millis();
   }
+  #endif
 
   // Auto-discovery — match legacy: use string broadcast address
-  if (!pcFound && millis() - lastDiscoveryShout > 3000) {
+  if (wifiConnected && !pcFound && millis() - lastDiscoveryShout > 3000) {
     udp.beginPacket("255.255.255.255", UDP_PORT_TX);
     const char* hello = "HELLO_COMPANION";
     udp.write((const uint8_t*)hello, strlen(hello));
@@ -964,6 +852,32 @@ void handleNetwork() {
     }
   }
 
+  // PC Dashboard dedicated UDP port 4210 listener
+  bool wantsPcDash = wifiConnected &&
+      companion_memory::nearby(int(currentState), int(STATE_PC_DASH), int(STATE_COUNT));
+  if (pcDashListening && !wantsPcDash) { udpPcDash.stop(); pcDashListening = false; }
+  if (!pcDashListening && wantsPcDash) pcDashListening = udpPcDash.begin(4210) != 0;
+  // Renewable demand lease: optional PC feeds stop if this device goes away.
+  static int sentView = -1;
+  static uint32_t lastViewSent = 0;
+  if (wifiConnected && (sentView != int(currentState) || uint32_t(millis() - lastViewSent) >= 5000)) {
+    udp.beginPacket(pcIPStr.c_str(), UDP_PORT_TX);
+    udp.print(String("VIEW:") + String(int(currentState)));
+    udp.endPacket();
+    sentView = int(currentState); lastViewSent = millis();
+  }
+  int pcdPacketSize = pcDashListening ? udpPcDash.parsePacket() : 0;
+  if (pcdPacketSize) {
+    int pcdReadLen = min(pcdPacketSize, 2047);
+    char pcdBuf[2048];
+    int pcdLen = udpPcDash.read(pcdBuf, pcdReadLen);
+    if (pcdLen > 0) {
+      pcdBuf[pcdLen] = '\0';
+      extern void processPcDashPacket(const char* packet);
+      if (pcdLen == pcdPacketSize) processPcDashPacket(pcdBuf);
+    }
+  }
+
   // UDP packet processing
   int packetSize = udp.parsePacket();
   if (packetSize) {
@@ -974,12 +888,13 @@ void handleNetwork() {
 
     int readLen = min(packetSize, 2047);
     int len = udp.read(udpBuffer, readLen);
+    if (len <= 0) return;
 
     // V4 OPTIMIZATION: BARE-METAL BINARY PACKET SNIFFING
     if (len > 3 && (unsigned char)udpBuffer[0] == 0xFD) {
       // CUSTOM EYE IMAGE CHUNKS (160x128 RGB565)
       if (customEyeImg == nullptr) {
-        customEyeImg = (uint16_t*)malloc(160 * 128 * 2);
+        if (!prepareCustomEyeImage()) return;
       }
       if (customEyeImg == nullptr) return; // Out of memory
       
@@ -1008,14 +923,16 @@ void handleNetwork() {
       int pixelsInChunk = (len - 3) / 2;
 
       // Auto-initialize on first chunk if ART_START: was missed over UDP
-      if (chunkIdx == 0) {
+      if (chunkIdx == 0 && !receivingArt) {
+        if (!prepareIncomingArt()) return;
         receivingArt = true;
         albumArtReady = false;
         artDrawn = false;
         albumArtRowsComplete = 0;
         memset(albumArtRowsReceived, 0, sizeof(albumArtRowsReceived));
+        albumArtStartedAt = millis();
       }
-      if (!receivingArt) receivingArt = true;
+      if (!receivingArt || (len - 3) % (ALBUM_ART_W * 2) != 0) return;
 
       int imgWidth = ALBUM_ART_W;
       int imgHeight = ALBUM_ART_H;
@@ -1024,8 +941,8 @@ void handleNetwork() {
       int pixelsPerChunk = imgWidth;
       int startPixel = chunkIdx * pixelsPerChunk;
 
-      if (startPixel >= 0 && startPixel < imagePixels && startPixel < maxPixels) {
-        uint16_t* dest = albumArt + startPixel;
+      if (albumArtIncoming && startPixel >= 0 && startPixel < imagePixels && startPixel < maxPixels) {
+        uint16_t* dest = albumArtIncoming + startPixel;
         int safePixels = min(pixelsInChunk, min(imagePixels - startPixel, maxPixels - startPixel));
         if (safePixels <= 0) return;
 
@@ -1035,7 +952,7 @@ void handleNetwork() {
         }
 
         int firstRow = startPixel / imgWidth;
-        int rowCount = (safePixels + imgWidth - 1) / imgWidth;
+        int rowCount = safePixels / imgWidth;
         for (int row = firstRow; row < firstRow + rowCount && row < ALBUM_ART_H; row++) {
           if (!albumArtRowsReceived[row]) {
             albumArtRowsReceived[row] = 1;
@@ -1052,48 +969,8 @@ void handleNetwork() {
     }
 
     if (len > 3 && (unsigned char)udpBuffer[0] == 0xFC) {
-      int chunkIdx = ((unsigned char)udpBuffer[1] << 8) | ((unsigned char)udpBuffer[2]);
-      int pixelsInChunk = (len - 3) / 2;
-      if (!receivingArt) return;
-
-      int imgWidth = ALBUM_ART_W;
-      int imgHeight = ALBUM_ART_H;
-      int imagePixels = imgWidth * imgHeight;
-      int maxPixels = ALBUM_ART_W * ALBUM_ART_H;
-      int pixelsPerChunk = imgWidth;
-      int startPixel = chunkIdx * pixelsPerChunk;
-
-      if (startPixel >= 0 && startPixel < imagePixels && startPixel < maxPixels) {
-        uint16_t* dest = albumArt + startPixel;
-        int safePixels = min(pixelsInChunk, min(imagePixels - startPixel, maxPixels - startPixel));
-        if (safePixels <= 0) return;
-
-        for (int i = 0; i < safePixels; i++) {
-          int offset = 3 + (i * 2);
-          dest[i] = ((uint16_t)(unsigned char)udpBuffer[offset] << 8) | (unsigned char)udpBuffer[offset + 1];
-        }
-
-        int firstRow = startPixel / imgWidth;
-        int rowCount = (safePixels + imgWidth - 1) / imgWidth;
-        for (int row = firstRow; row < firstRow + rowCount && row < ALBUM_ART_H; row++) {
-          if (!albumArtRowsReceived[row]) {
-            albumArtRowsReceived[row] = 1;
-            if (albumArtRowsComplete < ALBUM_ART_H) albumArtRowsComplete++;
-          }
-        }
-
-        // Progressive rendering for gaming page
-        int imgX = SCALE_X(12);
-        int imgY = SCALE_Y(36);
-        int yStart = startPixel / imgWidth;
-        int maxRows = safePixels / imgWidth;
-
-        if (currentState == STATE_GAMING) {
-          if (maxRows > 0) {
-            tft.pushImage(imgX, imgY + yStart, imgWidth, maxRows, dest);
-          }
-        }
-      }
+      // This legacy game-cover channel has no active sender or display owner.
+      // Keep it isolated from the active Spotify image transfer.
       return;
     }
 
@@ -1104,6 +981,9 @@ void handleNetwork() {
   }
 
   // Update WiFi status
+  if (receivingArt && millis() - albumArtStartedAt > 8000) {
+    discardIncomingArt();
+  }
   wifiConnected = (WiFi.status() == WL_CONNECTED);
 
 // ESP32: also check BT data
@@ -1112,14 +992,14 @@ void handleNetwork() {
 #endif
 
   // Standalone Services (When no host device is active or host is Android)
+  #ifdef ESP32
+  tickStandaloneServices();
+  #else
   if (wifiConnected) {
-    if (!isHostActive() || isHostAndroid) {
-      pollSpotifyStandalone();
-    }
-    if (!isHostActive()) {
-      fetchWeatherStandalone();
-    }
+    if (!isHostActive() || isHostAndroid) pollSpotifyStandalone();
+    if (!isHostActive()) fetchWeatherStandalone();
   }
+  #endif
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1129,7 +1009,30 @@ void handleNetwork() {
 // [LEGACY - v6.0] updateTimeFromUDP forward declaration
 extern void updateTimeFromUDP(String t);
 
+void invalidatePlaybackArt() {
+  companion_lyrics::timing() = companion_lyrics::Timing();
+  albumArtReady = false;
+  receivingArt = false;
+  albumArtRowsComplete = 0;
+  albumArtRevision++;
+  memset(albumArtRowsReceived, 0, sizeof(albumArtRowsReceived));
+  extern void resetSpotifyDrawState();
+  extern void t2_resetSpotifyDrawState();
+  resetSpotifyDrawState();
+  t2_resetSpotifyDrawState();
+}
+
 void handleCommand(String msg) {
+  // Keep durable Notes/Notifications state even while their UI is hidden.
+  if (currentState == STATE_LYRICS &&
+      (msg.startsWith("THOUGHT:") || msg.startsWith("AGENT:") || msg.startsWith("WEATHER:") ||
+       msg.startsWith("STOCKS:") || msg.startsWith("GAMING:") || msg.startsWith("SOCIAL:") ||
+       msg.startsWith("TASKS:") || msg.startsWith("RUVIEW:") || msg.startsWith("PCDASH:"))) return;
+  if (msg.startsWith("SPOTIFY:") || msg.startsWith("PROGRESS:") ||
+      msg.startsWith("TRACK:") || msg.startsWith("STATE:")) {
+    spotifyProgressUpdatedAt = millis();
+    lastHostPlaybackMillis = millis();
+  }
   if (msg.startsWith("HOST:")) {
     if (msg.indexOf("ANDROID") >= 0) isHostAndroid = true;
     else if (msg.indexOf("PC") >= 0) isHostAndroid = false;
@@ -1137,6 +1040,11 @@ void handleCommand(String msg) {
     return;
   } else if (msg.startsWith("EMOTION:")) {
     String emo = msg.substring(8);
+    if (emo == "AUTO") {
+      extern void resumeAutoEmotion();
+      resumeAutoEmotion();
+      return;
+    }
     Emotion e = EMO_NEUTRAL;
     if (emo == "HAPPY") e = EMO_HAPPY;
     else if (emo == "SAD") e = EMO_SAD;
@@ -1153,10 +1061,14 @@ void handleCommand(String msg) {
     customEyeActive = false;
     memset(customEyeRowsReceived, 0, sizeof(customEyeRowsReceived));
     if (customEyeImg == nullptr) {
-      customEyeImg = (uint16_t*)malloc(160 * 128 * 2);
+      if (!prepareCustomEyeImage()) {
+        sendCommand("CUSTEYE_ERROR:MEMORY_OR_PAGE");
+        return;
+      }
     }
     if (customEyeImg) memset(customEyeImg, 0, 160 * 128 * 2);
   } else if (msg.startsWith("CUSTEYE:VERIFY") || msg.startsWith("CUSTEYE:DONE")) {
+    if (!customEyeImg) return;
     // Exact byte-by-byte check — ZERO interpolation!
     String missingRows = "";
     int missingCount = 0;
@@ -1178,7 +1090,7 @@ void handleCommand(String msg) {
       }
     }
   } else if (msg.startsWith("CUSTEYE:TOGGLE:")) {
-    customEyeActive = (msg.substring(15).toInt() == 1);
+    customEyeActive = customEyeReady && customEyeImg && (msg.substring(15).toInt() == 1);
     if (currentState == STATE_EYES) {
       renderCurrentPage();
     }
@@ -1189,6 +1101,9 @@ void handleCommand(String msg) {
     }
 #ifdef ESP32
   } else if (msg.startsWith("DRHACK:")) {
+    // Never execute a remote tool command across a workspace restart. The user
+    // must explicitly select it again after the radio workspace is ready.
+    if (switchMemoryWorkspace(STATE_DR_HACK)) return;
     String action = msg.substring(7);
     currentState = STATE_DR_HACK;
     
@@ -1219,6 +1134,7 @@ void handleCommand(String msg) {
     int theme = msg.substring(10).toInt();
     if (theme >= 0 && theme < THEME_COUNT) {
       activeTheme = theme;
+      wakeForManualAppearance();
       if (currentState == STATE_EYES) {
         renderCurrentPage();
       }
@@ -1237,18 +1153,10 @@ void handleCommand(String msg) {
         lastInteractionTime = millis();
       }
       
-      if (agentStatus == "thinking") {
-        if (activeTheme == 2) t3_setEmotion(EMO_EXCITED);
-        else if (activeTheme == 1) t2_setEmotion(EMO_EXCITED);
-        else setEmotion(EMO_EXCITED);
-      } else if (agentStatus == "done") {
-        if (activeTheme == 2) t3_setEmotion(EMO_HAPPY);
-        else if (activeTheme == 1) t2_setEmotion(EMO_HAPPY);
-        else setEmotion(EMO_HAPPY);
-      } else if (agentStatus == "error") {
-        if (activeTheme == 2) t3_setEmotion(EMO_SAD);
-        else if (activeTheme == 1) t2_setEmotion(EMO_SAD);
-        else setEmotion(EMO_SAD);
+      if (!manualEmotionOverride) {
+        if (agentStatus == "thinking") applyAmbientEmotion(EMO_EXCITED);
+        else if (agentStatus == "done") applyAmbientEmotion(EMO_HAPPY);
+        else if (agentStatus == "error") applyAmbientEmotion(EMO_SAD);
       }
     }
   }
@@ -1260,6 +1168,7 @@ void handleCommand(String msg) {
       if (doc.containsKey("track")) {
         String newTrack = doc["track"].as<String>();
         if (newTrack != currentTrack) {
+          invalidatePlaybackArt();
           currentTrack = newTrack;
           currentLyrics = "";
           currentLyricsLine2 = "";
@@ -1269,11 +1178,11 @@ void handleCommand(String msg) {
       if (doc.containsKey("artist")) currentArtist = doc["artist"].as<String>();
       if (doc.containsKey("duration")) {
         int dur = doc["duration"].as<int>();
-        playDuration = (dur < 1000) ? (dur * 1000) : dur;
+        playDuration = constrain(dur, 0, 86400000);
       }
       if (doc.containsKey("progress")) {
         int prg = doc["progress"].as<int>();
-        playProgress = (prg < 1000) ? (prg * 1000) : prg;
+        playProgress = max(0, prg);
       }
       if (doc.containsKey("playing")) {
         isPlaying = doc["playing"].as<bool>();
@@ -1291,11 +1200,11 @@ void handleCommand(String msg) {
     if (!deserializeJson(doc, json)) {
       if (doc.containsKey("progress")) {
         int prg = doc["progress"].as<int>();
-        playProgress = (prg < 1000) ? (prg * 1000) : prg;
+        playProgress = max(0, prg);
       }
       if (doc.containsKey("duration")) {
         int dur = doc["duration"].as<int>();
-        playDuration = (dur < 1000) ? (dur * 1000) : dur;
+        playDuration = constrain(dur, 0, 86400000);
       }
       extern void t2_redrawSpotifyPartial();
       if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
@@ -1310,6 +1219,7 @@ void handleCommand(String msg) {
       String newTrack = doc["track"].as<String>();
       String newArtist = doc["artist"].as<String>();
       if (newTrack != currentTrack || newArtist != currentArtist) {
+        invalidatePlaybackArt();
         currentTrack = newTrack;
         currentArtist = newArtist;
         currentLyrics = "";
@@ -1318,7 +1228,7 @@ void handleCommand(String msg) {
       }
       if (doc.containsKey("duration")) {
         int dur = doc["duration"].as<int>();
-        playDuration = (dur < 1000) ? (dur * 1000) : dur;
+        playDuration = constrain(dur, 0, 86400000);
       }
       musicPlaying = true;
       isPlaying = true;
@@ -1329,16 +1239,19 @@ void handleCommand(String msg) {
       else if (currentState == STATE_RETRO_WATCH) redrawRetroWatchPartial();
     }
   } else if (msg.startsWith("ART_START:")) {
+    if (!prepareIncomingArt()) return;
     receivingArt = true;
     albumArtReady = false;
     artDrawn = false;
     albumArtRowsComplete = 0;
     memset(albumArtRowsReceived, 0, sizeof(albumArtRowsReceived));
-    memset(albumArt, 0, sizeof(albumArt));
+    if (albumArtIncoming) memset(albumArtIncoming, 0, ALBUM_ART_BYTES);
+    albumArtStartedAt = millis();
   } else if (msg.startsWith("ART_COMPLETE:")) {
+    if (!receivingArt || !albumArtIncoming) return;
     int missingRows = ALBUM_ART_H - albumArtRowsComplete;
-    if (missingRows > 4) {
-      // More than 4 rows missing (>6%) -> Request missing 4-row chunk packets from host!
+    if (missingRows > 0) {
+      // Never publish an incomplete frame; request the missing four-row chunks.
       String missingChunks = "";
       int count = 0;
       for (int c = 0; c < ALBUM_ART_H; c += 4) {
@@ -1355,18 +1268,18 @@ void handleCommand(String msg) {
       if (count > 0) {
         sendCommand("ART_REQ:" + missingChunks);
       }
-    } else if (albumArtRowsComplete >= (ALBUM_ART_H - 4)) {
-      // Within 4-row max interpolation threshold -> complete and render!
+    } else if (albumArtRowsComplete == ALBUM_ART_H) {
       completeAlbumArt();
     } else {
       receivingArt = false;
       albumArtReady = false;
     }
   } else if (msg.startsWith("SPOTIFY_RESET:")) {
+    discardIncomingArt();
     currentLyrics = "";
     currentLyricsLine2 = "";
     prevLyricsLine = "";
-    memset(albumArt, 0, sizeof(albumArt));
+    if (albumArt) memset(albumArt, 0, ALBUM_ART_BYTES);
     albumArtRowsComplete = 0;
     memset(albumArtRowsReceived, 0, sizeof(albumArtRowsReceived));
     artDrawn = false;
@@ -1375,25 +1288,39 @@ void handleCommand(String msg) {
     if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
     else if (currentState == STATE_SPOTIFY) redrawSpotifyPartial();
   } else if (msg.startsWith("SPOTIFY_AUTH:")) {
-    isHostAndroid = true;
-    lastHostPacketMillis = millis();
     String payload = msg.substring(13);
-    DynamicJsonDocument doc(512);
-    if (!deserializeJson(doc, payload)) {
-      if (doc.containsKey("access")) {
-        spotifyAccessToken = doc["access"].as<String>();
-      }
-      if (doc.containsKey("refresh")) {
-        spotifyRefreshToken = doc["refresh"].as<String>();
-      }
-      if (doc.containsKey("client_id")) {
-        spotifyClientId = doc["client_id"].as<String>();
-      }
-      if (doc.containsKey("client_secret")) {
-        spotifyClientSecret = doc["client_secret"].as<String>();
-      }
-      Serial.println(F("Spotify OAuth credentials synced from host!"));
-      showFlashNotification("Spotify Synced");
+    if (payload.length() > 1800) return;
+    DynamicJsonDocument doc(2048);
+    if (!deserializeJson(doc, payload.c_str())) {
+      if (!doc["access"].is<const char*>() || !doc["refresh"].is<const char*>() ||
+          !doc["client_id"].is<const char*>() || !doc["client_secret"].is<const char*>()) return;
+      auto valid = [](const char* text, size_t capacity) {
+        if (strlen(text) >= capacity) return false;
+        for (; *text; ++text) if (uint8_t(*text) <= 32 || uint8_t(*text) >= 127) return false;
+        return true;
+      };
+      const char* access = doc["access"];
+      const char* refresh = doc["refresh"];
+      const char* clientId = doc["client_id"];
+      const char* secret = doc["client_secret"];
+      if (doc["access"].as<JsonString>().size() != strlen(access) ||
+          doc["refresh"].as<JsonString>().size() != strlen(refresh) ||
+          doc["client_id"].as<JsonString>().size() != strlen(clientId) ||
+          doc["client_secret"].as<JsonString>().size() != strlen(secret)) return;
+      if (!*refresh || !*clientId || !valid(access, 2048) || !valid(refresh, 1024) ||
+          !valid(clientId, 128) || !valid(secret, 256)) return;
+      String nextAccess(access), nextRefresh(refresh), nextClientId(clientId), nextSecret(secret);
+      if (nextAccess.length() != strlen(access) || nextRefresh.length() != strlen(refresh) ||
+          nextClientId.length() != strlen(clientId) || nextSecret.length() != strlen(secret)) return;
+      bool changed = spotifyAccessToken != nextAccess || spotifyRefreshToken != nextRefresh ||
+                     spotifyClientId != nextClientId || spotifyClientSecret != nextSecret;
+      spotifyAccessToken = std::move(nextAccess); spotifyRefreshToken = std::move(nextRefresh);
+      spotifyClientId = std::move(nextClientId); spotifyClientSecret = std::move(nextSecret);
+      #ifdef ESP32
+      if (changed) notifyStandaloneCredentialsChanged();
+      #endif
+      if (changed) showFlashNotification("Spotify Synced");
+      sendCommand("SPOTIFY_AUTH_OK");
     }
   } else if (msg.startsWith("STATE:")) {
     String json = msg.substring(6);
@@ -1405,11 +1332,12 @@ void handleCommand(String msg) {
       }
       if (doc.containsKey("progress")) {
         int prg = doc["progress"].as<int>();
-        playProgress = (prg < 1000) ? (prg * 1000) : prg;
+        playProgress = max(0, prg);
       }
       if (doc.containsKey("track")) {
         String newTrack = doc["track"].as<String>();
         if (newTrack != currentTrack) {
+          invalidatePlaybackArt();
           currentTrack = newTrack;
           currentLyrics = "";
           currentLyricsLine2 = "";
@@ -1427,15 +1355,22 @@ void handleCommand(String msg) {
     String json = msg.substring(7);
     DynamicJsonDocument doc(1024);
     if (!deserializeJson(doc, json)) {
+      companion_lyrics::timing() = companion_lyrics::Timing();
       if (doc.is<JsonArray>()) {
+        standaloneLyricsSynced = true;
+        standaloneLyricsStatus = "";
         JsonArray arr = doc.as<JsonArray>();
         if (arr.size() >= 1) prevLyricsLine = arr[0].as<String>();
         if (arr.size() >= 2) currentLyrics = arr[1].as<String>();
         if (arr.size() >= 3) currentLyricsLine2 = arr[2].as<String>();
       } else {
+        standaloneLyricsSynced = doc["synced"] | true;
+        standaloneLyricsStatus = doc["status"] | "";
         if (doc.containsKey("line1")) currentLyrics = doc["line1"].as<String>();
         if (doc.containsKey("line2")) currentLyricsLine2 = doc["line2"].as<String>();
         if (doc.containsKey("prev"))  prevLyricsLine = doc["prev"].as<String>();
+        companion_lyrics::timing().start = doc["line_at"] | int64_t(-1);
+        companion_lyrics::timing().next = doc["next_at"] | int64_t(-1);
       }
       extern void t2_redrawSpotifyPartial();
       if (activeTheme == 1 && currentState == STATE_SPOTIFY) t2_redrawSpotifyPartial();
@@ -1447,6 +1382,10 @@ void handleCommand(String msg) {
     String json = msg.substring(8);
     DynamicJsonDocument doc(1024);
     if (!deserializeJson(doc, json)) {
+      if ((!doc["temp"].is<int>() && !doc["temp"].is<float>()) ||
+          doc["temp"].as<float>() < -100 || doc["temp"].as<float>() > 100 ||
+          (!doc["condition"].is<const char*>() && !doc["cond"].is<const char*>())) return;
+      lastHostWeatherMillis = millis();
       if (doc.containsKey("temp")) weatherTemp = doc["temp"].as<int>();
       if (doc.containsKey("condition")) weatherCondition = doc["condition"].as<String>();
       else if (doc.containsKey("cond")) weatherCondition = doc["cond"].as<String>();
@@ -1462,7 +1401,26 @@ void handleCommand(String msg) {
   } else if (msg.startsWith("POMO:")) {
     String json = msg.substring(5);
     DynamicJsonDocument doc(512);
-    if (!deserializeJson(doc, json)) {
+    if (!deserializeJson(doc, json) && doc.is<JsonObject>()) {
+      bool recognized = false;
+      for (const char* key : {"remaining", "total", "sessions"}) {
+        if (!doc.containsKey(key)) continue;
+        recognized = true;
+        if (!doc[key].is<int>()) return;
+        int value = doc[key].as<int>();
+        if (value < 0 || value > (!strcmp(key, "sessions") ? 9999 : 86400)) return;
+      }
+      for (const char* key : {"active", "is_break"}) {
+        if (!doc.containsKey(key)) continue;
+        recognized = true;
+        if (!doc[key].is<bool>()) return;
+      }
+      int remaining = doc["remaining"] | pomoRemaining;
+      int total = doc["total"] | pomoTotal;
+      bool active = doc["active"] | pomoActive;
+      if (!recognized || remaining > total || (active && !total)) return;
+      lastHostPomodoroMillis = millis();
+      pomoClockBaseline = millis();
       if (doc.containsKey("remaining")) pomoRemaining = doc["remaining"].as<int>();
       if (doc.containsKey("total")) pomoTotal = doc["total"].as<int>();
       if (doc.containsKey("active")) pomoActive = doc["active"].as<bool>();
@@ -1471,12 +1429,12 @@ void handleCommand(String msg) {
       redrawPomodoroPartial();
     }
   } else if (msg.startsWith("NOTIF:")) {
-    isHostAndroid = true;
     lastHostPacketMillis = millis();
     String json = msg.substring(6);
     DynamicJsonDocument doc(1024);
-    if (!deserializeJson(doc, json)) {
+    if (!deserializeJson(doc, json) && doc.is<JsonArray>()) {
       JsonArray array = doc.as<JsonArray>();
+      String oldTitle = notifTitles[0], oldTime = notifTimes[0], oldApp = notifApps[0];
       notifTotal = array.size();
       notifCount = notifTotal;
       for (int i = 0; i < 3; i++) {
@@ -1492,14 +1450,15 @@ void handleCommand(String msg) {
       }
       redrawNotificationsPartial();
 
-      if (notifTotal > 0 && currentState == STATE_EYES) {
+      if (notifTotal > 0 && currentState == STATE_EYES &&
+          (oldTitle != notifTitles[0] || oldTime != notifTimes[0] || oldApp != notifApps[0])) {
         showFlashNotification(notifTitles[0]);
       }
     }
   } else if (msg.startsWith("NOTES:")) {
     String json = msg.substring(6);
     DynamicJsonDocument doc(1024);
-    if (!deserializeJson(doc, json)) {
+    if (!deserializeJson(doc, json) && doc.is<JsonArray>()) {
       JsonArray array = doc.as<JsonArray>();
       for (int i = 0; i < 4; i++) {
         if (i < (int)array.size()) currentNotes[i] = array[i].as<String>();
@@ -1508,7 +1467,6 @@ void handleCommand(String msg) {
       redrawNotesPartial();
     }
   } else if (msg.startsWith("TIME:")) {
-    isHostAndroid = true;
     lastHostPacketMillis = millis();
     String json = msg.substring(5);
     DynamicJsonDocument doc(256);
@@ -1523,9 +1481,12 @@ void handleCommand(String msg) {
   // V6: Page Data Handlers
   // ═══════════════════════════════════════════════════════
   else if (msg.startsWith("STOCKS:")) {
+    if (!companion_memory::nearby(int(currentState), int(STATE_STOCKS), int(STATE_COUNT))) return;
     String json = msg.substring(7);
     DynamicJsonDocument doc(1024);
     if (!deserializeJson(doc, json)) {
+      if ((doc.containsKey("wl") && !doc["wl"].is<JsonArray>()) ||
+          (doc.containsKey("hist") && !doc["hist"].is<JsonArray>())) return;
       if (doc.containsKey("symbol")) SAFESTR(stockSymbol, doc["symbol"], 16);
       if (doc.containsKey("price")) SAFESTR(stockPrice, doc["price"], 16);
       if (doc.containsKey("delta")) SAFESTR(stockDelta, doc["delta"], 16);
@@ -1541,7 +1502,12 @@ void handleCommand(String msg) {
       }
 
       if (doc.containsKey("wl")) {
+        if (!doc["wl"].is<JsonArray>()) return;
         JsonArray wl = doc["wl"];
+        for (int i = 0; i < 3; ++i) {
+          wlSymbol[i][0] = wlPrice[i][0] = wlDelta[i][0] = 0;
+          wlIsUp[i] = false;
+        }
         for (int i = 0; i < min((int)wl.size(), 3); i++) {
           SAFESTR(wlSymbol[i], wl[i]["s"], 16);
           SAFESTR(wlPrice[i], wl[i]["p"], 16);
@@ -1553,30 +1519,34 @@ void handleCommand(String msg) {
       redrawStocksPartial();
     }
   } else if (msg.startsWith("GAMING:")) {
-    isHostAndroid = false;
+    if (!companion_memory::nearby(int(currentState), int(STATE_GAMING), int(STATE_COUNT))) return;
     lastHostPacketMillis = millis();
     String json = msg.substring(7);
     DynamicJsonDocument doc(512);
     if (!deserializeJson(doc, json)) {
+      if (doc.containsKey("recent") && !doc["recent"].is<JsonArray>()) return;
       if (doc.containsKey("title")) SAFESTR(gameTitle, doc["title"], 24);
       if (doc.containsKey("session")) SAFESTR(sessionTime, doc["session"], 12);
-      if (doc.containsKey("achieve")) achievePct = doc["achieve"].as<uint8_t>();
-      if (doc.containsKey("friends")) friendsOnline = doc["friends"].as<uint8_t>();
+      if (doc.containsKey("achieve")) achievePct = constrain(doc["achieve"].as<int>(), 0, 100);
+      if (doc.containsKey("friends")) friendsOnline = constrain(doc["friends"].as<int>(), 0, 255);
       if (doc.containsKey("active")) gameActive = doc["active"].as<bool>();
       if (doc.containsKey("status")) SAFESTR(gameStatus, doc["status"], 16);
 
       // 🟡 GAP-01 FIX: Parse recent games list
       if (doc.containsKey("recent")) {
+        if (!doc["recent"].is<JsonArray>()) return;
         JsonArray recent = doc["recent"];
+        for (int i = 0; i < 3; ++i) { recentGame[i][0] = 0; recentPlaytime[i] = 0; }
         for (int i = 0; i < min((int)recent.size(), 3); i++) {
           SAFESTR(recentGame[i], recent[i]["name"], 24);
-          recentPlaytime[i] = recent[i]["time"].as<uint16_t>();
+          recentPlaytime[i] = constrain(recent[i]["time"].as<int>(), 0, 65535);
         }
       }
 
       redrawGamingPartial();
     }
   } else if (msg.startsWith("SOCIAL:")) {
+    if (!companion_memory::nearby(int(currentState), int(STATE_SOCIAL), int(STATE_COUNT))) return;
     String json = msg.substring(7);
     DynamicJsonDocument doc(512);
     if (!deserializeJson(doc, json)) {
@@ -1584,11 +1554,12 @@ void handleCommand(String msg) {
       if (doc.containsKey("app")) SAFESTR(socialApp, doc["app"], 12);
       if (doc.containsKey("body")) SAFESTR(socialBody, doc["body"], 80);
       if (doc.containsKey("time")) SAFESTR(socialTime, doc["time"], 8);
-      if (doc.containsKey("likes")) socialLikes = doc["likes"].as<uint16_t>();
-      if (doc.containsKey("comments")) socialComments = doc["comments"].as<uint16_t>();
+      if (doc.containsKey("likes")) socialLikes = constrain(doc["likes"].as<int>(), 0, 65535);
+      if (doc.containsKey("comments")) socialComments = constrain(doc["comments"].as<int>(), 0, 65535);
       redrawSocialPartial();
     }
   } else if (msg.startsWith("TASKS:")) {
+    if (!companion_memory::nearby(int(currentState), int(STATE_PRODUCTIVITY), int(STATE_COUNT))) return;
     String json = msg.substring(6);
     DynamicJsonDocument doc(1024);
     if (!deserializeJson(doc, json)) {
@@ -1599,7 +1570,7 @@ void handleCommand(String msg) {
       if (doc.containsKey("next2")) SAFESTR(taskNext2, doc["next2"], 32);
       if (doc.containsKey("next2_time")) SAFESTR(taskNext2Time, doc["next2_time"], 16);
       if (doc.containsKey("active")) taskActive = doc["active"].as<bool>();
-      if (doc.containsKey("progress")) taskProgressPct = doc["progress"].as<uint8_t>();
+      if (doc.containsKey("progress")) taskProgressPct = constrain(doc["progress"].as<int>(), 0, 100);
       redrawProductivityPartial();
     }
   }
@@ -1614,7 +1585,6 @@ void handleCommand(String msg) {
     if (thought.length() > 0 && thought.length() < 80) {
       strncpy(overrideThought, thought.c_str(), 79);
       overrideThought[79] = '\0';
-      activeBubble.active = false; // Reset so scheduler immediately displays the new thought
     }
   }
 
@@ -1648,11 +1618,15 @@ void handleCommand(String msg) {
   // CMD: — Custom commands from Web Remote
   else if (msg.startsWith("CMD:")) {
     String cmd = msg.substring(4);
-    if (cmd == "NRF_CHECK") {
+    if (cmd == "PLAY_PAUSE" || cmd == "NEXT" || cmd == "PREV" ||
+        cmd == "POMO:START" || cmd == "POMO:PAUSE" || cmd == "POMO:RESET") {
+      sendCommand(cmd);
+    } else if (cmd == "NRF_CHECK") {
       extern int settingsScrollY;
-      currentState = STATE_SETTINGS;
+      extern void setPage(int targetPage);
+      setPage(STATE_SETTINGS);
       settingsScrollY = 0;
-      renderCurrentPage();
+      redrawSettingsPartial();
     }
   }
 
@@ -1736,6 +1710,7 @@ void handleCommand(String msg) {
     int t = msg.substring(6).toInt();
     if (t >= 0 && t < THEME_COUNT) {
       activeTheme = t;
+      wakeForManualAppearance();
       EEPROM.begin(EEPROM_SIZE);
       EEPROM.write(EEPROM_ACTIVE_THEME_ADDR, activeTheme);
       EEPROM.commit();
@@ -1745,12 +1720,14 @@ void handleCommand(String msg) {
     }
   } else if (msg.startsWith("RUVIEW:")) {
     // ── RuView CSI Presence Data ──
-    isHostAndroid = false;
     lastHostPacketMillis = millis();
     if (currentState != STATE_RUVIEW) return; // Skip CPU-intensive parsing when not viewing RuView
     String payload = msg.substring(7);
-    StaticJsonDocument<256> doc;
-    if (deserializeJson(doc, payload) == DeserializationError::Ok) {
+    StaticJsonDocument<1536> doc;
+    if (deserializeJson(doc, payload) == DeserializationError::Ok && doc.is<JsonObject>()) {
+      if (!doc["status"].is<const char*>() || (!doc["pps"].is<float>() && !doc["pps"].is<int>())) return;
+      float pps = doc["pps"].as<float>();
+      if (!isfinite(pps) || pps < 0 || pps > 2000) return;
       extern bool    rvOccupied;
       extern bool    rvMotion;
       extern float   rvConfidence;
@@ -1764,12 +1741,14 @@ void handleCommand(String msg) {
 
       rvOccupied    = doc["occupied"] | false;
       rvMotion      = doc["motion"] | false;
-      rvConfidence  = doc["confidence"] | 0.0f;
-      rvVariance    = doc["variance"] | 0.0f;
-      rvRSSI        = doc["rssi"] | (int8_t)0;
+      float confidence = doc["confidence"] | 0.0f, variance = doc["variance"] | 0.0f;
+      rvConfidence  = isfinite(confidence) ? constrain(confidence, 0.0f, 100.0f) : 0;
+      rvVariance    = isfinite(variance) ? constrain(variance, 0.0f, 1.0e9f) : 0;
+      rvRSSI        = constrain(doc["rssi"] | 0, -127, 0);
       rvCalibrating = doc["calibrating"] | false;
-      rvPPS         = doc["pps"] | 0.0f;
-      rvSubcarriers = doc["subcarriers"] | 0;
+      rvPPS         = pps;
+      rvSubcarriers = constrain(doc["subcarriers"] | 0, 0, 1024);
+      if (!pps) { rvOccupied = rvMotion = false; rvConfidence = 0; }
 
       const char* st = doc["status"] | "Unknown";
       strncpy(rvStatus, st, 23);
@@ -1780,6 +1759,8 @@ void handleCommand(String msg) {
         strncpy(rvZoneLabel, lbl, 15);
         rvZoneLabel[15] = '\0';
       }
+      extern void noteRuviewPacket();
+      noteRuviewPacket();
 
       // Only redraw if on RuView page
       if (currentState == STATE_RUVIEW) {
@@ -1787,6 +1768,10 @@ void handleCommand(String msg) {
         redrawRuviewPartial();
       }
     }
+  } else if (msg.startsWith("PCDASH:") || (msg.indexOf(',') >= 0 && isdigit(msg.charAt(0)))) {
+    // ── PC Dashboard Telemetry (InnoCircuitsLab port) ──
+    extern void processPcDashPacket(const char* packet);
+    processPcDashPacket(msg.c_str());
   }
 }
 

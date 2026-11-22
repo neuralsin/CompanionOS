@@ -27,6 +27,7 @@
     "lyrics_enabled": true,
     "weather_enabled": true,
     "notifications_enabled": true,
+    "pc_dashboard_enabled": true,
     "notes_web_port": 5555
   },
   "update_intervals": {

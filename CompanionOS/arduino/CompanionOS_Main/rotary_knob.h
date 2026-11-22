@@ -33,6 +33,8 @@ static int lastKnobPage = -1;
 static unsigned long lastKnobMoveTime = 0;
 static bool potAutoCalibratedChanged = false;
 static unsigned long lastEepromSaveTime = 0;
+static bool knobMovePending = false;
+static unsigned long lastKnobSample = 0;
 
 // Forward declaration
 extern void setPage(int targetPage);
@@ -65,7 +67,7 @@ inline void savePotCalibration() {
 }
 
 inline void initRotaryKnob() {
-  #ifndef ENABLE_ROTARY_KNOB
+  #if !defined(ENABLE_ROTARY_KNOB) || !ENABLE_ROTARY_KNOB
   return;
   #endif
   pinMode(POT_KNOB_PIN, INPUT);
@@ -79,7 +81,7 @@ inline void initRotaryKnob() {
     delayMicroseconds(50);
   }
   potFilteredVal = (float)(sum / 16);
-  lastKnobPage = (int)currentState;
+  lastKnobPage = -1;
 }
 
 // 16x oversampled reading with thermal noise filtering
@@ -93,10 +95,12 @@ inline uint16_t readPotOversampled() {
 }
 
 inline void tickRotaryKnob() {
-  #ifndef ENABLE_ROTARY_KNOB
+  #if !defined(ENABLE_ROTARY_KNOB) || !ENABLE_ROTARY_KNOB
   return;
   #endif
 
+  if (millis() - lastKnobSample < 10) return;
+  lastKnobSample = millis();
   uint16_t raw = readPotOversampled();
 
   // 1. Dynamic Auto-Calibration: Automatically adapt to the physical travel of any potentiometer
@@ -157,13 +161,16 @@ inline void tickRotaryKnob() {
     if (validTransition) {
       lastKnobPage = candidatePage;
       lastKnobMoveTime = millis();
+      knobMovePending = true;
     }
   } else if (lastKnobPage < 0) {
     lastKnobPage = candidatePage;
   }
 
   // 5. Debounced Page Switch: Trigger page change once knob settles for 80ms
-  if (lastKnobPage != (int)currentState && millis() - lastKnobMoveTime >= 80) {
+  if (knobMovePending && millis() - lastKnobMoveTime >= 100) {
+    knobMovePending = false;
+    if (lastKnobPage == (int)currentState) return;
     Serial.printf("[KNOB] Switching to Tile Index: %d (Norm=%.2f, Raw=%d)\n", lastKnobPage, norm, raw);
     setPage(lastKnobPage);
   }

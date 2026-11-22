@@ -42,6 +42,9 @@ using fs::File;
 #define SCR_H       SCREEN_H
 #define SCR_CX      (SCREEN_W / 2)
 #define SCR_CY      (SCREEN_H / 2)
+constexpr int UI_HEADER_H = 16;
+constexpr int UI_FOOTER_H = 10;
+uint32_t uiPageGeneration = 0;
 #define SCALE_X(v)  ((int)((v) * ((float)SCREEN_W / 320.0f) + 0.5f))
 #define SCALE_Y(v)  ((int)((v) * ((float)SCREEN_H / 240.0f) + 0.5f))
 #define SCALE_MIN(v) max(1, SCALE_X(v))   // enforce minimum 1px for borders/dots
@@ -55,6 +58,8 @@ TFT_eSPI tft = TFT_eSPI();
   XPT2046_Touchscreen ts(TOUCH_CS);
 #endif
 WiFiUDP udp;
+WiFiUDP udpPcDash;
+bool pcDashListening = false;
 
 // ═══════════════════════════════════════════════════════════
 // V7 PAGE ARCHITECTURE — 13 pages (+ Dr. Hack on ESP32)
@@ -64,24 +69,31 @@ WiFiUDP udp;
 enum AppState {
   STATE_EYES,            // 0
   STATE_SPOTIFY,         // 1
-  STATE_POMODORO,        // 2
-  STATE_WEATHER,         // 3
-  STATE_NOTIFICATIONS,   // 4
-  STATE_NOTES,           // 5
-  STATE_STOCKS,          // 6
-  STATE_GAMING,          // 7
-  STATE_SOCIAL,          // 8
-  STATE_PRODUCTIVITY,    // 9
-  STATE_NETWORK,         // 10
-  STATE_SETTINGS,        // 11
-  STATE_RUVIEW,          // 12 — RuView CSI Presence Detection
-  STATE_CLOCK_DASHBOARD, // 13 — Screensaver / Clock Dashboard Tile
-  STATE_RETRO_WATCH,     // 14 — Retro Watch Chronograph Face Tile
-  STATE_DR_HACK,         // 15 — ESP32 only (#ifdef ESP32 guard in page_dr_hack.h)
-  STATE_COUNT            // = 16 pages
+  STATE_LYRICS,          // 2 - dedicated playback focus
+  STATE_POMODORO,        // 3
+  STATE_WEATHER,         // 4
+  STATE_NOTIFICATIONS,   // 5
+  STATE_NOTES,           // 6
+  STATE_STOCKS,          // 7
+  STATE_GAMING,          // 8
+  STATE_SOCIAL,          // 9
+  STATE_PRODUCTIVITY,    // 10
+  STATE_NETWORK,         // 11
+  STATE_SETTINGS,        // 12
+  STATE_PC_DASH,         // 13
+  STATE_RUVIEW,          // 14
+  STATE_CLOCK_DASHBOARD, // 15
+  STATE_RETRO_WATCH,     // 16
+  STATE_DR_HACK,         // 17 - ESP32 only
+  STATE_CALENDAR,        // 18
+  STATE_TIMETABLE,       // 19
+  STATE_COUNT            // 20 pages
 };
 
 extern AppState currentState;
+#ifdef ESP32
+bool switchMemoryWorkspace(int targetPage);
+#endif
 
 // Pet Emotion State
 enum Emotion {
@@ -98,10 +110,13 @@ enum Emotion {
 
 extern Emotion currentEmotion;
 extern unsigned long lastManualEmotionTime;
+bool manualEmotionOverride = false;
+void wakeForManualAppearance();
+void applyAmbientEmotion(Emotion emotion);
 
 // ═══════════════════════════════════════════════════════════
 // DR. HACK SUB-STATE MACHINE (ESP32 only)
-// 16 tools across 2 pages of 8 tools each
+// 48 menu entries across 6 pages of 8 entries each.
 // ═══════════════════════════════════════════════════════════
 #ifdef ESP32
 
@@ -131,6 +146,12 @@ enum DrHackSubState {
   DH_HW_DIAG,          DH_INPUT_MONITOR,     DH_ABOUT,             DH_RFCLOWN_JAM
 };
 
+inline bool dhUsesPageInput(DrHackSubState state) {
+  return state == DH_WIFI_SCANNER || state == DH_BT_SCANNER ||
+         state == DH_INFO || state == DH_HW_DIAG || state == DH_ABOUT ||
+         state == DH_WIFI_CONFIG || state == DH_BLE_INSPECTOR;
+}
+
 extern DrHackSubState dhCurrentState;
 extern int dhCursorIndex;
 extern int dhMenuPage;
@@ -142,7 +163,7 @@ extern int dhMenuPage;
 
 #define THOUGHT_MIN_INTERVAL_MS  (5UL * 60UL * 1000UL)   // min 5 min between thoughts
 #define THOUGHT_MAX_INTERVAL_MS  (20UL * 60UL * 1000UL)  // max 20 min (random in range)
-#define THOUGHT_DISPLAY_MS       (5UL * 60UL * 1000UL)   // visible for 5 minutes
+#define THOUGHT_DISPLAY_MS       (10UL * 60UL * 1000UL)  // visible for 10 minutes
 #define THOUGHT_FADE_STEPS       20                       // fade in/out over 20 frames
 
 extern bool thoughtSchedulerActive;
@@ -152,7 +173,7 @@ extern uint16_t* customEyeImg;
 extern bool customEyeActive;
 extern bool customEyeReady;
 extern uint8_t customEyeRowsReceived[128];
-extern uint16_t spotifyArtCache[4096]; // 64x64 cache for Spotify persistence
+// spotifyArtCache removed to save 8KB DRAM
 
 struct ThoughtBubble {
   char text[80];           // thought text (max 80 chars)
@@ -172,7 +193,7 @@ char overrideThought[80] = "";  // PC-pushed thought (THOUGHT: command)
 
 // LDR sensor reading
 int ldrValue = 512;  // Default mid-brightness
-bool ldrEnabled = true;
+bool ldrEnabled = false; // No LDR fitted; never sample a floating input by default.
 
 // System Time
 int displayHour = 0;
@@ -252,11 +273,16 @@ bool dhNetPaused = false; // Flag to pause background network loop during Dr. Ha
 
 #define ALBUM_ART_W  64
 #define ALBUM_ART_H  64
-uint16_t albumArt[ALBUM_ART_W * ALBUM_ART_H];   // 18432 bytes (ESP8266 near limit, ESP32 fine)
+#define ALBUM_ART_PIXELS (ALBUM_ART_W * ALBUM_ART_H)
+#define ALBUM_ART_BYTES  (ALBUM_ART_PIXELS * sizeof(uint16_t))
+extern uint16_t* albumArt;
+extern uint16_t* albumArtIncoming;
 bool albumArtReady = false;
 bool receivingArt = false;
 uint8_t albumArtRowsReceived[ALBUM_ART_H] = {0};
 uint8_t albumArtRowsComplete = 0;
+uint32_t albumArtRevision = 0;
+unsigned long albumArtStartedAt = 0;
 
 // Shared Spotify Lyrics
 String currentLyrics = "";
@@ -298,7 +324,7 @@ unsigned long virtualSelectHoldUntil = 0;
 // GALLERY / SLIDESHOW
 // ═══════════════════════════════════════════════════════════
 
-uint16_t* galleryImage = albumArt;
+extern uint16_t* galleryImage;
 bool galleryReady = false;
 int galleryIndex = 0;
 unsigned long lastGalleryAdvance = 0;

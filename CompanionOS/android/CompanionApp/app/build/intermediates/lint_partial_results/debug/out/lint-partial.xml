@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<incidents format="6" by="lint 8.2.2" type="partial_results">
+    <map id="UnsafeIntentLaunch">
+            <map id="unprotected">
+                <entry
+                    name="com.companionos.app.MainActivity"
+                    boolean="true"/>
+                <entry
+                    name="android.content.BroadcastReceiver"
+                    boolean="true"/>
+                <entry
+                    name="com.companionos.app.BootReceiver"
+                    boolean="true"/>
+            </map>
+    </map>
+    <map id="UnsafeImplicitIntentLaunch">
+            <map id="actionsSent">
+                    <map id="android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS (used to start an activity)">
+                        <location id="0"
+                            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/companionos/app/MainActivity.kt"
+                            line="230"
+                            column="88"
+                            startOffset="13960"
+                            endLine="230"
+                            endColumn="148"
+                            endOffset="14020"/>
+                    </map>
+                    <map id="android.intent.action.VIEW (used to start an activity)">
+                        <location id="0"
+                            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/companionos/app/MainActivity.kt"
+                            line="132"
+                            column="33"
+                            startOffset="7186"
+                            endLine="132"
+                            endColumn="113"
+                            endOffset="7266"/>
+                    </map>
+                    <map id="android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS (used to start an activity)">
+                        <location id="0"
+                            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/companionos/app/MainActivity.kt"
+                            line="229"
+                            column="93"
+                            startOffset="13813"
+                            endLine="229"
+                            endColumn="147"
+                            endOffset="13867"/>
+                    </map>
+            </map>
+    </map>
+    <map id="UnusedResources">
+        <location id="R.color.secondary_cyan"
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/values/colors.xml"
+            line="5"
+            column="12"
+            startOffset="152"
+            endLine="5"
+            endColumn="33"
+            endOffset="173"/>
+        <entry
+            name="model"
+            string="color[primary_green(D),secondary_cyan(D),bg_dark(D)],drawable[app_cover(D)],id[companion_webview(U)],layout[activity_main(U)],mipmap[ic_launcher_round(U),ic_launcher(U)],string[app_name(U)],style[Theme_AppCompat_NoActionBar(R),Theme_CompanionOS(U)],xml[network_security_config(U)];a^9;;;"/>
+        <location id="R.color.primary_green"
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/values/colors.xml"
+            line="4"
+            column="12"
+            startOffset="104"
+            endLine="4"
+            endColumn="32"
+            endOffset="124"/>
+        <location id="R.drawable.app_cover"
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/drawable/app_cover.png"/>
+        <location id="R.color.bg_dark"
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/values/colors.xml"
+            line="3"
+            column="12"
+            startOffset="62"
+            endLine="3"
+            endColumn="26"
+            endOffset="76"/>
+    </map>
+
+</incidents>

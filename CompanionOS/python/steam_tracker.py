@@ -12,14 +12,13 @@
 """
 
 import os
-import sys
+import ntpath
 import json
 import time
 import ctypes
 import ctypes.wintypes
 import psutil
 import requests
-from datetime import datetime
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -267,7 +266,7 @@ class SteamTracker:
                 cbNeeded = ctypes.c_ulong()
 
                 success = psapi.EnumProcessModulesEx(
-                    hProcess, ctypes.byref(hMods),
+                    hProcess, hMods,
                     ctypes.sizeof(hMods), ctypes.byref(cbNeeded),
                     LIST_MODULES_ALL
                 )
@@ -288,38 +287,59 @@ class SteamTracker:
             pass
         return False
 
+    @staticmethod
+    def _game_install_title(exe_path):
+        """Recognize complete game-folder components, independent of DLL access."""
+        if not exe_path:
+            return None
+        parts = ntpath.normpath(exe_path).split('\\')
+        lowered = [part.lower() for part in parts]
+        roots = [('steamapps', 'common'), ('epic games',),
+                 ('xboxgames',), ('gog galaxy', 'games')]
+        for root in roots:
+            for index in range(len(parts) - len(root) - 1):
+                if tuple(lowered[index:index + len(root)]) == root:
+                    folder = parts[index + len(root)]
+                    return folder.replace('_', ' ').title()
+        return None
+
+    @staticmethod
+    def _is_minecraft_java(proc, exe_path):
+        """Use local evidence only; command lines may contain private tokens."""
+        def minecraft_path(value):
+            return any(part.lower() in {'.minecraft', 'minecraft'}
+                       for part in ntpath.normpath(value).split('\\'))
+
+        if minecraft_path(exe_path):
+            return True
+        try:
+            return any(
+                arg.lower().startswith('net.minecraft.') or
+                arg.lower() in {'net.fabricmc.loader.impl.launch.knot.knotclient',
+                                'net.fabricmc.loader.launch.knot.knotclient'} or
+                minecraft_path(arg)
+                for arg in proc.cmdline()
+            )
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            return False
+
     def _title_from_exe_path(self, exe_path):
         """Extract a clean game title from the executable path."""
         if not exe_path:
             return None
-        exe_lower = exe_path.lower()
-
-        # Steam
-        if 'steamapps\\common\\' in exe_lower:
-            folder = exe_path.split('steamapps\\common\\')[-1].split('\\')[0]
-            return folder.replace('_', ' ').title()
-        # Epic
-        if 'epic games\\' in exe_lower:
-            folder = exe_path.split('Epic Games\\')[-1].split('\\')[0]
-            return folder.replace('_', ' ').title()
-        # Xbox Game Pass
-        if 'xboxgames\\' in exe_lower:
-            folder = exe_path.split('XboxGames\\')[-1].split('\\')[0]
-            return folder.replace('_', ' ').title()
-        # GOG
-        if 'gog galaxy\\games\\' in exe_lower:
-            folder = exe_path.split('GOG Galaxy\\Games\\')[-1].split('\\')[0]
-            return folder.replace('_', ' ').title()
+        installed_title = self._game_install_title(exe_path)
+        if installed_title:
+            return installed_title
         # Generic: Program Files game folder
-        if 'program files' in exe_lower:
-            parts = exe_path.split('\\')
+        parts = ntpath.normpath(exe_path).split('\\')
+        if any(part.lower() in {'program files', 'program files (x86)'} for part in parts):
             # Find the folder after "Program Files" or "Program Files (x86)"
             for i, p in enumerate(parts):
-                if 'program files' in p.lower() and i + 1 < len(parts):
+                if p.lower() in {'program files', 'program files (x86)'} and i + 2 < len(parts):
                     return parts[i + 1].replace('_', ' ').title()
 
         # Fallback: use the exe name without extension
-        basename = os.path.splitext(os.path.basename(exe_path))[0]
+        basename = ntpath.splitext(ntpath.basename(exe_path))[0]
         # Clean up common suffixes
         for suffix in ['-Win64-Shipping', '-Win32-Shipping', 'Client',
                        'Launcher', '_BE', '-EAC', '_dx11', '_dx12']:
@@ -328,16 +348,14 @@ class SteamTracker:
 
     def detect_local_game(self):
         """
-        Detect running game using NVIDIA-style GPU DLL scanning.
+        Detect games from known names, trusted paths, or GPU module evidence.
         
         Strategy (in priority order):
-        1. Known games list (instant match by exe name)
-        2. GPU DLL scan: check every process for loaded d3d11/d3d12/vulkan
-           DLLs, filter out non-game GPU apps (browsers, editors, etc.)
-        3. Directory heuristics (Steam/Epic/Xbox/GOG paths)
+        Prefer an evidenced foreground game, then known names, trusted install
+        paths, and GPU DLL candidates. Java requires Minecraft-specific evidence.
         """
-        gpu_candidates = []
-        foreground_title = self._foreground_window_title()
+        candidates = []
+        foreground_pid = self._foreground_process_id()
 
         for proc in psutil.process_iter(['pid', 'name', 'exe']):
             try:
@@ -350,48 +368,65 @@ class SteamTracker:
                 if not name or pid < 100:
                     continue
 
-                # 1. Known games list (instant)
+                # Known names do not need module enumeration.
                 if name_lower in self.KNOWN_GAMES_LOWER:
                     title = self.KNOWN_GAMES_LOWER[name_lower]
+                    if name_lower == 'javaw.exe' and not self._is_minecraft_java(proc, exe):
+                        continue
                     if title:
-                        return title
+                        candidates.append((0, pid, title))
                     continue  # Skip launchers (None entries)
 
                 # Skip known non-game GPU apps
                 if name_lower in self.NON_GAME_GPU_APPS:
                     continue
 
-                # 2. GPU DLL scan — the NVIDIA approach
+                # A trusted installation path also works for protected processes
+                # whose modules cannot be enumerated.
+                installed_title = self._game_install_title(exe)
+                if installed_title:
+                    candidates.append((1, pid, installed_title))
+                    continue
+
+                # GPU rendering is the remaining evidence-based fallback.
                 if self._process_has_gpu_dlls(pid):
                     # This process is rendering with DirectX/Vulkan
-                    title = self._title_from_exe_path(exe)
+                    title = self._title_from_exe_path(exe or name)
                     if title:
-                        gpu_candidates.append((title, exe))
+                        candidates.append((2, pid, title))
 
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
 
-        # Return the best GPU candidate (prefer ones from game directories)
-        if gpu_candidates:
-            # Prioritize processes from known game directories
-            for title, exe in gpu_candidates:
-                exe_lower = (exe or '').lower()
-                if any(marker in exe_lower for marker in [
-                    'steamapps', 'epic games', 'xboxgames',
-                    'gog galaxy', 'riot games', 'ubisoft', '\\games\\'
-                ]):
-                    return title[:23]
-
-            # Otherwise return the first GPU-using non-blocklisted process
-            return gpu_candidates[0][0][:23]
-
-        if foreground_title:
-            return foreground_title[:23]
+        if candidates:
+            # Strong game evidence outranks GPU-only applications. Within each
+            # group, prefer the foreground candidate; ties retain process order.
+            priority, pid, title = min(candidates, key=lambda item: (
+                item[0] >= 2, item[1] != foreground_pid, item[0]))
+            return title if priority == 0 else title[:23]
 
         return ''
 
+    @staticmethod
+    def _foreground_process_id():
+        if os.name != 'nt':
+            return 0
+        try:
+            user32 = ctypes.windll.user32
+            user32.GetForegroundWindow.restype = ctypes.wintypes.HWND
+            user32.GetWindowThreadProcessId.argtypes = [
+                ctypes.wintypes.HWND, ctypes.POINTER(ctypes.wintypes.DWORD)]
+            user32.GetWindowThreadProcessId.restype = ctypes.wintypes.DWORD
+            hwnd = user32.GetForegroundWindow()
+            pid = ctypes.wintypes.DWORD()
+            if hwnd:
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            return pid.value
+        except Exception:
+            return 0
+
     def _foreground_window_title(self):
-        """Last-resort detection from the active Windows title bar."""
+        """Read the active title; a title alone is not evidence of a game."""
         if os.name != 'nt':
             return ''
         try:

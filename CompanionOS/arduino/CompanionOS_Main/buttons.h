@@ -29,6 +29,8 @@ struct ButtonState {
   unsigned long pressedAt;
   bool longFired;         // long press already reported this hold
   bool xlongFired;        // xlong press already reported this hold
+  bool rawState = false;
+  unsigned long rawChangedAt = 0;
 };
 
 ButtonState btnLeft   = {BTN_LEFT,   false, false, false, false, 0, false, false};
@@ -57,6 +59,13 @@ void initButtons() {
 static void updateButtonState(ButtonState& btn) {
   bool raw = (digitalRead(btn.pin) == BTN_ACTIVE_LEVEL);  // Configured active state
   unsigned long now = millis();
+
+  // Debounce both edges. A release glitch must not become a page change.
+  if (raw != btn.rawState) {
+    btn.rawState = raw;
+    btn.rawChangedAt = now;
+  }
+  if (now - btn.rawChangedAt < BTN_DEBOUNCE_MS) return;
 
   if (raw && !btn.pressed) {
     // Button just pressed — start tracking
@@ -128,7 +137,7 @@ void handleButtons() {
 
   // ── Long press actions (Hold > 800ms) ──
   if (consumeLong(btnLeft)) {
-    if (currentState == STATE_SPOTIFY) {
+    if ((currentState == STATE_SPOTIFY || currentState == STATE_LYRICS)) {
       extern void sendCommand(String cmd);
       sendCommand("PREV");
     } else if (currentState != STATE_EYES) {
@@ -139,7 +148,7 @@ void handleButtons() {
   }
 
   if (consumeLong(btnRight)) {
-    if (currentState == STATE_SPOTIFY) {
+    if ((currentState == STATE_SPOTIFY || currentState == STATE_LYRICS)) {
       extern void sendCommand(String cmd);
       sendCommand("NEXT");
     } else if (currentState != STATE_SETTINGS) {
@@ -151,6 +160,8 @@ void handleButtons() {
   }
 
   if (consumeLong(btnSelect)) {
+    extern bool dismissEyesOverlays();
+    if (currentState == STATE_EYES && dismissEyesOverlays()) return;
     if (currentState == STATE_DR_HACK) {
       extern DrHackSubState dhCurrentState;
       if (dhCurrentState != DH_MENU) {
@@ -165,7 +176,7 @@ void handleButtons() {
       if (activeTheme == 2) t3_setEmotion(next);
       else if (activeTheme == 1) t2_setEmotion(next);
       else setEmotion(next);
-    } else if (currentState == STATE_SPOTIFY) {
+    } else if ((currentState == STATE_SPOTIFY || currentState == STATE_LYRICS)) {
       extern void sendCommand(String cmd);
       sendCommand("SHUFFLE:TOGGLE");
     } else if (currentState == STATE_POMODORO) {
@@ -202,6 +213,8 @@ void handleButtons() {
   }
 
   if (consumePress(btnSelect)) {
+    extern bool plannerButton(int step);
+    if (plannerButton(1)) return;
     if (currentState == STATE_DR_HACK) {
       extern void dhSelect();
       dhSelect();
@@ -222,7 +235,7 @@ void handleButtons() {
         setEmotion((Emotion)((currentEmotion + 1) % EMO_COUNT));
       }
     }
-    else if (currentState == STATE_SPOTIFY) {
+    else if ((currentState == STATE_SPOTIFY || currentState == STATE_LYRICS)) {
       extern void sendCommand(String cmd);
       sendCommand("PLAY_PAUSE");
     }
@@ -232,9 +245,16 @@ void handleButtons() {
       if (pomoActive) sendCommand("POMO:PAUSE");
       else sendCommand("POMO:START");
     }
+    else if (currentState == STATE_NOTIFICATIONS) {
+      extern bool flashNotifEnabled;
+      extern void redrawNotificationsPartial();
+      flashNotifEnabled = !flashNotifEnabled;
+      redrawNotificationsPartial();
+    }
     else if (currentState == STATE_SETTINGS) {
       // Cycle activeTheme
       activeTheme = (activeTheme + 1) % THEME_COUNT;
+      wakeForManualAppearance();
       EEPROM.begin(EEPROM_SIZE);
       EEPROM.write(EEPROM_ACTIVE_THEME_ADDR, activeTheme);
       EEPROM.commit();
@@ -248,17 +268,11 @@ void handleButtons() {
       t2_resetSpotifyDrawState();
       t2_initialized = false;
       
-      // Visual cue: Circular screen wipe
-      int rMax = max(SCREEN_W, SCREEN_H) * 1.5;
-      uint16_t wipeColor = (activeTheme == 0) ? 0x2104 : (activeTheme == 1) ? 0x4810 : 0x1848;
-      for (int r = 0; r < rMax; r += 12) {
-        tft.drawCircle(SCREEN_W / 2, SCREEN_H / 2, r, wipeColor);
-        tft.drawCircle(SCREEN_W / 2, SCREEN_H / 2, r+1, wipeColor);
-        tft.drawCircle(SCREEN_W / 2, SCREEN_H / 2, r+2, wipeColor);
-        delay(2);
-      }
-      
-      redrawSettingsPartial();
+      renderCurrentPage();
+    }
+    else if (currentState == STATE_PC_DASH) {
+      extern void nextPcDashSubPage();
+      nextPcDashSubPage();
     }
     lastInteractionTime = millis();
     return;

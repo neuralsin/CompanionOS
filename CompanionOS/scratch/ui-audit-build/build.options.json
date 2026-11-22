@@ -1,0 +1,9 @@
+{
+  "additionalFiles": "..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..",
+  "compiler.optimization_flags": "-Os",
+  "customBuildProperties": "",
+  "fqbn": "esp32:esp32:esp32",
+  "hardwareFolders": "C:\\Users\\shaan\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.8,C:\\Users\\shaan\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.8",
+  "otherLibrariesFolders": "C:\\Users\\shaan\\OneDrive\\Documents\\Arduino\\libraries",
+  "sketchLocation": "C:\\Users\\shaan\\OneDrive\\Documents\\C++\\esp\\CompanionOS\\arduino\\CompanionOS_Main"
+}

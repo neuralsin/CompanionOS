@@ -11,6 +11,10 @@
 #include "ui_components.h"
 #include <math.h>
 
+extern String currentTrack;
+extern bool isPlaying;
+extern void drawPageIndicator(int current, int total);
+
 // Minimalist Luxury Palette
 #define RW_BG         0x0000  // Pure OLED black
 #define RW_BEZEL      0x2965  // Sleek titanium grey
@@ -24,6 +28,7 @@ static int rw_lastMin = -1;
 static int rw_lastHour = -1;
 static String rw_lastTrack = "";
 static bool rw_drawn = false;
+static String rw_lastStatus = "";
 
 void resetRetroWatchDrawState() {
   rw_lastSec = -1;
@@ -31,6 +36,7 @@ void resetRetroWatchDrawState() {
   rw_lastHour = -1;
   rw_lastTrack = "";
   rw_drawn = false;
+  rw_lastStatus = "";
 }
 
 // ── Dial & Ticks ──
@@ -96,81 +102,76 @@ static void rw_drawHands(int cx, int cy, int r, int h, int m, int s) {
   tft.drawPixel(cx, cy, TFT_BLACK);
 }
 
-// ── Corner Telemetry (Minimalist) ──
-static void rw_drawMinimalInfo(int cx, int cy, int r) {
-  // Top: Minimal Digital Time (pushed down by 10 pixels)
-  char digBuf[10];
-  int hr12 = displayHour % 12;
-  if (hr12 == 0) hr12 = 12;
-  sprintf(digBuf, "%d:%02d", hr12, displayMinute);
-  
-  tft.setTextColor(RW_MUTED, RW_BG);
-  tft.drawCentreString(digBuf, cx, cy - r + 9, 1);
+static String rw_statusKey() {
+  return String(uiPageGeneration) + "/" + currentTrack + "/" + String(isPlaying) + "/" + String(wifiConnected) + "/" + String(timeReceived);
+}
 
-  // Bottom: Song / Wi-Fi status (pushed up by 10 pixels)
-  if (musicPlaying && currentTrack.length() > 0) {
-    String s = "♪ " + currentTrack;
-    drawTruncatedText(SCALE_X(6), SCR_H - SCALE_Y(19), s.c_str(), SCR_W - SCALE_X(12), RW_ACCENT, 1);
+static void rw_drawContent(bool updateMedia = true) {
+  tft.setTextSize(1);
+  tft.setTextDatum(TL_DATUM);
+  const int mediaY = SCREEN_H - UI_FOOTER_H - tft.fontHeight(1) - 2;
+  const int top = UI_HEADER_H + 15;
+  const int cy = (top + mediaY - 4) / 2;
+  const int cx = SCREEN_W / 2;
+  const int r = min(cx - 4, (mediaY - 4 - top) / 2 - 1);
+
+  tft.fillRect(0, UI_HEADER_H, SCREEN_W, 12, RW_BG);
+  drawTruncatedText(4, UI_HEADER_H + 2, "WATCH", SCREEN_W / 2 - 8, RW_ACCENT, 1, RW_BG);
+  char digital[12];
+  if (timeReceived) {
+    int hr12 = displayHour % 12;
+    if (hr12 == 0) hr12 = 12;
+    snprintf(digital, sizeof(digital), "%02d:%02d", hr12, displayMinute);
   } else {
-    tft.setTextColor(wifiConnected ? RW_MUTED : 0x4208, RW_BG);
-    tft.drawCentreString(wifiConnected ? "ONLINE" : "OFFLINE", cx, SCR_H - SCALE_Y(19), 1);
+    snprintf(digital, sizeof(digital), "--:--");
+  }
+  tft.setTextColor(RW_MUTED, RW_BG);
+  tft.drawRightString(digital, SCREEN_W - 4, UI_HEADER_H + 2, 1);
+
+  // Clear the complete hand sweep, then restore ticks it could have touched.
+  tft.fillCircle(cx, cy, r - 1, RW_BG);
+  rw_drawDial(cx, cy, r);
+  if (timeReceived) {
+    rw_drawHands(cx, cy, r, displayHour, displayMinute, displaySecond);
+  } else {
+    drawTruncatedText(cx - 36, cy - 4, "No time sync", 72, RW_MUTED, 1, RW_BG);
+  }
+
+  if (updateMedia) {
+    tft.fillRect(0, mediaY, SCREEN_W, tft.fontHeight(1) + 2, RW_BG);
+    String status;
+    if (currentTrack.length()) status = String(isPlaying ? "Playing: " : "Paused: ") + currentTrack;
+    else status = wifiConnected ? "No media - WiFi online" : "No media - WiFi offline";
+    drawTruncatedText(4, mediaY, status.c_str(), SCREEN_W - 8, RW_ACCENT, 1, RW_BG);
   }
 }
 
-// ── Full Page ──
 void drawRetroWatchPage() {
-  tft.fillScreen(RW_BG);
-
-  int cx = SCR_CX;
-  int cy = SCR_CY;
-  int r = min(SCR_CX, SCR_CY) - SCALE_MIN(6);
-
-  rw_drawDial(cx, cy, r);
-  rw_drawMinimalInfo(cx, cy, r);
-  rw_drawHands(cx, cy, r, displayHour, displayMinute, displaySecond);
-
+  tft.fillRect(0, UI_HEADER_H, SCREEN_W, SCREEN_H - UI_HEADER_H, RW_BG);
+  rw_drawContent();
   drawPageIndicator(STATE_RETRO_WATCH, STATE_COUNT);
-
   rw_drawn = true;
   rw_lastSec = displaySecond;
   rw_lastMin = displayMinute;
   rw_lastHour = displayHour;
   rw_lastTrack = currentTrack;
+  rw_lastStatus = rw_statusKey();
 }
 
-// ── 1s Partial Update (Zero Flicker) ──
 void redrawRetroWatchPartial() {
   if (currentState != STATE_RETRO_WATCH) return;
-
-  if (!rw_drawn || currentTrack != rw_lastTrack) {
+  String status = rw_statusKey();
+  if (!rw_drawn) {
     drawRetroWatchPage();
-    return;
-  }
-
-  if (displaySecond != rw_lastSec || displayMinute != rw_lastMin) {
-    int cx = SCR_CX;
-    int cy = SCR_CY;
-    int r = min(SCR_CX, SCR_CY) - SCALE_MIN(6);
-
-    // Clear inner dial only (leaves bezel intact)
-    tft.fillCircle(cx, cy, r - 7, RW_BG);
-
-    // Minimal digital time update (pushed down by 10 pixels)
-    char digBuf[10];
-    int hr12 = displayHour % 12;
-    if (hr12 == 0) hr12 = 12;
-    sprintf(digBuf, "%d:%02d", hr12, displayMinute);
-    tft.setTextColor(RW_MUTED, RW_BG);
-    tft.drawCentreString(digBuf, cx, cy - r + 9, 1);
-
-    // Redraw hands
-    rw_drawHands(cx, cy, r, displayHour, displayMinute, displaySecond);
-
+  } else if (displaySecond != rw_lastSec || displayMinute != rw_lastMin ||
+             displayHour != rw_lastHour || status != rw_lastStatus) {
+    rw_drawContent(status != rw_lastStatus);
     rw_lastSec = displaySecond;
     rw_lastMin = displayMinute;
     rw_lastHour = displayHour;
     rw_lastTrack = currentTrack;
+    rw_lastStatus = status;
   }
 }
 
-#endif // PAGE_RETRO_WATCH_H
+#endif

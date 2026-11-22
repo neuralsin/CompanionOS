@@ -65,9 +65,9 @@
 // Button active logic level & mode (Configured for 3-pin TTP223 Capacitive Touch Modules)
 // TTP223 outputs Active HIGH (3.3V) when touched, LOW (0V) when idle.
 // For traditional mechanical tactile switches (wired to GND), change to LOW, HIGH, INPUT_PULLUP.
-#define BTN_ACTIVE_LEVEL      HIGH
-#define BTN_UNPRESSED_LEVEL   LOW
-#define BTN_PIN_MODE          INPUT
+#define BTN_ACTIVE_LEVEL      LOW
+#define BTN_UNPRESSED_LEVEL   HIGH
+#define BTN_PIN_MODE          INPUT_PULLUP
 
 // LDR ambient light sensor
 #define LDR_PIN     39   // GPIO39 ADC1 (input-only OK for analog read)

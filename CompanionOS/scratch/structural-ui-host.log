@@ -1,0 +1,268 @@
+Building 160x128 with C:/mingw/bin/g++.exe
+In file included from c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\pages.h:12:0,
+                 from C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\tests/ui_host_regression.cpp:14:
+c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\page_pc_dash.h: In function 'void processPcDashPacket(const char*)':
+c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\page_pc_dash.h:606:5: warning: 'template<unsigned int N> class ArduinoJson::V743HB22::StaticJsonDocument' is deprecated [-Wdeprecated-declarations]
+     StaticJsonDocument<1536> doc;
+     ^~~~~~~~~~~~~~~~~~
+In file included from C:\Users\shaan/OneDrive/Documents/Arduino/libraries/ArduinoJson/src/ArduinoJson.hpp:65:0,
+                 from C:\Users\shaan/OneDrive/Documents/Arduino/libraries/ArduinoJson/src/ArduinoJson.h:9,
+                 from c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\page_pc_dash.h:6,
+                 from c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\pages.h:12,
+                 from C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\tests/ui_host_regression.cpp:14:
+C:\Users\shaan/OneDrive/Documents/Arduino/libraries/ArduinoJson/src/ArduinoJson/compatibility.hpp:63:58: note: declared here
+ class ARDUINOJSON_DEPRECATED("use JsonDocument instead") StaticJsonDocument
+                                                          ^~~~~~~~~~~~~~~~~~
+In file included from c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\pages.h:12:0,
+                 from C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\tests/ui_host_regression.cpp:14:
+c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\page_pc_dash.h:612:31: warning: 'bool ArduinoJson::V743HB22::JsonDocument::containsKey(TChar*) const [with TChar = const char]' is deprecated: use doc["key"].is<T>() instead [-Wdeprecated-declarations]
+       if (!doc.containsKey(key)) continue;
+                               ^
+In file included from C:\Users\shaan/OneDrive/Documents/Arduino/libraries/ArduinoJson/src/ArduinoJson.hpp:42:0,
+                 from C:\Users\shaan/OneDrive/Documents/Arduino/libraries/ArduinoJson/src/ArduinoJson.h:9,
+                 from c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\page_pc_dash.h:6,
+                 from c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\pages.h:12,
+                 from C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\tests/ui_host_regression.cpp:14:
+C:\Users\shaan/OneDrive/Documents/Arduino/libraries/ArduinoJson/src/ArduinoJson/Document/JsonDocument.hpp:167:8: note: declared here
+   bool containsKey(TChar* key) const {
+        ^~~~~~~~~~~
+Native real-header UI regression 160x128
+PASS sink/font-metrics-and-raster
+PASS helpers/uiText-transformations
+PASS helpers/truncate-width-matrix
+PASS helpers/tiny-empty-and-screen-edge-boxes
+PASS helpers/wrapped-width-height-matrix
+PASS helpers/zero-and-one-row-gradients
+PASS helpers/marquee-clip-and-restore
+PASS helpers/marquee-absolute-viewport-restoration
+PASS helpers/marquee-timing-and-tiny-boxes
+PASS helpers/marquee-sprite-reuse-and-allocation-fallback
+PASS memory/current-and-adjacent-custom-image
+PASS pages/clock-empty
+PASS pages/clock-long
+PASS pages/clock-utf8
+PASS pages/retro-empty
+PASS pages/retro-long
+PASS pages/retro-utf8
+PASS pages/gaming-empty
+PASS pages/gaming-long
+PASS pages/gaming-utf8
+PASS pages/social-empty
+PASS pages/social-long
+PASS pages/social-utf8
+PASS pages/productivity-empty
+PASS pages/productivity-long
+PASS pages/productivity-utf8
+PASS pages/network-empty
+PASS pages/network-long
+PASS pages/network-utf8
+PASS pages/stocks-empty
+PASS pages/stocks-long
+PASS pages/stocks-utf8
+PASS spotify/quiet-polling-0
+PASS spotify/quiet-polling-1
+PASS spotify/quiet-polling-2
+PASS integration/spotify-classic-empty
+PASS integration/spotify-classic-long
+PASS integration/spotify-classic-utf8
+PASS integration/spotify-theme2-empty
+PASS integration/spotify-theme2-long
+PASS integration/spotify-theme2-utf8
+PASS integration/spotify-art-transaction-0
+PASS integration/spotify-art-transaction-1
+PASS integration/notifications-empty
+PASS integration/notifications-long
+PASS integration/notifications-utf8
+PASS integration/notes-empty
+PASS integration/notes-long
+PASS integration/notes-utf8
+PASS integration/settings-empty
+PASS integration/settings-long
+PASS integration/settings-utf8
+PASS integration/pomodoro-same-data-reentry
+PASS weather/icon-native-pixel-bounds
+PASS weather/forecast-1000
+PASS weather/forecast-1003
+PASS weather/forecast-1006
+PASS weather/forecast-1183
+PASS weather/forecast-1087
+PASS weather/forecast-1213
+PASS weather/forecast-1135
+PASS weather/forecast-0
+PASS weather/forecast-800
+PASS weather/forecast-801
+PASS weather/forecast-803
+PASS weather/forecast-500
+PASS weather/forecast-200
+PASS weather/forecast-600
+PASS weather/forecast-741
+PASS weather/empty-status-0
+PASS weather/empty-status-1
+PASS weather/empty-status-2
+PASS weather/empty-status-3
+PASS weather/empty-status-4
+PASS weather/bounded-and-cached-0
+PASS weather/bounded-and-cached-1
+PASS weather/bounded-and-cached-2
+PASS weather/bounded-and-cached-3
+PASS header/idle-sun-and-moon
+PASS header/music-alternation-and-real-progress
+PASS focus/state-0
+PASS focus/state-1
+PASS focus/state-2
+PASS focus/state-3
+PASS focus/state-4
+PASS focus/state-5
+PASS pc-dashboard/0/0
+PASS pc-dashboard/0/1
+PASS pc-dashboard/0/2
+PASS pc-dashboard/1/0
+PASS pc-dashboard/1/1
+PASS pc-dashboard/1/2
+PASS pc-dashboard/2/0
+PASS pc-dashboard/2/1
+PASS pc-dashboard/2/2
+PASS pc-dashboard/3/0
+PASS pc-dashboard/3/1
+PASS pc-dashboard/3/2
+PASS ruview/state-0
+PASS ruview/state-1
+PASS ruview/state-2
+PASS ruview/state-3
+PASS ruview/state-4
+PASS ruview/stale-samples
+104 cases, 23828 assertions, 0 failures
+Building 320x240 with C:/mingw/bin/g++.exe
+In file included from c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\pages.h:12:0,
+                 from C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\tests/ui_host_regression.cpp:14:
+c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\page_pc_dash.h: In function 'void processPcDashPacket(const char*)':
+c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\page_pc_dash.h:606:5: warning: 'template<unsigned int N> class ArduinoJson::V743HB22::StaticJsonDocument' is deprecated [-Wdeprecated-declarations]
+     StaticJsonDocument<1536> doc;
+     ^~~~~~~~~~~~~~~~~~
+In file included from C:\Users\shaan/OneDrive/Documents/Arduino/libraries/ArduinoJson/src/ArduinoJson.hpp:65:0,
+                 from C:\Users\shaan/OneDrive/Documents/Arduino/libraries/ArduinoJson/src/ArduinoJson.h:9,
+                 from c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\page_pc_dash.h:6,
+                 from c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\pages.h:12,
+                 from C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\tests/ui_host_regression.cpp:14:
+C:\Users\shaan/OneDrive/Documents/Arduino/libraries/ArduinoJson/src/ArduinoJson/compatibility.hpp:63:58: note: declared here
+ class ARDUINOJSON_DEPRECATED("use JsonDocument instead") StaticJsonDocument
+                                                          ^~~~~~~~~~~~~~~~~~
+In file included from c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\pages.h:12:0,
+                 from C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\tests/ui_host_regression.cpp:14:
+c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\page_pc_dash.h:612:31: warning: 'bool ArduinoJson::V743HB22::JsonDocument::containsKey(TChar*) const [with TChar = const char]' is deprecated: use doc["key"].is<T>() instead [-Wdeprecated-declarations]
+       if (!doc.containsKey(key)) continue;
+                               ^
+In file included from C:\Users\shaan/OneDrive/Documents/Arduino/libraries/ArduinoJson/src/ArduinoJson.hpp:42:0,
+                 from C:\Users\shaan/OneDrive/Documents/Arduino/libraries/ArduinoJson/src/ArduinoJson.h:9,
+                 from c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\page_pc_dash.h:6,
+                 from c:\users\shaan\onedrive\documents\c++\esp\companionos\arduino\companionos_main\pages.h:12,
+                 from C:\Users\shaan\OneDrive\Documents\C++\esp\CompanionOS\tests/ui_host_regression.cpp:14:
+C:\Users\shaan/OneDrive/Documents/Arduino/libraries/ArduinoJson/src/ArduinoJson/Document/JsonDocument.hpp:167:8: note: declared here
+   bool containsKey(TChar* key) const {
+        ^~~~~~~~~~~
+Native real-header UI regression 320x240
+PASS sink/font-metrics-and-raster
+PASS helpers/uiText-transformations
+PASS helpers/truncate-width-matrix
+PASS helpers/tiny-empty-and-screen-edge-boxes
+PASS helpers/wrapped-width-height-matrix
+PASS helpers/zero-and-one-row-gradients
+PASS helpers/marquee-clip-and-restore
+PASS helpers/marquee-absolute-viewport-restoration
+PASS helpers/marquee-timing-and-tiny-boxes
+PASS helpers/marquee-sprite-reuse-and-allocation-fallback
+PASS memory/current-and-adjacent-custom-image
+PASS pages/clock-empty
+PASS pages/clock-long
+PASS pages/clock-utf8
+PASS pages/retro-empty
+PASS pages/retro-long
+PASS pages/retro-utf8
+PASS pages/gaming-empty
+PASS pages/gaming-long
+PASS pages/gaming-utf8
+PASS pages/social-empty
+PASS pages/social-long
+PASS pages/social-utf8
+PASS pages/productivity-empty
+PASS pages/productivity-long
+PASS pages/productivity-utf8
+PASS pages/network-empty
+PASS pages/network-long
+PASS pages/network-utf8
+PASS pages/stocks-empty
+PASS pages/stocks-long
+PASS pages/stocks-utf8
+PASS spotify/quiet-polling-0
+PASS spotify/quiet-polling-1
+PASS spotify/quiet-polling-2
+PASS integration/spotify-classic-empty
+PASS integration/spotify-classic-long
+PASS integration/spotify-classic-utf8
+PASS integration/spotify-theme2-empty
+PASS integration/spotify-theme2-long
+PASS integration/spotify-theme2-utf8
+PASS integration/spotify-art-transaction-0
+PASS integration/spotify-art-transaction-1
+PASS integration/notifications-empty
+PASS integration/notifications-long
+PASS integration/notifications-utf8
+PASS integration/notes-empty
+PASS integration/notes-long
+PASS integration/notes-utf8
+PASS integration/settings-empty
+PASS integration/settings-long
+PASS integration/settings-utf8
+PASS integration/pomodoro-same-data-reentry
+PASS weather/icon-native-pixel-bounds
+PASS weather/forecast-1000
+PASS weather/forecast-1003
+PASS weather/forecast-1006
+PASS weather/forecast-1183
+PASS weather/forecast-1087
+PASS weather/forecast-1213
+PASS weather/forecast-1135
+PASS weather/forecast-0
+PASS weather/forecast-800
+PASS weather/forecast-801
+PASS weather/forecast-803
+PASS weather/forecast-500
+PASS weather/forecast-200
+PASS weather/forecast-600
+PASS weather/forecast-741
+PASS weather/empty-status-0
+PASS weather/empty-status-1
+PASS weather/empty-status-2
+PASS weather/empty-status-3
+PASS weather/empty-status-4
+PASS weather/bounded-and-cached-0
+PASS weather/bounded-and-cached-1
+PASS weather/bounded-and-cached-2
+PASS weather/bounded-and-cached-3
+PASS header/idle-sun-and-moon
+PASS header/music-alternation-and-real-progress
+PASS focus/state-0
+PASS focus/state-1
+PASS focus/state-2
+PASS focus/state-3
+PASS focus/state-4
+PASS focus/state-5
+PASS pc-dashboard/0/0
+PASS pc-dashboard/0/1
+PASS pc-dashboard/0/2
+PASS pc-dashboard/1/0
+PASS pc-dashboard/1/1
+PASS pc-dashboard/1/2
+PASS pc-dashboard/2/0
+PASS pc-dashboard/2/1
+PASS pc-dashboard/2/2
+PASS pc-dashboard/3/0
+PASS pc-dashboard/3/1
+PASS pc-dashboard/3/2
+PASS ruview/state-0
+PASS ruview/state-1
+PASS ruview/state-2
+PASS ruview/state-3
+PASS ruview/state-4
+PASS ruview/stale-samples
+104 cases, 28079 assertions, 0 failures

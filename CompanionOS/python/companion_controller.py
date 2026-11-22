@@ -16,7 +16,6 @@ import socket
 import subprocess
 from datetime import datetime
 import threading
-import struct
 
 # Ensure local modules are importable
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -44,14 +43,12 @@ else:
 
 from spotify_integration import SpotifyIntegration  # type: ignore # noqa: E402
 from github_integration import GitHubIntegration  # type: ignore # noqa: E402
-from steam_tracker import SteamTracker  # type: ignore # noqa: E402
 from google_cal import GoogleCalendar, LocalTaskList  # type: ignore # noqa: E402
 from stock_manager import StockManager  # type: ignore # noqa: E402
-from theme2_bridge import theme2_spotify_feed  # type: ignore # noqa: E402
 from ruview_processor import (  # type: ignore # noqa: E402
-    ruview_listener_loop, ruview_push_loop, zone_manager,
-    ruview_enabled
+    ruview_listener_loop, ruview_push_loop,
 )
+from pc_dashboard_service import PCDashboardTelemetry  # type: ignore # noqa: E402
 
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
 
@@ -113,6 +110,30 @@ pomodoro_remaining = pomodoro_duration
 pomodoro_last_tick = 0.0
 pomodoro_sessions = 0
 
+
+def handle_pomodoro_command(message):
+    """Apply explicit timer commands without losing a paused session."""
+    global pomodoro_active, pomodoro_remaining, pomodoro_is_break
+    global pomodoro_last_tick
+    if message == "POMO:START":
+        if pomodoro_remaining <= 0:
+            pomodoro_remaining = pomodoro_break_duration if pomodoro_is_break else pomodoro_duration
+        pomodoro_active = True
+    elif message == "POMO:PAUSE":
+        if pomodoro_active:
+            pomodoro_remaining = max(0, pomodoro_remaining - max(0, time.time() - pomodoro_last_tick))
+        pomodoro_active = False
+    elif message == "POMO:RESET":
+        pomodoro_active = pomodoro_is_break = False
+        pomodoro_remaining = pomodoro_duration
+    elif message == "POMO:SKIP":
+        pomodoro_is_break = not pomodoro_is_break
+        pomodoro_remaining = pomodoro_break_duration if pomodoro_is_break else pomodoro_duration
+    else:
+        return False
+    pomodoro_last_tick = time.time()
+    return True
+
 # Notification storage
 from typing import List, Dict, Any, cast
 notifications: List[Dict[str, Any]] = []
@@ -129,10 +150,66 @@ github_service = GitHubIntegration(username=GITHUB_USERNAME, token=GITHUB_TOKEN)
 
 # ── V6: New service instances ──────────────────────────
 gaming_cfg = config.get('gaming', {})
-steam_service = SteamTracker(
-    steam_api_key=gaming_cfg.get('steam_api_key', ''),
-    steam_id=gaming_cfg.get('steam_id', '')
-)
+steam_service = None
+_view_lease = (-1, 0.0, None)
+_latest_playback_track = None
+_OPTIONAL_FEEDS = {
+    'THOUGHT': (0, False), 'AGENT': (0, False), 'WEATHER': (4, True),
+    'STOCKS': (7, True), 'GAMING': (8, True), 'SOCIAL': (9, True),
+    'GITHUB': (9, True), 'TASKS': (10, True), 'RUVIEW': (14, False),
+    'PCDASH': (13, True), 'NOTES': (6, True), 'T2SPOT': (1, False),
+}
+
+
+def optional_updates_active():
+    page, expires, device = _view_lease
+    return device == active_esp_ip and time.monotonic() < expires and page != 2
+
+
+def optional_view_active(owner, adjacent=True):
+    page, expires, device = _view_lease
+    if device != active_esp_ip or time.monotonic() >= expires or page == 2:
+        return False
+    distance = abs(page - owner)
+    return distance == 0 or (adjacent and distance in (1, 19))
+
+
+def accept_view_lease(message, sender_ip):
+    global _view_lease
+    if sender_ip != active_esp_ip or not message.startswith("VIEW:"):
+        return False
+    value = message[5:]
+    if not value.isascii() or not value.isdecimal() or not 0 <= int(value) < 20:
+        return False
+    _view_lease = (int(value), time.monotonic() + 12.0, sender_ip)
+    return True
+
+
+def optional_feed_ticks(owner, interval, adjacent=True):
+    """Wake promptly on page entry; do no collection while its lease is absent."""
+    due = 0.0
+    entered = True
+    while True:
+        now = time.monotonic()
+        if not optional_view_active(owner, adjacent=adjacent):
+            due = 0.0
+            entered = True
+        elif now >= due:
+            yield entered
+            entered = False
+            due = time.monotonic() + max(1.0, float(interval))
+        time.sleep(0.5)
+
+
+def get_steam_service():
+    global steam_service
+    if steam_service is None:
+        from steam_tracker import SteamTracker
+        steam_service = SteamTracker(
+            steam_api_key=gaming_cfg.get('steam_api_key', ''),
+            steam_id=gaming_cfg.get('steam_id', '')
+        )
+    return steam_service
 
 prod_cfg = config.get('productivity', {})
 gcal_creds = prod_cfg.get('google_credentials', '')
@@ -142,21 +219,72 @@ else:
     productivity_service = LocalTaskList()
 
 stock_service = StockManager()
+pc_dash_service = PCDashboardTelemetry()
 
 
-def send_udp(message):
+def send_udp(message, port=None):
+    prefix = message.partition(':')[0]
+    demand = _OPTIONAL_FEEDS.get(prefix)
+    if demand is not None and not optional_view_active(*demand):
+        return False
+    # Notifications also drive the eyes overlay, so keep them page-independent.
+    if prefix == 'NOTIF' and not optional_updates_active():
+        return False
     target_ip = active_esp_ip if active_esp_ip else ESP_IP
     try:
-        sock.sendto(message.encode(), (target_ip, ESP_PORT_RX))
+        sock.sendto(message.encode(), (target_ip, ESP_PORT_RX if port is None else port))
+        return True
     except Exception as e:
         print(f"UDP send error to {target_ip}: {e}")
+        return False
 
 def send_udp_bytes(packet):
     target_ip = active_esp_ip if active_esp_ip else ESP_IP
     try:
         sock.sendto(packet, (target_ip, ESP_PORT_RX))
-    except Exception as e:
+    except Exception:
         pass
+
+
+def sync_spotify_credentials(token_info=None, target_ip=None):
+    """Provision only a known unicast deskbot, never broadcast account credentials."""
+    import ipaddress
+    target = target_ip or active_esp_ip
+    try:
+        address = ipaddress.ip_address(target or "")
+        if (address.version != 4 or not address.is_private or address.is_unspecified
+                or address.is_multicast or address.is_loopback):
+            return False
+        if str(address).endswith((".255", ".0")):
+            return False
+    except ValueError:
+        return False
+    token_info = token_info or spotify_service.get_token_info()
+    if not token_info or not token_info.get("access_token") or not token_info.get("refresh_token"):
+        return False
+    payload = json.dumps({
+        "access": token_info["access_token"], "refresh": token_info["refresh_token"],
+        "client_id": SPOTIFY_CLIENT_ID, "client_secret": SPOTIFY_CLIENT_SECRET,
+    }, separators=(",", ":"))
+    packet = ("SPOTIFY_AUTH:" + payload).encode("utf-8")
+    if len(packet) > 1800:
+        return False
+    try:
+        sock.sendto(packet, (str(address), ESP_PORT_RX))
+        return True
+    except OSError:
+        return False
+
+
+def recover_spotify_authorization(target_ip):
+    # Runs off the UDP listener: token refresh and browser consent must not stall it.
+    if sync_spotify_credentials(target_ip=target_ip):
+        return
+    if spotify_service.request_authorization(
+            lambda token: sync_spotify_credentials(token, target_ip)):
+        print("Spotify: complete authorization in the browser; credentials will sync automatically")
+    else:
+        print("Spotify: could not start browser authorization; check the callback port and app configuration")
 
 current_lyrics = []  # Make global so background thread can update it
 last_sent_lyrics = None
@@ -172,6 +300,30 @@ def _next_asset_generation():
 def _is_current_asset_generation(generation):
     with _asset_generation_lock:
         return generation == _asset_generation
+
+def lyrics_frame(lines, progress_ms):
+    """Stable, bounded display frame; an intro does not advance the first verse."""
+    def text(value):
+        return str(value).encode('utf-8')[:192].decode('utf-8', errors='ignore')
+
+    index = next((i for i in range(len(lines) - 1, -1, -1)
+                  if lines[i]['time'] <= progress_ms), -1)
+    frame = {'prev': '', 'line1': '', 'line2': '', 'synced': True, 'status': '',
+             'line_at': -1, 'next_at': -1}
+    if index >= 0:
+        entry = lines[index]
+        frame.update(prev=text(lines[index - 1]['words']) if index else '',
+                     line1=text(entry['words']),
+                     line2=text(lines[index + 1]['words']) if index + 1 < len(lines) else '',
+                     synced=entry.get('synced', True), status=text(entry.get('status', '')),
+                     line_at=entry['time'],
+                     next_at=lines[index + 1]['time'] if index + 1 < len(lines) else -1)
+    elif lines:
+        frame['line2'] = text(lines[0]['words'])
+        frame['synced'] = lines[0].get('synced', True)
+        frame['next_at'] = lines[0]['time']
+    return frame
+
 
 def fetch_heavy_assets(track_name, artist_name, track_id, album_art_url, generation):
     """Background thread to process lyrics and album art without blocking UDP STATE updates."""
@@ -1071,18 +1223,24 @@ def start_notes_server():
                 <div class="page-nav">
                     <button class="page-btn" onclick="page(0)">Eyes</button>
                     <button class="page-btn" onclick="page(1)">Spotify</button>
-                    <button class="page-btn" onclick="page(2)">Pomo</button>
-                    <button class="page-btn" onclick="page(3)">Weather</button>
-                    <button class="page-btn" onclick="page(4)">Notifs</button>
-                    <button class="page-btn" onclick="page(5)">Notes</button>
-                    <button class="page-btn" onclick="page(6)">Stocks</button>
-                    <button class="page-btn" onclick="page(7)">Gaming</button>
-                    <button class="page-btn" onclick="page(8)">Social</button>
-                    <button class="page-btn" onclick="page(9)">Tasks</button>
-                    <button class="page-btn" onclick="page(10)">Network</button>
-                    <button class="page-btn" onclick="page(11)">Settings</button>
-                    <button class="page-btn" onclick="page(12)" style="border-color:#a855f7;color:#a855f7">RuView</button>
-                    <button class="page-btn" onclick="page(13)">Dr.Hack</button>
+                    <button class="page-btn" onclick="page(2)">Lyrics</button>
+                    <button class="page-btn" onclick="page(3)">Pomo</button>
+                    <button class="page-btn" onclick="page(4)">Weather</button>
+                    <button class="page-btn" onclick="page(5)">Notifs</button>
+                    <button class="page-btn" onclick="page(6)">Notes</button>
+                    <button class="page-btn" onclick="page(7)">Stocks</button>
+                    <button class="page-btn" onclick="page(8)">Gaming</button>
+                    <button class="page-btn" onclick="page(9)">Social</button>
+                    <button class="page-btn" onclick="page(10)">Tasks</button>
+                    <button class="page-btn" onclick="page(11)">Network</button>
+                    <button class="page-btn" onclick="page(12)">Settings</button>
+                    <button class="page-btn" onclick="page(13)">PC dashboard</button>
+                    <button class="page-btn" onclick="page(14)">RuView</button>
+                    <button class="page-btn" onclick="page(15)">Clock</button>
+                    <button class="page-btn" onclick="page(16)">Watch</button>
+                    <button class="page-btn" onclick="page(17)">Dr.Hack</button>
+                    <button class="page-btn" onclick="page(18)">Calendar</button>
+                    <button class="page-btn" onclick="page(19)">Timetable</button>
                     <a href="/ruview" style="font-size:11px;color:#a855f7;text-decoration:none;align-self:center;margin-left:8px">📡 Full Dashboard →</a>
                 </div>
 
@@ -1442,7 +1600,6 @@ def start_notes_server():
             """Receives image upload, processes to 96x96 RGB565, streams to ESP"""
             try:
                 from PIL import Image  # type: ignore
-                import io
                 
                 if 'image' not in request.files:
                     return {'status': 'error', 'msg': 'No image file'}, 400
@@ -1483,7 +1640,7 @@ def start_notes_server():
                     time.sleep(0.02)
                 
                 send_udp("ART_COMPLETE:")
-                print(f"🖼️ Gallery image pushed to ESP")
+                print("🖼️ Gallery image pushed to ESP")
                 return {'status': 'ok'}
             except ImportError:
                 return {'status': 'error', 'msg': 'PIL not installed'}, 500
@@ -1651,9 +1808,9 @@ def start_notes_server():
         
         print(f"🌐 CompanionOS Web Remote starting on http://0.0.0.0:{port}")
         print(f"  🎮 Virtual Remote: http://localhost:{port}")
-        print(f"  🤖 Agent webhook: POST /api/agent")
-        print(f"  🖼️ Gallery push:  POST /api/gallery")
-        print(f"  🔘 Button API:    POST /api/button")
+        print("  🤖 Agent webhook: POST /api/agent")
+        print("  🖼️ Gallery push:  POST /api/gallery")
+        print("  🔘 Button API:    POST /api/button")
         print(f"  📡 RuView CSI:    http://localhost:{port}/ruview")
         app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
     except ImportError:
@@ -1743,11 +1900,9 @@ def command_listener():
     except Exception:
         pass
 
-    bound = False
     for attempt in range(5):
         try:
             listen_sock.bind(('0.0.0.0', PC_PORT_RX))
-            bound = True
             break
         except OSError as e:
             if attempt < 4:
@@ -1763,10 +1918,11 @@ def command_listener():
         try:
             data, addr = listen_sock.recvfrom(1024)
             sender_ip = addr[0]
-            command = data.decode(errors='replace').strip()
-            
             msg = data.decode('utf-8', errors='replace').strip()
             
+            if msg.startswith("VIEW:"):
+                accept_view_lease(msg, sender_ip)
+                continue
             if msg == "HELLO_COMPANION":
                 is_first = not device_connected or (active_esp_ip != sender_ip)
                 active_esp_ip = sender_ip
@@ -1776,6 +1932,8 @@ def command_listener():
                     last_discovered_ip = sender_ip
                     print(f"👋 Companion Device Connected & Confirmed at {active_esp_ip}!")
                     force_resync = True
+                    threading.Thread(target=recover_spotify_authorization,
+                                     args=(sender_ip,), daemon=True).start()
                     if config.get('network', {}).get('esp_ip') != active_esp_ip:
                         config['network']['esp_ip'] = active_esp_ip
                         try:
@@ -1788,6 +1946,10 @@ def command_listener():
                 device_connected = True
                 print(f"🔄 Resync requested by device at {active_esp_ip}!")
                 force_resync = True
+            elif msg == "SPOTIFY_AUTH_REQUEST":
+                if sender_ip == active_esp_ip:
+                    threading.Thread(target=recover_spotify_authorization,
+                                     args=(sender_ip,), daemon=True).start()
             else:
                 if not device_connected:
                     device_connected = True
@@ -1837,28 +1999,8 @@ def command_listener():
                                 print(f"❤️ Saved {track['name']}")
                     except Exception as e:
                         print(f"Like toggle error: {e}")
-                elif msg == "POMO:START":
-                    pomodoro_active = True
-                    pomodoro_last_tick = time.time()
-                    if not pomodoro_is_break: # If starting work, reset remaining
-                        pomodoro_remaining = pomodoro_duration
-                    else: # If starting break, reset remaining
-                        pomodoro_remaining = pomodoro_break_duration
-                    print("🍅 Pomodoro started!")
-                elif msg == "POMO:PAUSE":
-                    pomodoro_active = False
-                    print("🍅 Pomodoro paused")
-                elif msg == "POMO:SKIP":
-                    if pomodoro_is_break:
-                        pomodoro_is_break = False
-                        pomodoro_remaining = pomodoro_duration
-                        pomodoro_last_tick = time.time()
-                    else:
-                        pomodoro_is_break = True
-                        pomodoro_remaining = pomodoro_break_duration
-                        pomodoro_last_tick = time.time()
-                        pomodoro_sessions += 1  # type: ignore
-                    print(f"🍅 Skipped to {'break' if pomodoro_is_break else 'work'}")
+                elif handle_pomodoro_command(msg):
+                    print(f"Pomodoro command applied: {msg}")
                 elif msg == "NOTIF:CLEAR":
                     notifications.clear()
                     notif_file = os.path.join(SCRIPT_DIR, "notifications.json")
@@ -1887,9 +2029,7 @@ def command_listener():
 def stock_feed_loop():
     """Periodically fetch stock data and send to ESP."""
     interval = config.get('stocks', {}).get('update_interval_seconds', 300)
-    # Initial delay to let network settle
-    time.sleep(8)
-    while True:
+    for _ in optional_feed_ticks(7, interval):
         try:
             payload = stock_service.get_esp_payload()
             msg = f"STOCKS:{json.dumps(payload)}"
@@ -1897,13 +2037,14 @@ def stock_feed_loop():
             print(f"📊 Stock sync: {payload.get('symbol', '?')} {payload.get('price', '?')}")
         except Exception as e:
             print(f"Stock feed error: {e}")
-        time.sleep(interval)
 
 
 def push_game_cover(title):
     """Fetch a game cover URL for cache warmup without touching Spotify art packets."""
+    if not optional_view_active(8):
+        return
     try:
-        url = steam_service.get_game_cover_url(title)
+        url = get_steam_service().get_game_cover_url(title)
         if not url: return
         print(f"🖼️ Game cover found for {title}; not streamed over Spotify art channel")
     except Exception as e:
@@ -1912,11 +2053,10 @@ def push_game_cover(title):
 def gaming_feed_loop():
     """Periodically check game state and send to ESP."""
     interval = config.get('gaming', {}).get('update_interval_seconds', 30)
-    time.sleep(5)
     last_pushed_title = ""
-    while True:
+    for _ in optional_feed_ticks(8, interval):
         try:
-            state = steam_service.get_gaming_state()
+            state = get_steam_service().get_gaming_state()
             msg = f"GAMING:{json.dumps(state)}"
             send_udp(msg)
             if state.get('active'):
@@ -1928,16 +2068,14 @@ def gaming_feed_loop():
                 last_pushed_title = ""
         except Exception as e:
             print(f"Gaming feed error: {e}")
-        time.sleep(interval)
 
 
 def social_feed_loop():
     """Reformat Windows notifications as social cards for ESP."""
     interval = config.get('social', {}).get('update_interval_seconds', 15)
-    last_social_body = ''
-    time.sleep(6)
-    while True:
+    for _ in optional_feed_ticks(9, interval):
         try:
+            social_payload = {'user': '', 'app': '', 'body': '', 'time': '', 'likes': 0, 'comments': 0}
             # Read from the notification storage that capture_windows_notifications populates
             notif_file = os.path.join(SCRIPT_DIR, "notifications.json")
             if os.path.exists(notif_file):
@@ -1945,7 +2083,7 @@ def social_feed_loop():
                     notifs = json.load(f)
                 if notifs and isinstance(notifs, list):
                     # Pick the most recent notification
-                    latest = notifs[-1]
+                    latest = next((item for item in reversed(notifs) if isinstance(item, dict)), {})
                     app_name = str(latest.get('app', 'App'))[:11]
                     title = str(latest.get('title', ''))[:79]
                     time_str = str(latest.get('time', ''))[:7]
@@ -1960,27 +2098,17 @@ def social_feed_loop():
                         user = parts[0][:15] if parts else app_name
                         body = parts[1] if len(parts) > 1 else title
 
-                    if body != last_social_body:
-                        social_payload = {
-                            'user': user,
-                            'app': app_name,
-                            'body': body[:79],
-                            'time': time_str,
-                            'likes': 0,
-                            'comments': 0
-                        }
-                        send_udp(f"SOCIAL:{json.dumps(social_payload)}")
-                        last_social_body = body
+                    social_payload.update(user=user, app=app_name, body=body[:79], time=time_str)
+            # Resend on entry/reconnection too; the display caches identical data.
+            send_udp(f"SOCIAL:{json.dumps(social_payload)}")
         except Exception as e:
             print(f"Social feed error: {e}")
-        time.sleep(interval)
 
 
 def productivity_feed_loop():
     """Periodically fetch calendar/tasks and send to ESP."""
     interval = config.get('productivity', {}).get('update_interval_seconds', 60)
-    time.sleep(7)
-    while True:
+    for _ in optional_feed_ticks(10, interval):
         try:
             state = productivity_service.get_productivity_state()
             msg = f"TASKS:{json.dumps(state)}"
@@ -1989,7 +2117,6 @@ def productivity_feed_loop():
                 print(f"📅 Task: {state['current']}")
         except Exception as e:
             print(f"Productivity feed error: {e}")
-        time.sleep(interval)
 
 # ═══════════════════════════════════════════════════════════
 # V7: THOUGHT PUSH — PC→ESP override thought injection
@@ -2050,18 +2177,47 @@ def push_thought_to_esp(context: str, **kwargs):
     print(f"💭 Pushed thought: {thought}")
 
 
+def theme2_spotify_feed(spotify_service, send_udp_fn, config):
+    """Collect extended controls only while the Spotify page has demand."""
+    interval = max(1.0, float(config.get('update_intervals', {}).get('spotify_poll_seconds', 1)) * 2)
+    last_payload = None
+    for entered in optional_feed_ticks(1, interval, adjacent=False):
+        if entered:
+            last_payload = None
+        if not spotify_service.enabled or not spotify_service.client:
+            continue
+        try:
+            state = spotify_service.client.current_playback()
+            if not state or not optional_view_active(1, adjacent=False):
+                continue
+            device = state.get('device', {})
+            payload = json.dumps({
+                'vol': device.get('volume_percent', 0),
+                'shuf': state.get('shuffle_state', False),
+                'rep': {'off': 0, 'context': 1, 'track': 2}.get(state.get('repeat_state', 'off'), 0),
+                'dev': device.get('name', '?')[:23],
+            })
+            if payload != last_payload and send_udp_fn(f"T2SPOT:{payload}"):
+                last_payload = payload
+        except Exception as e:
+            print(f"T2 Bridge error: {e}")
+
+
 def thought_push_loop():
     """Background thread: push context thoughts on events."""
     global _last_thought_track, _last_thought_time
     time.sleep(30)  # Wait for initial setup
     
     while True:
+        if not optional_view_active(0, adjacent=False):
+            time.sleep(0.5)
+            continue
         try:
             now = time.time()
             
             # Check for track change → push music thought
             try:
-                track = spotify_service.get_current_track()
+                track = _latest_playback_track
                 if track and track.get('id') != _last_thought_track:
                     _last_thought_track = track.get('id')
                     push_thought_to_esp('track_change',
@@ -2108,29 +2264,33 @@ def main():
     # Theme 2: Extended Spotify data bridge (reuses same spotify_service + API keys)
     threading.Thread(target=theme2_spotify_feed, args=(spotify_service, send_udp, config), daemon=True).start()
     # V8: RuView CSI Presence Detection threads
-    threading.Thread(target=ruview_listener_loop, args=(8890,), daemon=True).start()
+    threading.Thread(target=ruview_listener_loop, args=(8890,),
+                     kwargs={'active_fn': lambda: optional_view_active(14, adjacent=False)}, daemon=True).start()
+    threading.Thread(target=ruview_push_loop, args=(send_udp,),
+                     kwargs={'active_fn': lambda: optional_view_active(14, adjacent=False)}, daemon=True).start()
     print("Monitoring playback & connections...")
     if active_esp_ip:
         print(f"📡 Target Device IP: {active_esp_ip}")
     else:
         print("🔍 Scanning local subnet for Companion Device...")
     
-    global current_lyrics, fast_poll_now
+    global current_lyrics, fast_poll_now, _latest_playback_track
     fast_poll_now = False
     current_track_id = None
     last_sent_lyrics = None
     last_github_check: float = 0.0
     last_notes_check: float = 0.0
-    last_notes_content = []
+    last_notes_content = None
     last_time_sync: float = 0.0
     last_weather_check: float = 0.0
     last_pomodoro_sync: float = 0.0
     last_spotify_token_sync: float = 0.0
+    last_pcdash_check: float = 0.0
     
     notes_file = os.path.join(SCRIPT_DIR, "notes.txt")
     if not os.path.exists(notes_file):
         with open(notes_file, "w") as f:
-            f.write("Welcome to CompanionOS!\nEdit notes at http://YOUR_PC_IP:5555\n")
+            f.write("")
     
     global force_resync, pomodoro_active, pomodoro_remaining
     global pomodoro_is_break, pomodoro_sessions, pomodoro_last_tick
@@ -2151,8 +2311,10 @@ def main():
                     last_sent_lyrics = None
                     last_github_check = 0.0
                     last_notes_check = 0.0
+                    last_notes_content = None
                     last_time_sync = 0.0
                     last_weather_check = 0.0
+                    last_pcdash_check = 0.0
                     print("🔄 Triggered full state resync!")
             
             # --- Time Sync (every 60s) ---
@@ -2162,9 +2324,22 @@ def main():
                 # ESP expects {"time": "HH:MM"}
                 time_str = f"{dt.hour:02d}:{dt.minute:02d}"
                 send_udp(f'TIME:{{"time":"{time_str}"}}')
+
+            # --- Wireless PC Dashboard Telemetry (every 1s) ---
+            if optional_view_active(13) and (now - last_pcdash_check >= 1.0 or last_pcdash_check == 0):
+                last_pcdash_check = now
+                try:
+                    pcd_data = pc_dash_service.collect()
+                    pcd_pkt = pc_dash_service.format_packet(pcd_data)
+                    if pcd_pkt:
+                        send_udp(pcd_pkt)
+                        # Also mirror to port 4210 for secondary listener compatibility
+                        send_udp(pcd_pkt, port=4210)
+                except Exception:
+                    pass
             
             # --- Weather Sync ---
-            if now - last_weather_check > WEATHER_REFRESH or last_weather_check == 0:
+            if optional_view_active(4) and (now - last_weather_check > WEATHER_REFRESH or last_weather_check == 0):
                 last_weather_check = now
                 weather = fetch_weather()
                 if weather:
@@ -2218,7 +2393,7 @@ def main():
                     send_udp(f"POMO:{json.dumps(pomo_data)}")
             
             # --- Notes Sync ---
-            if now - last_notes_check > 5:
+            if optional_view_active(6) and now - last_notes_check > 5:
                 last_notes_check = now
                 try:
                     with open(notes_file, "r") as f:
@@ -2237,7 +2412,7 @@ def main():
                     pass
             
             # --- GitHub Stats ---
-            if github_service.enabled and (now - last_github_check > GITHUB_REFRESH or last_github_check == 0):
+            if optional_view_active(9) and github_service.enabled and (now - last_github_check > GITHUB_REFRESH or last_github_check == 0):
                 last_github_check = now
                 profile = github_service.get_profile()
                 if profile:
@@ -2248,17 +2423,10 @@ def main():
             if spotify_service.enabled:
                 if now - last_spotify_token_sync > 300.0:
                     last_spotify_token_sync = now
-                    token_info = spotify_service.get_token_info()
-                    if token_info and 'access_token' in token_info:
-                        auth_payload = {
-                            "access": token_info.get("access_token", ""),
-                            "refresh": token_info.get("refresh_token", ""),
-                            "client_id": SPOTIFY_CLIENT_ID,
-                            "client_secret": SPOTIFY_CLIENT_SECRET
-                        }
-                        send_udp(f"SPOTIFY_AUTH:{json.dumps(auth_payload)}")
+                    sync_spotify_credentials()
 
                 track = spotify_service.get_current_track()
+                _latest_playback_track = track
                 if track and track['id'] != current_track_id:
                     print(f"\n🎵 {track['name']} - {track['artist']}")
                     current_track_id = track['id']
@@ -2287,30 +2455,12 @@ def main():
                     send_udp(f"STATE:{json.dumps(state)}")
                     
                     if spotify_service.lyrics_enabled and current_lyrics:
-                        lines = current_lyrics # Renamed for clarity
-                        
-                        # Find the current lyric line
-                        matching_indices = [i for i, line in enumerate(lines) if line['time'] <= track['progress_ms'] + 500]
-                        
-                        if matching_indices:
-                            current_idx = matching_indices[-1]
-                            prev_lyric = lines[current_idx - 1]['words'] if current_idx > 0 else ""
-                            current_lyric = lines[current_idx]['words']
-                            next_lyric = lines[current_idx + 1]['words'] if current_idx + 1 < len(lines) else ""
-                            
-                            # Only send if the set of 3 lines has changed
-                            current_three_lines = [prev_lyric, current_lyric, next_lyric]
-                            if current_three_lines != last_sent_lyrics:
-                                last_sent_lyrics = current_three_lines
-                                send_udp(f"LYRICS:{json.dumps(current_three_lines)}")
-                        elif not lines: # No lyrics at all
-                            if last_sent_lyrics != ["♪ Instrumental ♪", "", ""]:
-                                last_sent_lyrics = ["♪ Instrumental ♪", "", ""]
-                                send_udp(f"LYRICS:{json.dumps(last_sent_lyrics)}")
-                        else: # Lyrics exist but no line is active yet (e.g., intro)
-                            if last_sent_lyrics != ["", lines[0]['words'], lines[1]['words'] if len(lines) > 1 else ""]:
-                                last_sent_lyrics = ["", lines[0]['words'], lines[1]['words'] if len(lines) > 1 else ""]
-                                send_udp(f"LYRICS:{json.dumps(last_sent_lyrics)}")
+                        frame = lyrics_frame(current_lyrics, track['progress_ms'])
+                        if frame != last_sent_lyrics:
+                            last_sent_lyrics = frame
+                            send_udp(f"LYRICS:{json.dumps(frame, ensure_ascii=False)}")
+                elif getattr(spotify_service, 'playback_sample_valid', False):
+                    send_udp('STATE:{"playing":false}')
             
             time.sleep(SPOTIFY_POLL)
             
@@ -2324,7 +2474,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except Exception as e:
+    except Exception:
         import traceback
         with open(os.path.join(SCRIPT_DIR, "crash.log"), "w", encoding="utf-8") as f:
             traceback.print_exc(file=f)

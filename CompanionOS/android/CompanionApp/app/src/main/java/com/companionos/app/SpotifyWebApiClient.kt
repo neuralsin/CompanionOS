@@ -11,6 +11,8 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
+import java.security.SecureRandom
+import java.security.MessageDigest
 
 data class SpotifyPlaybackInfo(
     val trackId: String,
@@ -25,13 +27,13 @@ data class SpotifyPlaybackInfo(
 
 object SpotifyWebApiClient {
 
-    var clientId = "450a2e6ab1ed4ce4ac9738f654814240"
-    var clientSecret = "78200536e7804c8ca427102a6ba2138f"
+    var clientId = ""
+    var clientSecret = ""
     const val REDIRECT_URI = "companionos://callback"
     const val SCOPES = "user-read-playback-state user-modify-playback-state user-read-currently-playing"
 
-    const val DEFAULT_REFRESH_TOKEN = "AQCDzzl6TnG-FpdJKuWddUHoX_wTx2jA1mMHJR3okGYjllb_DnifVtaplec0Do9EJWTZippa7R5DCejRbR_eJgexej9BEmsFbCdE3o6zwgXCs4tXHOth3eOT6NksbNi1lSs"
-    const val DEFAULT_ACCESS_TOKEN = "BQCNa_jBDQmPUroD1WVTgAyt9Eq60wJ7tXGqgElBSDFZywXo11mKCBQ7NcpsK8QT4jIJzlQNPjMi8Lgno601-FU_9bD1o6KMa9REzSVxqqXtLMSoiYNKju3jBPH-5vg-sC8vhTakaClrVipZjpzT6d0cw4mGvqid7LFqOH_rfJwL-2K7f99CQvYL5dKUhcM85adLeBXLdCjhng8A27oI0PyC0VsUVa2x9LEKRkZguylaiOKqqwGFq4tG-oU2gQxmrU7RJOhNHVJh8TdkDF2tZUCwxVdQ7w"
+    const val DEFAULT_REFRESH_TOKEN = ""
+    const val DEFAULT_ACCESS_TOKEN = ""
 
     private var userAccessToken: String? = null
     private var userRefreshToken: String? = null
@@ -48,7 +50,10 @@ object SpotifyWebApiClient {
     private var prefs: SharedPreferences? = null
 
     fun init(context: Context) {
-        prefs = context.getSharedPreferences("spotify_auth_prefs", Context.MODE_PRIVATE)
+        prefs = SecurePrefs.open(context, "spotify_auth_prefs")
+        val config = SecurePrefs.open(context, "CompanionPrefs")
+        clientId = config.getString("spotify_id", "") ?: ""
+        clientSecret = config.getString("spotify_secret", "") ?: ""
         userAccessToken = prefs?.getString("access_token", DEFAULT_ACCESS_TOKEN) ?: DEFAULT_ACCESS_TOKEN
         userRefreshToken = prefs?.getString("refresh_token", DEFAULT_REFRESH_TOKEN) ?: DEFAULT_REFRESH_TOKEN
         userTokenExpiry = prefs?.getLong("token_expiry", 0L) ?: 0L
@@ -61,32 +66,43 @@ object SpotifyWebApiClient {
     fun getRefreshToken(): String? = userRefreshToken
     fun getCurrentAccessToken(): String? = userAccessToken
 
+    @android.annotation.SuppressLint("ApplySharedPref") // Persist verifier before leaving the process for the browser.
     fun getAuthorizationUrl(): String {
+        require(clientId.isNotBlank()) { "Save a Spotify client ID first" }
+        fun randomKey(): String = Base64.encodeToString(ByteArray(48).also { SecureRandom().nextBytes(it) }, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+        val verifier = randomKey()
+        val state = randomKey()
+        prefs?.edit()?.putString("oauth_verifier", verifier)?.putString("oauth_state", state)
+            ?.putLong("oauth_started", System.currentTimeMillis())?.commit()
+        val challenge = Base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII)), Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
         val encodedScopes = URLEncoder.encode(SCOPES, "UTF-8")
         val encodedRedirect = URLEncoder.encode(REDIRECT_URI, "UTF-8")
-        return "https://accounts.spotify.com/authorize?client_id=$clientId&response_type=code&redirect_uri=$encodedRedirect&scope=$encodedScopes"
+        return "https://accounts.spotify.com/authorize?client_id=$clientId&response_type=code&redirect_uri=$encodedRedirect&scope=$encodedScopes&state=$state&code_challenge_method=S256&code_challenge=$challenge"
     }
 
-    suspend fun exchangeCodeForToken(code: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun exchangeCodeForToken(code: String, state: String?): Boolean = withContext(Dispatchers.IO) {
+        val expected = prefs?.getString("oauth_state", null)
+        val verifier = prefs?.getString("oauth_verifier", null)
+        val started = prefs?.getLong("oauth_started", 0) ?: 0
+        if (state.isNullOrEmpty() || expected == null || verifier == null ||
+            !MessageDigest.isEqual(state.toByteArray(), expected.toByteArray()) ||
+            System.currentTimeMillis() - started !in 0..600000) return@withContext false
+        prefs?.edit()?.remove("oauth_state")?.remove("oauth_verifier")?.apply()
         try {
-            val authHeader = "Basic " + Base64.encodeToString(
-                "$clientId:$clientSecret".toByteArray(Charsets.UTF_8),
-                Base64.NO_WRAP
-            )
-
             val body = FormBody.Builder()
                 .add("grant_type", "authorization_code")
                 .add("code", code)
                 .add("redirect_uri", REDIRECT_URI)
+                .add("client_id", clientId)
+                .add("code_verifier", verifier)
                 .build()
 
             val request = Request.Builder()
                 .url("https://accounts.spotify.com/api/token")
-                .header("Authorization", authHeader)
                 .post(body)
                 .build()
 
-            val response = httpClient.newCall(request).execute()
+            httpClient.newCall(request).execute().use { response ->
             if (response.isSuccessful) {
                 val jsonStr = response.body?.string() ?: ""
                 val obj = JSONObject(jsonStr)
@@ -95,6 +111,9 @@ object SpotifyWebApiClient {
                 val expiresIn = obj.optLong("expires_in", 3600L)
 
                 if (access.isNotEmpty()) {
+                    // Public-client PKCE refresh tokens must not use a client secret.
+                    clientSecret = ""
+                    prefs?.edit()?.putBoolean("pkce", true)?.apply()
                     userAccessToken = access
                     userRefreshToken = refresh
                     userTokenExpiry = System.currentTimeMillis() + (expiresIn * 1000L)
@@ -107,6 +126,7 @@ object SpotifyWebApiClient {
 
                     return@withContext true
                 }
+            }
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -125,15 +145,16 @@ object SpotifyWebApiClient {
             val body = FormBody.Builder()
                 .add("grant_type", "refresh_token")
                 .add("refresh_token", refresh)
+                .add("client_id", clientId)
                 .build()
 
             val request = Request.Builder()
                 .url("https://accounts.spotify.com/api/token")
-                .header("Authorization", authHeader)
+                .apply { if (clientSecret.isNotEmpty() && prefs?.getBoolean("pkce", false) != true) header("Authorization", authHeader) }
                 .post(body)
                 .build()
 
-            val response = httpClient.newCall(request).execute()
+            httpClient.newCall(request).execute().use { response ->
             if (response.isSuccessful) {
                 val jsonStr = response.body?.string() ?: ""
                 val obj = JSONObject(jsonStr)
@@ -155,6 +176,7 @@ object SpotifyWebApiClient {
                     return@withContext access
                 }
             }
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -166,6 +188,33 @@ object SpotifyWebApiClient {
             return userAccessToken
         }
         return refreshUserToken()
+    }
+
+    fun configure(context: Context, id: String, secret: String, refresh: String, access: String) {
+        val changedClient = id != clientId
+        val edit = SecurePrefs.open(context, "CompanionPrefs").edit().putString("spotify_id", id)
+        if (secret.isNotBlank() || changedClient) edit.putString("spotify_secret", secret)
+        edit.apply()
+        clientId = id
+        if (secret.isNotBlank() || changedClient) clientSecret = secret
+        if (changedClient || refresh.isNotBlank()) {
+            userRefreshToken = refresh
+            userAccessToken = access
+            userTokenExpiry = 0
+            prefs?.edit()?.putString("refresh_token", refresh)?.putString("access_token", access)
+                ?.putLong("token_expiry", 0)?.putBoolean("pkce", clientSecret.isEmpty())?.apply()
+        } else if (access.isNotBlank()) {
+            userAccessToken = access
+            userTokenExpiry = 0
+            prefs?.edit()?.putString("access_token", access)?.putLong("token_expiry", 0)?.apply()
+        }
+    }
+
+    fun provisioningPayload(): JSONObject = JSONObject().apply {
+        put("access", userAccessToken ?: "")
+        put("refresh", userRefreshToken ?: "")
+        put("client_id", clientId)
+        put("client_secret", if (prefs?.getBoolean("pkce", false) == true) "" else clientSecret)
     }
 
     suspend fun getClientCredentialsToken(): String? = withContext(Dispatchers.IO) {
@@ -189,7 +238,7 @@ object SpotifyWebApiClient {
                 .post(body)
                 .build()
 
-            val response = httpClient.newCall(request).execute()
+            httpClient.newCall(request).execute().use { response ->
             if (response.isSuccessful) {
                 val jsonStr = response.body?.string() ?: ""
                 val obj = JSONObject(jsonStr)
@@ -200,6 +249,7 @@ object SpotifyWebApiClient {
                     clientCredsExpiry = System.currentTimeMillis() + (expiresIn * 1000L)
                     return@withContext token
                 }
+            }
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -215,7 +265,7 @@ object SpotifyWebApiClient {
                 .header("Authorization", "Bearer $token")
                 .build()
 
-            val response = httpClient.newCall(request).execute()
+            httpClient.newCall(request).execute().use { response ->
             if (response.code == 200) {
                 val bodyStr = response.body?.string() ?: return@withContext null
                 val root = JSONObject(bodyStr)
@@ -236,7 +286,7 @@ object SpotifyWebApiClient {
                 val album = albumObj?.optString("name", "") ?: ""
                 val images = albumObj?.optJSONArray("images")
                 val artUrl = if (images != null && images.length() > 0) {
-                    images.getJSONObject(0).optString("url", null)
+                    images.getJSONObject(0).optString("url", "").takeIf { it.isNotEmpty() }
                 } else null
 
                 return@withContext SpotifyPlaybackInfo(
@@ -249,6 +299,7 @@ object SpotifyWebApiClient {
                     isPlaying = isPlaying,
                     albumArtUrl = artUrl
                 )
+            }
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -276,8 +327,9 @@ object SpotifyWebApiClient {
             val reqBuilder = Request.Builder().url(url).header("Authorization", "Bearer $token")
             val req = if (method == "PUT") reqBuilder.put(emptyBody).build() else reqBuilder.post(emptyBody).build()
 
-            val response = httpClient.newCall(req).execute()
+            httpClient.newCall(req).execute().use { response ->
             return@withContext response.isSuccessful || response.code in 200..204
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -300,7 +352,7 @@ object SpotifyWebApiClient {
                 .header("Authorization", "Bearer $token")
                 .build()
 
-            val response = httpClient.newCall(request).execute()
+            httpClient.newCall(request).execute().use { response ->
             if (response.isSuccessful) {
                 val jsonStr = response.body?.string() ?: ""
                 val obj = JSONObject(jsonStr)
@@ -314,6 +366,7 @@ object SpotifyWebApiClient {
                         return@withContext images.getJSONObject(0).optString("url")
                     }
                 }
+            }
             }
         } catch (e: Exception) {
             e.printStackTrace()

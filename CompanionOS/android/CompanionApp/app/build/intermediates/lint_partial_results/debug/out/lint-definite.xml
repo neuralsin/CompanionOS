@@ -1,0 +1,334 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<incidents format="6" by="lint 8.2.2" type="incidents">
+
+    <incident
+        id="InsecureBaseConfiguration"
+        severity="warning"
+        message="Insecure Base Configuration">
+        <fix-replace
+            description="Replace with false"
+            replacement="false">
+            <range
+                file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/xml/network_security_config.xml"
+                startOffset="672"
+                endOffset="676"/>
+        </fix-replace>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/xml/network_security_config.xml"
+            line="12"
+            column="45"
+            startOffset="672"
+            endLine="12"
+            endColumn="49"
+            endOffset="676"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; SDK_INT is always >= 26">
+        <fix-data conditional="true"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/companionos/app/BootReceiver.kt"
+            line="13"
+            column="17"
+            startOffset="470"
+            endLine="13"
+            endColumn="63"
+            endOffset="516"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; SDK_INT is always >= 26">
+        <fix-data conditional="true"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/companionos/app/CompanionNotificationListenerService.kt"
+            line="477"
+            column="40"
+            startOffset="20559"
+            endLine="477"
+            endColumn="86"
+            endOffset="20605"/>
+    </incident>
+
+    <incident
+        id="CommitPrefEdits"
+        severity="warning"
+        message="`SharedPreferences.edit()` without a corresponding `commit()` or `apply()` call">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/companionos/app/SecurePrefs.kt"
+            line="54"
+            column="22"
+            startOffset="2643"
+            endLine="54"
+            endColumn="32"
+            endOffset="2653"/>
+    </incident>
+
+    <incident
+        id="ApplySharedPref"
+        severity="warning"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background">
+        <fix-replace
+            description="Replace commit() with apply()"
+            oldPattern="(commit)\s*\("
+            replacement="apply"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/companionos/app/SpotifyWebApiClient.kt"
+            line="75"
+            column="69"
+            startOffset="2741"
+            endLine="75"
+            endColumn="77"
+            endOffset="2749"/>
+    </incident>
+
+    <incident
+        id="OldTargetApi"
+        severity="warning"
+        message="Not targeting the latest versions of Android; compatibility modes apply. Consider testing and updating this version. Consult the android.os.Build.VERSION_CODES javadoc for details.">
+        <fix-replace
+            description="Update targetSdkVersion to 36"
+            oldString="35"
+            replacement="36"/>
+        <location
+            file="${:app*projectDir}/build.gradle.kts"
+            line="13"
+            column="9"
+            startOffset="249"
+            endLine="13"
+            endColumn="23"
+            endOffset="263"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.core:core-ktx than 1.12.0 is available: 1.19.1">
+        <fix-replace
+            description="Change to 1.19.1"
+            family="Update versions"
+            oldString="1.12.0"
+            replacement="1.19.1"/>
+        <location
+            file="${:app*projectDir}/build.gradle.kts"
+            line="60"
+            column="21"
+            startOffset="1525"
+            endLine="60"
+            endColumn="50"
+            endOffset="1554"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.appcompat:appcompat than 1.6.1 is available: 1.8.0">
+        <fix-replace
+            description="Change to 1.8.0"
+            family="Update versions"
+            oldString="1.6.1"
+            replacement="1.8.0"/>
+        <location
+            file="${:app*projectDir}/build.gradle.kts"
+            line="61"
+            column="21"
+            startOffset="1577"
+            endLine="61"
+            endColumn="55"
+            endOffset="1611"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of com.google.android.material:material than 1.11.0 is available: 1.14.0">
+        <fix-replace
+            description="Change to 1.14.0"
+            family="Update versions"
+            oldString="1.11.0"
+            replacement="1.14.0"/>
+        <location
+            file="${:app*projectDir}/build.gradle.kts"
+            line="62"
+            column="21"
+            startOffset="1634"
+            endLine="62"
+            endColumn="64"
+            endOffset="1677"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.constraintlayout:constraintlayout than 2.1.4 is available: 2.2.2">
+        <fix-replace
+            description="Change to 2.2.2"
+            family="Update versions"
+            oldString="2.1.4"
+            replacement="2.2.2"/>
+        <location
+            file="${:app*projectDir}/build.gradle.kts"
+            line="63"
+            column="21"
+            startOffset="1700"
+            endLine="63"
+            endColumn="69"
+            endOffset="1748"/>
+    </incident>
+
+    <incident
+        id="Overdraw"
+        severity="warning"
+        message="Possible overdraw: Root element paints background `#101112` with a theme that also paints a background (inferred theme is `@style/Theme_CompanionOS`)">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/activity_main.xml"
+            line="5"
+            column="5"
+            startOffset="196"
+            endLine="5"
+            endColumn="33"
+            endOffset="224"/>
+    </incident>
+
+    <incident
+        id="IconLocation"
+        severity="warning"
+        message="Found bitmap drawable `res/drawable/app_cover.png` in densityless folder">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/drawable/app_cover.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-hdpi/ic_launcher.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-hdpi/ic_launcher_round.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-mdpi/ic_launcher.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-mdpi/ic_launcher_round.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-xhdpi/ic_launcher.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-xhdpi/ic_launcher_round.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-xxhdpi/ic_launcher.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-xxhdpi/ic_launcher_round.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-xxxhdpi/ic_launcher.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-xxxhdpi/ic_launcher_round.png"/>
+    </incident>
+
+    <incident
+        id="IconDuplicates"
+        severity="warning"
+        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-xhdpi/ic_launcher_round.png"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-xhdpi/ic_launcher.png"/>
+    </incident>
+
+    <incident
+        id="IconDuplicates"
+        severity="warning"
+        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-hdpi/ic_launcher_round.png"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-hdpi/ic_launcher.png"/>
+    </incident>
+
+    <incident
+        id="IconDuplicates"
+        severity="warning"
+        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-mdpi/ic_launcher_round.png"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-mdpi/ic_launcher.png"/>
+    </incident>
+
+    <incident
+        id="IconDuplicates"
+        severity="warning"
+        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-xxxhdpi/ic_launcher_round.png"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-xxxhdpi/ic_launcher.png"/>
+    </incident>
+
+    <incident
+        id="IconDuplicates"
+        severity="warning"
+        message="The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-xxhdpi/ic_launcher_round.png"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/mipmap-xxhdpi/ic_launcher.png"/>
+    </incident>
+
+</incidents>

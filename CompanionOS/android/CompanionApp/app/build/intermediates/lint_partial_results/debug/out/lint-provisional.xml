@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<incidents format="6" by="lint 8.2.2" type="conditional_incidents">
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; SDK_INT is always >= 31">
+        <fix-replace
+            description="Delete tools:targetApi"
+            replacement="">
+            <range
+                file="${:app*debug*MAIN*sourceProvider*0*manifest*0}"
+                startOffset="950"
+                endOffset="970"/>
+        </fix-replace>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*manifest*0}"
+            line="20"
+            column="9"
+            startOffset="950"
+            endLine="20"
+            endColumn="29"
+            endOffset="970"/>
+        <map>
+            <condition minGE="ffffffffc0000000"/>
+        </map>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; SDK_INT is always >= 31">
+        <fix-replace
+            description="Delete tools:targetApi"
+            replacement="">
+            <range
+                file="${:app*debug*MAIN*sourceProvider*0*manifest*0}"
+                startOffset="1115"
+                endOffset="1135"/>
+        </fix-replace>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*manifest*0}"
+            line="24"
+            column="9"
+            startOffset="1115"
+            endLine="24"
+            endColumn="29"
+            endOffset="1135"/>
+        <map>
+            <condition minGE="ffffffffc0000000"/>
+        </map>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; SDK_INT is always >= 35">
+        <fix-replace
+            description="Delete tools:targetApi"
+            replacement="">
+            <range
+                file="${:app*debug*MAIN*sourceProvider*0*manifest*0}"
+                startOffset="2539"
+                endOffset="2559"/>
+        </fix-replace>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*manifest*0}"
+            line="53"
+            column="9"
+            startOffset="2539"
+            endLine="53"
+            endColumn="29"
+            endOffset="2559"/>
+        <map>
+            <condition minGE="fffffffc00000000"/>
+        </map>
+    </incident>
+
+    <incident
+        id="UnspecifiedRegisterReceiverFlag"
+        severity="error"
+        message="`spotifyBroadcastReceiver` \&#xA;is missing `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED` flag for unprotected \&#xA;broadcasts registered for com.spotify.music.playbackstatechanged, com.spotify.music.metadatachanged, com.spotify.music.queuechanged">
+        <fix-alternatives>
+            <fix-replace
+                description="Add RECEIVER_NOT_EXPORTED (preferred)"
+                oldString="_lint_insert_end_"
+                replacement=", android.content.Context.RECEIVER_NOT_EXPORTED"
+                shortenNames="true"
+                reformat="value">
+                <range
+                    file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/companionos/app/CompanionNotificationListenerService.kt"
+                    startOffset="4155"
+                    endOffset="4161"/>
+            </fix-replace>
+            <fix-replace
+                description="Add RECEIVER_EXPORTED"
+                oldString="_lint_insert_end_"
+                replacement=", android.content.Context.RECEIVER_EXPORTED"
+                shortenNames="true"
+                reformat="value">
+                <range
+                    file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/companionos/app/CompanionNotificationListenerService.kt"
+                    startOffset="4155"
+                    endOffset="4161"/>
+            </fix-replace>
+        </fix-alternatives>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/companionos/app/CompanionNotificationListenerService.kt"
+            line="108"
+            column="17"
+            startOffset="4112"
+            endLine="108"
+            endColumn="67"
+            endOffset="4162"/>
+        <map>
+            <entry
+                name="hasUnprotected"
+                boolean="true"/>
+        </map>
+    </incident>
+
+</incidents>
