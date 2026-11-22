@@ -194,15 +194,8 @@ class LocalTaskList:
 
     def _ensure_file(self):
         if not os.path.exists(self.tasks_file):
-            sample = [
-                {"title": "Morning Standup", "time": "09:00 - 09:30"},
-                {"title": "Deep Work Block", "time": "10:00 - 12:00"},
-                {"title": "Lunch Break", "time": "12:30 - 13:30"},
-                {"title": "Code Review", "time": "14:00 - 15:00"},
-                {"title": "Planning", "time": "16:00 - 17:00"}
-            ]
             with open(self.tasks_file, 'w') as f:
-                json.dump(sample, f, indent=2)
+                json.dump([], f)
 
     def get_productivity_state(self):
         """Parse local task list for ESP display."""
@@ -236,8 +229,13 @@ class LocalTaskList:
         upcoming = []
 
         for task in tasks:
+            if not isinstance(task, dict) or task.get('done'):
+                continue
             time_str = task.get('time', '')
-            title = task.get('title', '')[:31]
+            title = task.get('title', '')
+            if not isinstance(time_str, str) or not isinstance(title, str) or not title.strip():
+                continue
+            title = title[:31]
 
             # Parse "HH:MM - HH:MM" format
             if ' - ' in time_str:
@@ -245,8 +243,12 @@ class LocalTaskList:
                     start_s, end_s = time_str.split(' - ')
                     sh, sm = map(int, start_s.strip().split(':'))
                     eh, em = map(int, end_s.strip().split(':'))
+                    if not (0 <= sh < 24 and 0 <= eh < 24 and 0 <= sm < 60 and 0 <= em < 60):
+                        continue
                     start_mins = sh * 60 + sm
                     end_mins = eh * 60 + em
+                    if end_mins <= start_mins:
+                        continue
 
                     if start_mins <= now_minutes < end_mins:
                         current_task = {
@@ -258,7 +260,7 @@ class LocalTaskList:
                     elif start_mins > now_minutes:
                         upcoming.append({
                             'title': title,
-                            'time': start_s.strip()
+                            'time': start_s.strip(), 'minutes': start_mins
                         })
                 except ValueError:
                     pass
@@ -266,9 +268,11 @@ class LocalTaskList:
                 # Single time entry
                 try:
                     th, tm = map(int, time_str.strip().split(':'))
+                    if not (0 <= th < 24 and 0 <= tm < 60):
+                        continue
                     t_mins = th * 60 + tm
                     if t_mins > now_minutes:
-                        upcoming.append({'title': title, 'time': time_str})
+                        upcoming.append({'title': title, 'time': time_str, 'minutes': t_mins})
                 except ValueError:
                     pass
 
@@ -281,6 +285,7 @@ class LocalTaskList:
             if total > 0:
                 result['progress'] = min(100, int(elapsed / total * 100))
 
+        upcoming.sort(key=lambda task: task['minutes'])
         if len(upcoming) > 0:
             result['next1'] = upcoming[0]['title']
             result['next1_time'] = upcoming[0]['time']

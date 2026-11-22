@@ -4,8 +4,132 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include "lyrics_state.h"
 
 namespace standalone_detail {
+
+// Bounded LRC reader. Metadata tags are ignored, repeated timestamps and seeks
+// are supported, and empty timed lines intentionally clear the previous verse.
+inline bool lyricTime(const char* p, const char* end, int64_t& ms, const char*& after,
+                      char open = '[', char close = ']') {
+  if (p == end || *p++ != open) return false;
+  uint32_t minute = 0, second = 0, fraction = 0, scale = 100;
+  unsigned digits = 0;
+  while (p < end && *p >= '0' && *p <= '9' && digits < 3) {
+    minute = minute * 10 + unsigned(*p++ - '0'); ++digits;
+  }
+  if (!digits || p == end || *p++ != ':') return false;
+  if (end - p < 2 || p[0] < '0' || p[0] > '5' || p[1] < '0' || p[1] > '9') return false;
+  second = unsigned(p[0] - '0') * 10 + unsigned(p[1] - '0'); p += 2;
+  if (p < end && *p == '.') {
+    ++p; unsigned count = 0;
+    while (p < end && *p >= '0' && *p <= '9') {
+      if (scale) { fraction += unsigned(*p - '0') * scale; scale /= 10; }
+      ++p; ++count;
+    }
+    if (!count) return false;
+  }
+  if (p == end || *p++ != close) return false;
+  ms = int64_t(minute) * 60000 + second * 1000 + fraction; after = p; return true;
+}
+template <size_t N> inline void lyricCopy(char (&out)[N], const char* begin, const char* end) {
+  while (begin < end && (*begin == ' ' || *begin == '\t')) ++begin;
+  while (end > begin && (end[-1] == '\r' || end[-1] == ' ' || end[-1] == '\t')) --end;
+  size_t size = size_t(end - begin);
+  if (size >= N) {
+    size = N - 1;
+    while (size && (uint8_t(begin[size]) & 0xc0) == 0x80) --size;
+  }
+  memcpy(out, begin, size); out[size] = 0;
+}
+// Enhanced LRC can carry real per-word timestamps. Ordinary LRC stays line-timed.
+template <size_t N> inline void lyricWords(char (&out)[N], const char* begin, const char* end,
+                                           int64_t at, companion_lyrics::Timing* timing) {
+  size_t used = 0;
+  int word = -1;
+  bool space = true, timed = false;
+  int64_t stamp = -1;
+  for (const char* p = begin; p < end;) {
+    const char* after = p;
+    int64_t parsed;
+    if (lyricTime(p, end, parsed, after, '<', '>')) {
+      stamp = parsed; timed = true; p = after;
+      continue;
+    }
+    bool blank = *p == ' ' || *p == '\t' || *p == '\r';
+    if (!blank && space) {
+      ++word;
+      if (timing && timed && stamp <= at) timing->word = word;
+    }
+    space = blank;
+    if (used + 1 < N) out[used++] = *p;
+    ++p;
+  }
+  // Remove a truncated UTF-8 tail, then trailing whitespace.
+  if (used && used == N - 1) {
+    size_t lead = used - 1;
+    while (lead && (uint8_t(out[lead]) & 0xc0) == 0x80) --lead;
+    uint8_t first = uint8_t(out[lead]);
+    size_t bytes = first >= 0xf0 ? 4 : first >= 0xe0 ? 3 : first >= 0xc0 ? 2 : 1;
+    if (used - lead < bytes) used = lead;
+  }
+  while (used && (out[used - 1] == ' ' || out[used - 1] == '\t' || out[used - 1] == '\r')) --used;
+  out[used] = 0;
+  if (timing) timing->wordTimed = timed;
+}
+
+template <size_t N> inline bool lyricLines(const char* text, bool synced, uint32_t at,
+                                          char (&current)[N], char (&next)[N],
+                                          companion_lyrics::Timing* timing = nullptr) {
+  current[0] = next[0] = 0;
+  if (timing) *timing = companion_lyrics::Timing();
+  if (!text) return false;
+  int64_t offset = 0, best = INT64_MIN, upcoming = INT64_MAX;
+  unsigned plainCount = 0;
+  for (const char* p = text; *p;) {
+    const char* end = strchr(p, '\n'); if (!end) end = p + strlen(p);
+    if (synced && end - p >= 10 && !strncmp(p, "[offset:", 8)) {
+      const char* q = p + 8; bool negative = q < end && *q == '-';
+      if (q < end && (*q == '-' || *q == '+')) ++q;
+      int64_t value = 0; unsigned digits = 0;
+      while (q < end && *q >= '0' && *q <= '9' && digits < 7) { value = value * 10 + (*q++ - '0'); ++digits; }
+      if (digits && q < end && *q == ']') offset = negative ? -value : value;
+    }
+    if (!synced && end > p && *p != '\r') ++plainCount;
+    p = *end ? end + 1 : end;
+  }
+  unsigned plainIndex = 0, selected = plainCount ? (at / 6000) % plainCount : 0;
+  bool found = false;
+  for (const char* p = text; *p;) {
+    const char* end = strchr(p, '\n'); if (!end) end = p + strlen(p);
+    if (!synced) {
+      if (end > p && *p != '\r') {
+        if (plainIndex == selected) { lyricCopy(current, p, end); found = true; }
+        else if (plainIndex == selected + 1) lyricCopy(next, p, end);
+        ++plainIndex;
+      }
+    } else {
+      const char* content = p; const char* after = p; int64_t stamp;
+      while (lyricTime(content, end, stamp, after)) content = after;
+      const char* tag = p;
+      while (lyricTime(tag, end, stamp, after)) {
+        stamp -= offset;
+        if (stamp <= int64_t(at) && stamp >= best) {
+          best = stamp;
+          if (timing) { timing->word = -1; timing->start = stamp; }
+          lyricWords(current, content, end, int64_t(at) + offset, timing); found = true;
+        } else if (stamp > int64_t(at) && stamp < upcoming) {
+          upcoming = stamp; lyricWords(next, content, end, 0, nullptr);
+          if (timing) timing->next = stamp;
+        }
+        tag = after;
+      }
+    }
+    p = *end ? end + 1 : end;
+  }
+  // Empty timed breaks and clipped previews are still valid synced lyrics.
+  return found || upcoming != INT64_MAX;
+}
 
 struct Gate {
   uint32_t since = 0;
@@ -64,6 +188,13 @@ enum Failure : int {
   UnsafeRedirect = -1005, InvalidJson = -1006, InvalidJpeg = -1007,
   NotConfigured = -1008, TlsFailure = -1009, AuthInvalidClient = -1010, AuthSignInRequired = -1011
 };
+inline bool tlsAllocationFailed(int error) {
+  // mbedTLS errors can combine a high-level stage and a low-level cause.
+  unsigned code = error < 0 ? unsigned(-int64_t(error)) : unsigned(error);
+  unsigned stage = code & 0xff80, cause = code & 0x7f;
+  return stage == 0x7f00 || stage == 0x2880 || stage == 0x3f80 ||
+         stage == 0x4d80 || cause == 0x10 || cause == 0x6a;
+}
 inline const char* failureName(int status) {
   switch (status) {
     case NoMemory: return "Out of memory";

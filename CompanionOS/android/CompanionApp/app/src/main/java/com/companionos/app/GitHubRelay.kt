@@ -15,7 +15,7 @@ object GitHubRelay {
         .build()
 
     var githubUsername: String = "neuralsin"
-    var githubToken: String = "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"
+    var githubToken: String = ""
 
     suspend fun fetchAndSendGitHubStats() = withContext(Dispatchers.IO) {
         try {

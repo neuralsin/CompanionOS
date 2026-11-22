@@ -1,0 +1,8 @@
+Building eyes-thought-160x128-esp8266
+PASS: lifetime, duplicate pushes, pagination, invalidation, compositing, rollover, allocation fallback, geometry, transitions, blink and shake (160x128, ESP8266 ADC)
+Building eyes-thought-160x128-esp32
+PASS: lifetime, duplicate pushes, pagination, invalidation, compositing, rollover, allocation fallback, geometry, transitions, blink and shake (160x128, ESP32 ADC)
+Building eyes-thought-320x240-esp8266
+PASS: lifetime, duplicate pushes, pagination, invalidation, compositing, rollover, allocation fallback, geometry, transitions, blink and shake (320x240, ESP8266 ADC)
+Building eyes-thought-320x240-esp32
+PASS: lifetime, duplicate pushes, pagination, invalidation, compositing, rollover, allocation fallback, geometry, transitions, blink and shake (320x240, ESP32 ADC)

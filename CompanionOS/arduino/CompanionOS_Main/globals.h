@@ -59,6 +59,7 @@ TFT_eSPI tft = TFT_eSPI();
 #endif
 WiFiUDP udp;
 WiFiUDP udpPcDash;
+bool pcDashListening = false;
 
 // ═══════════════════════════════════════════════════════════
 // V7 PAGE ARCHITECTURE — 13 pages (+ Dr. Hack on ESP32)
@@ -68,25 +69,31 @@ WiFiUDP udpPcDash;
 enum AppState {
   STATE_EYES,            // 0
   STATE_SPOTIFY,         // 1
-  STATE_POMODORO,        // 2
-  STATE_WEATHER,         // 3
-  STATE_NOTIFICATIONS,   // 4
-  STATE_NOTES,           // 5
-  STATE_STOCKS,          // 6
-  STATE_GAMING,          // 7
-  STATE_SOCIAL,          // 8
-  STATE_PRODUCTIVITY,    // 9
-  STATE_NETWORK,         // 10
-  STATE_SETTINGS,        // 11
-  STATE_PC_DASH,         // 12 — Wireless PC Dashboard (ported from innocircuitslab)
-  STATE_RUVIEW,          // 13 — RuView CSI Presence Detection
-  STATE_CLOCK_DASHBOARD, // 14 — Screensaver / Clock Dashboard Tile
-  STATE_RETRO_WATCH,     // 15 — Retro Watch Chronograph Face Tile
-  STATE_DR_HACK,         // 16 — ESP32 only (#ifdef ESP32 guard in page_dr_hack.h)
-  STATE_COUNT            // = 17 pages
+  STATE_LYRICS,          // 2 - dedicated playback focus
+  STATE_POMODORO,        // 3
+  STATE_WEATHER,         // 4
+  STATE_NOTIFICATIONS,   // 5
+  STATE_NOTES,           // 6
+  STATE_STOCKS,          // 7
+  STATE_GAMING,          // 8
+  STATE_SOCIAL,          // 9
+  STATE_PRODUCTIVITY,    // 10
+  STATE_NETWORK,         // 11
+  STATE_SETTINGS,        // 12
+  STATE_PC_DASH,         // 13
+  STATE_RUVIEW,          // 14
+  STATE_CLOCK_DASHBOARD, // 15
+  STATE_RETRO_WATCH,     // 16
+  STATE_DR_HACK,         // 17 - ESP32 only
+  STATE_CALENDAR,        // 18
+  STATE_TIMETABLE,       // 19
+  STATE_COUNT            // 20 pages
 };
 
 extern AppState currentState;
+#ifdef ESP32
+bool switchMemoryWorkspace(int targetPage);
+#endif
 
 // Pet Emotion State
 enum Emotion {
@@ -103,10 +110,13 @@ enum Emotion {
 
 extern Emotion currentEmotion;
 extern unsigned long lastManualEmotionTime;
+bool manualEmotionOverride = false;
+void wakeForManualAppearance();
+void applyAmbientEmotion(Emotion emotion);
 
 // ═══════════════════════════════════════════════════════════
 // DR. HACK SUB-STATE MACHINE (ESP32 only)
-// 16 tools across 2 pages of 8 tools each
+// 48 menu entries across 6 pages of 8 entries each.
 // ═══════════════════════════════════════════════════════════
 #ifdef ESP32
 
@@ -136,6 +146,12 @@ enum DrHackSubState {
   DH_HW_DIAG,          DH_INPUT_MONITOR,     DH_ABOUT,             DH_RFCLOWN_JAM
 };
 
+inline bool dhUsesPageInput(DrHackSubState state) {
+  return state == DH_WIFI_SCANNER || state == DH_BT_SCANNER ||
+         state == DH_INFO || state == DH_HW_DIAG || state == DH_ABOUT ||
+         state == DH_WIFI_CONFIG || state == DH_BLE_INSPECTOR;
+}
+
 extern DrHackSubState dhCurrentState;
 extern int dhCursorIndex;
 extern int dhMenuPage;
@@ -147,7 +163,7 @@ extern int dhMenuPage;
 
 #define THOUGHT_MIN_INTERVAL_MS  (5UL * 60UL * 1000UL)   // min 5 min between thoughts
 #define THOUGHT_MAX_INTERVAL_MS  (20UL * 60UL * 1000UL)  // max 20 min (random in range)
-#define THOUGHT_DISPLAY_MS       (5UL * 60UL * 1000UL)   // visible for 5 minutes
+#define THOUGHT_DISPLAY_MS       (10UL * 60UL * 1000UL)  // visible for 10 minutes
 #define THOUGHT_FADE_STEPS       20                       // fade in/out over 20 frames
 
 extern bool thoughtSchedulerActive;
@@ -177,7 +193,7 @@ char overrideThought[80] = "";  // PC-pushed thought (THOUGHT: command)
 
 // LDR sensor reading
 int ldrValue = 512;  // Default mid-brightness
-bool ldrEnabled = true;
+bool ldrEnabled = false; // No LDR fitted; never sample a floating input by default.
 
 // System Time
 int displayHour = 0;

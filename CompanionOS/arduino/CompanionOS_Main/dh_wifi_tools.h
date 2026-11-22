@@ -20,8 +20,6 @@
 
 static void dhWifiPrepare() {
   WiFi.mode(WIFI_STA);
-  WiFi.disconnect(false);
-  delay(80);
 }
 
 static uint16_t dhRssiColor(int rssi) {
@@ -35,6 +33,22 @@ static uint8_t dhRssiPct(int rssi) {
   if (rssi <= -100) return 0;
   if (rssi >= -35)  return 100;
   return (uint8_t)(((rssi + 100) * 100) / 65);
+}
+
+static bool dhWifiWaitSelect(DrHackSubState owner) {
+  bool armed = digitalRead(BTN_SELECT) != BTN_ACTIVE_LEVEL;
+  const uint32_t started = millis();
+  while (currentState == STATE_DR_HACK && dhCurrentState == owner &&
+         uint32_t(millis() - started) < DH_BTN_TIMEOUT_MS) {
+    extern void handleNetwork(); handleNetwork();
+    if (currentState != STATE_DR_HACK || dhCurrentState != owner) return false;
+    if (virtualSelectPressed) { virtualSelectPressed = false; return true; }
+    bool down = digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL;
+    if (!down) armed = true;
+    if (armed && down) return true;
+    delay(10); yield();
+  }
+  return false;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -61,7 +75,7 @@ static int dhChBestRssi[15];
 static int dhChCursor = 1;
 static int dhChScroll = 0;
 
-static void dhChScan() {
+static bool dhChScan() {
   dhChNetCount = 0;
   memset(dhChCounts, 0, sizeof(dhChCounts));
   for (int i = 0; i < 15; i++) dhChBestRssi[i] = -127;
@@ -71,8 +85,12 @@ static void dhChScan() {
   tft.setTextColor(CLR_PRIMARY);
   tft.drawCentreString("Scanning CH 1-14", SCR_CX, SCR_CY - 5, 1);
 
-  int n = WiFi.scanNetworks(false, true);
-  if (n < 0) n = 0;
+  int n = dhPassiveWifiScan();
+  if (n < 0) {
+    if (currentState == STATE_DR_HACK && dhCurrentState == DH_CHANNEL_SCAN)
+      dhDiagnosticStatus("CHANNEL SCAN", dhDiscoveryErrorText(n));
+    return false;
+  }
 
   for (int i = 0; i < n; i++) {
     if (dhChNetCount >= DH_CH_MAX_NETS) break;
@@ -87,6 +105,7 @@ static void dhChScan() {
     if (net.rssi > dhChBestRssi[ch]) dhChBestRssi[ch] = net.rssi;
   }
   WiFi.scanDelete();
+  return true;
 }
 
 static void dhChDrawList() {
@@ -136,13 +155,17 @@ static void dhChDrawList() {
 }
 
 static void dhRunChannelScan() {
-  dhChScan();
+  if (!dhChScan()) {
+    dhWifiWaitSelect(DH_CHANNEL_SCAN);
+    return;
+  }
   dhChCursor = 1; dhChScroll = 0;
   dhChDrawList();
 
   unsigned long holdStart = 0; bool holding = false;
-  while (true) {
+  while (currentState == STATE_DR_HACK && dhCurrentState == DH_CHANNEL_SCAN) {
     extern void handleNetwork(); handleNetwork();
+    if (currentState != STATE_DR_HACK || dhCurrentState != DH_CHANNEL_SCAN) break;
     if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
       dhChCursor = (dhChCursor <= DH_CH_MIN) ? DH_CH_MAX : dhChCursor - 1;
       if (dhChCursor < DH_CH_MIN + dhChScroll) dhChScroll = dhChCursor - DH_CH_MIN;
@@ -189,10 +212,12 @@ static int16_t dhRadarHistory[DH_RADAR_HIST];
 static int dhRadarHistHead = 0;
 static uint32_t dhRadarPass = 0;
 static bool dhRadarSeen = false;
+static int dhRadarScanError = 0;
 
 static bool dhRadarScanTarget() {
   dhWifiPrepare();
-  int n = WiFi.scanNetworks(false, true, false, 170, dhRadarTarget.channel);
+  int n = dhPassiveWifiScan(dhRadarTarget.channel);
+  dhRadarScanError = n < 0 ? n : 0;
   bool found = false;
   int best = -127;
   for (int i = 0; i < n; i++) {
@@ -217,6 +242,8 @@ static bool dhRadarScanTarget() {
 }
 
 static void dhRadarDrawScreen() {
+  if (currentState != STATE_DR_HACK || dhCurrentState != DH_WIFI_RADAR) return;
+  if (dhRadarScanError) { dhDiagnosticStatus("WIFI RADAR", dhDiscoveryErrorText(dhRadarScanError)); return; }
   tft.fillScreen(CLR_BG);
   drawGradientCard(0, 0, SCR_W, SCALE_Y(14), CLR_PRIMARY, darkenColor(CLR_PRIMARY, 50), 0);
   tft.setTextColor(CLR_TEXT_HI);
@@ -235,9 +262,9 @@ static void dhRadarDrawScreen() {
 
   if (dhRadarSeen) {
     int dotR = map(pct, 0, 100, maxR - 2, 4);
-    float angle = ((dhRadarPass * 37) % 360) * 0.0174532925f;
-    int dx = cx + (int)(cosf(angle) * dotR);
-    int dy = cy + (int)(sinf(angle) * dotR);
+    // A single radio measures signal strength, not a bearing.
+    int dx = cx + dotR;
+    int dy = cy;
     tft.fillCircle(dx, dy, 3, col);
   }
   tft.fillCircle(cx, cy, 2, CLR_PRIMARY);
@@ -253,20 +280,19 @@ static void dhRadarDrawScreen() {
   tft.setTextColor(CLR_SUCCESS); tft.drawString(buf, sx, SCALE_Y(44), 1);
 
   const char* trend = !dhRadarSeen ? "SEARCH" :
-    (dhRadarTrend >= 4 ? "CLOSER" : (dhRadarTrend <= -4 ? "FARTHER" : "STABLE"));
+    (dhRadarTrend >= 4 ? "STRONGER" : (dhRadarTrend <= -4 ? "WEAKER" : "STABLE"));
   uint16_t tCol = !dhRadarSeen ? CLR_SECONDARY :
     (dhRadarTrend >= 4 ? CLR_SUCCESS : (dhRadarTrend <= -4 ? CLR_WARNING : CLR_PRIMARY));
   tft.setTextColor(tCol); tft.drawString(trend, sx, SCALE_Y(56), 1);
 
-  // Proximity label
-  const char* prox = !dhRadarSeen ? "LOST" :
-    (pct >= 76 ? "VERY CLOSE" : (pct >= 52 ? "CLOSE" : (pct >= 28 ? "NEAR" : "FAR")));
+  // Signal level is not a calibrated distance estimate.
+  const char* prox = !dhRadarSeen ? "NOT SEEN" :
+    (pct >= 76 ? "HIGH" : (pct >= 52 ? "MEDIUM" : (pct >= 28 ? "LOW" : "VERY LOW")));
   tft.setTextColor(col); tft.drawString(prox, sx, SCALE_Y(68), 1);
 
   // History bar chart
   int histY = SCALE_Y(82), histH = SCALE_Y(20);
   tft.drawRect(SCALE_X(4), histY, SCR_W - SCALE_X(8), histH, CLR_BORDER);
-  int maxPps = max(abs(dhRadarBest), 10);
   for (int i = 0; i < DH_RADAR_HIST; i++) {
     int idx = (dhRadarHistHead + i) % DH_RADAR_HIST;
     if (dhRadarHistory[idx] == 0) continue;
@@ -291,8 +317,9 @@ static void dhRadarTrack() {
   unsigned long lastScan = millis();
   unsigned long holdStart = 0; bool holding = false;
 
-  while (true) {
+  while (currentState == STATE_DR_HACK && dhCurrentState == DH_WIFI_RADAR) {
     extern void handleNetwork(); handleNetwork();
+    if (currentState != STATE_DR_HACK || dhCurrentState != DH_WIFI_RADAR) break;
     if (millis() - lastScan > 950) {
       dhRadarScanTarget();
       dhRadarDrawScreen();
@@ -318,8 +345,13 @@ static void dhRunWifiRadar() {
   tft.drawCentreString("Scanning APs...", SCR_CX, SCR_CY, 1);
 
   dhRadarCount = 0;
-  int n = WiFi.scanNetworks(false, true);
-  if (n < 0) n = 0;
+  int n = dhPassiveWifiScan();
+  if (n < 0) {
+    if (currentState == STATE_DR_HACK && dhCurrentState == DH_WIFI_RADAR) {
+      dhDiagnosticStatus("WIFI RADAR", dhDiscoveryErrorText(n)); dhWifiWaitSelect(DH_WIFI_RADAR);
+    }
+    return;
+  }
   for (int i = 0; i < n; i++) {
     if (dhRadarCount >= DH_RADAR_MAX) break;
     DH_RadarAp& ap = dhRadarAps[dhRadarCount++];
@@ -344,6 +376,7 @@ static void dhRunWifiRadar() {
   // Show AP list for selection
   dhRadarSel = 0; dhRadarScroll = 0;
   auto drawList = [&]() {
+    if (currentState != STATE_DR_HACK || dhCurrentState != DH_WIFI_RADAR) return;
     tft.fillScreen(CLR_BG);
     drawGradientCard(0, 0, SCR_W, SCALE_Y(14), CLR_PRIMARY, darkenColor(CLR_PRIMARY, 50), 0);
     tft.setTextColor(CLR_TEXT_HI);
@@ -360,9 +393,9 @@ static void dhRunWifiRadar() {
       String ssid = dhRadarAps[idx].ssid.length() > 0 ? dhRadarAps[idx].ssid : "<HIDDEN>";
       tft.setTextColor(sel ? CLR_TEXT_HI : CLR_TEXT_MED);
       drawTruncatedText(SCALE_X(4), y + SCALE_Y(2), ssid.c_str(), SCALE_X(90), sel ? CLR_TEXT_HI : CLR_TEXT_MED, 1);
-      char rssi[10]; sprintf(rssi, "%ddBm", dhRadarAps[idx].rssi);
+      char rssi[16]; snprintf(rssi, sizeof(rssi), "%ddBm", constrain(dhRadarAps[idx].rssi, -127, 0));
       tft.setTextColor(dhRssiColor(dhRadarAps[idx].rssi));
-      tft.drawString(rssi, SCR_W - SCALE_X(36), y + SCALE_Y(2), 1);
+      tft.drawRightString(rssi, SCR_W - SCALE_X(4), y + SCALE_Y(2), 1);
     }
     tft.setTextColor(CLR_TEXT_LO);
     tft.drawString("</>:Scrl SEL:Track", SCALE_X(2), SCR_H - SCALE_Y(10), 1);
@@ -370,8 +403,9 @@ static void dhRunWifiRadar() {
 
   drawList();
   unsigned long holdStart = 0; bool holding = false;
-  while (true) {
+  while (currentState == STATE_DR_HACK && dhCurrentState == DH_WIFI_RADAR) {
     extern void handleNetwork(); handleNetwork();
+    if (currentState != STATE_DR_HACK || dhCurrentState != DH_WIFI_RADAR) break;
     if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
       dhRadarSel = (dhRadarSel <= 0) ? dhRadarCount-1 : dhRadarSel-1;
       if (dhRadarSel < dhRadarScroll) dhRadarScroll = dhRadarSel;
@@ -411,11 +445,13 @@ static bool dhDirMeasure(int& rssiOut) {
   dhWifiPrepare();
   int sum = 0, hits = 0;
   for (int s = 0; s < DH_DIR_SAMPLES; s++) {
-    tft.fillRect(SCALE_X(4), SCALE_Y(60), SCR_W - SCALE_X(8), SCALE_Y(14), CLR_BG);
+    if (currentState != STATE_DR_HACK || dhCurrentState != DH_WIFI_DIRECTION) { rssiOut = -127; return false; }
+    tft.fillRect(SCALE_X(4), SCALE_Y(84), SCR_W - SCALE_X(8), SCALE_Y(14), CLR_BG);
     char buf[16]; sprintf(buf, "Sample %d/%d", s+1, DH_DIR_SAMPLES);
-    tft.setTextColor(CLR_TEXT_MED); tft.drawString(buf, SCALE_X(4), SCALE_Y(60), 1);
+    tft.setTextColor(CLR_TEXT_MED); tft.drawString(buf, SCALE_X(4), SCALE_Y(84), 1);
 
-    int n = WiFi.scanNetworks(false, true, false, 170, dhDirTarget.channel);
+    int n = dhPassiveWifiScan(dhDirTarget.channel);
+    if (n < 0) { rssiOut = -127; return false; }
     for (int i = 0; i < n; i++) {
       if (WiFi.BSSIDstr(i).equalsIgnoreCase(dhDirTarget.bssid)) {
         sum += WiFi.RSSI(i); hits++; break;
@@ -437,8 +473,13 @@ static void dhRunWifiDirection() {
   tft.drawCentreString("Scanning APs...", SCR_CX, SCR_CY, 1);
 
   dhRadarCount = 0;
-  int n = WiFi.scanNetworks(false, true);
-  if (n < 0) n = 0;
+  int n = dhPassiveWifiScan();
+  if (n < 0) {
+    if (currentState == STATE_DR_HACK && dhCurrentState == DH_WIFI_DIRECTION) {
+      dhDiagnosticStatus("DIRECTION", dhDiscoveryErrorText(n)); dhWifiWaitSelect(DH_WIFI_DIRECTION);
+    }
+    return;
+  }
   for (int i = 0; i < n; i++) {
     if (dhRadarCount >= DH_RADAR_MAX) break;
     DH_RadarAp& ap = dhRadarAps[dhRadarCount++];
@@ -467,6 +508,7 @@ static void dhRunWifiDirection() {
   bool valid[4] = {false, false, false, false};
 
   for (int i = 0; i < 4; i++) {
+    if (currentState != STATE_DR_HACK || dhCurrentState != DH_WIFI_DIRECTION) return;
     tft.fillScreen(CLR_BG);
     drawGradientCard(0, 0, SCR_W, SCALE_Y(14), CLR_PRIMARY, darkenColor(CLR_PRIMARY, 50), 0);
     tft.setTextColor(CLR_TEXT_HI);
@@ -485,13 +527,13 @@ static void dhRunWifiDirection() {
     tft.drawCentreString("SEL: Measure", SCR_CX, SCR_H - SCALE_Y(12), 1);
 
     // Wait for SELECT
-    dhWaitSelectPress();
-    delay(200);
+    if (!dhWifiWaitSelect(DH_WIFI_DIRECTION)) return;
 
     valid[i] = dhDirMeasure(values[i]);
   }
 
   // Show results
+  if (currentState != STATE_DR_HACK || dhCurrentState != DH_WIFI_DIRECTION) return;
   tft.fillScreen(CLR_BG);
   drawGradientCard(0, 0, SCR_W, SCALE_Y(14), CLR_SUCCESS, darkenColor(CLR_SUCCESS, 50), 0);
   tft.setTextColor(CLR_TEXT_HI);
@@ -529,8 +571,7 @@ static void dhRunWifiDirection() {
   tft.setTextColor(CLR_TEXT_LO);
   tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
 
-  dhWaitSelectPress();
-  delay(200);
+  dhWifiWaitSelect(DH_WIFI_DIRECTION);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1039,37 +1080,15 @@ static void dhRunKarma() {
 // ═══════════════════════════════════════════════════════════
 
 static void dhRunWifiConfig() {
-  tft.fillScreen(CLR_BG);
-  drawGradientCard(0, 0, SCR_W, SCALE_Y(14), CLR_PRIMARY, darkenColor(CLR_PRIMARY, 50), 0);
-  tft.setTextColor(CLR_TEXT_HI);
-  tft.drawString("WIFI CONFIG", SCALE_X(4), SCALE_Y(2), 1);
-
-  int y = SCALE_Y(22);
-  tft.setTextColor(CLR_TEXT_MED);
-  tft.drawString("Current SSID:", SCALE_X(4), y, 1); y += SCALE_Y(12);
-  tft.setTextColor(CLR_SUCCESS);
-  tft.drawString(WIFI_SSID, SCALE_X(4), y, 1); y += SCALE_Y(16);
-
-  tft.setTextColor(CLR_TEXT_MED);
-  tft.drawString("Status:", SCALE_X(4), y, 1); y += SCALE_Y(12);
-  tft.setTextColor(wifiConnected ? CLR_SUCCESS : CLR_SECONDARY);
-  tft.drawString(wifiConnected ? "Connected" : "Disconnected", SCALE_X(4), y, 1); y += SCALE_Y(16);
-
-  if (wifiConnected) {
-    tft.setTextColor(CLR_TEXT_MED);
-    tft.drawString("IP:", SCALE_X(4), y, 1); y += SCALE_Y(12);
-    tft.setTextColor(CLR_PRIMARY);
-    tft.drawString(WiFi.localIP().toString().c_str(), SCALE_X(4), y, 1); y += SCALE_Y(12);
-    char rssi[16]; sprintf(rssi, "RSSI: %ddBm", WiFi.RSSI());
-    tft.setTextColor(dhRssiColor(WiFi.RSSI()));
-    tft.drawString(rssi, SCALE_X(4), y, 1);
-  }
-
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
-
-  dhWaitSelectPress();
-  delay(200);
+  dhDiagnosticHeader("WIFI STATUS", CLR_PRIMARY);
+  const bool connected = WiFi.status() == WL_CONNECTED;
+  int y = dhDiagnosticTop(), lineH = max(14, (dhDiagnosticBottom() - y) / 5);
+  dhDiagnosticRow("State", connected ? "Connected" : "Offline", y, connected ? CLR_SUCCESS : CLR_WARNING); y += lineH;
+  dhDiagnosticRow("SSID", connected ? WiFi.SSID() : currentWiFiSSID, y, CLR_TEXT_HI); y += lineH;
+  dhDiagnosticRow("IP", connected ? WiFi.localIP().toString() : String("--"), y, CLR_TEXT_MED); y += lineH;
+  dhDiagnosticRow("Signal", connected ? String(WiFi.RSSI()) + " dBm" : String("--"), y, CLR_TEXT_MED); y += lineH;
+  dhDiagnosticRow("Channel", connected ? String(WiFi.channel()) : String("--"), y, CLR_TEXT_MED);
+  dhDiagnosticFooter("Network");
 }
 
 #endif // ESP32

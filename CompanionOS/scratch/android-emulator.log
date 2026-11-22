@@ -1,0 +1,764 @@
+INFO         | Android emulator version 37.1.11.0 (build_id 15917651) (CL:N/A)
+INFO         | Graphics backend: gfxstream
+INFO         | Found systemPath C:\Users\shaan\AppData\Local\Android\Sdk\system-images\android-37.1\google_apis_playstore_ps16k\x86_64\
+INFO         | Saving last run QEMU version for the AVD to 2
+INFO         | Guest usage of host flag 'VulkanVirtualQueue' will be ignored.
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: 506e:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: 506e:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: 506e:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: 4074:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: 4074:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: 4074:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: 307a:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: 307a:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: 307a:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: 3880:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: 3880:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: 3880:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: 5086:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: 5086:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: 5086:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: f895:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: f895:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: f895:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: 189c:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: 189c:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Ignore IPv6 address: 189c:a8bd:ed01:0:506e:a8bd:ed01:0
+INFO         | Guest GLES Driver: Auto (ext controls)
+INFO         | emuglConfig_init: vulkan_mode_selected:swiftshader gles_mode_selected:swiftshader
+INFO         | Checking system compatibility:
+INFO         |   Checking: hasCompatibleHypervisor
+INFO         |      Ok: Hypervisor compatibility to run avd: `CompanionOS_QA` are met
+INFO         |   Checking: hasSufficientSystem
+INFO         |      Ok: System requirements to run avd: `CompanionOS_QA` are met
+INFO         |   Checking: hasSufficientHwGpu
+INFO         |      Ok: Hardware GPU compatibility checks are not required
+INFO         |   Checking: hasSufficientDiskSpace
+INFO         |      Ok: Disk space requirements to run avd: `CompanionOS_QA` are met
+ERROR        | Unable to connect to adb daemon on port: 5037
+INFO         | Storing crashdata in: C:\Users\shaan\AppData\Local\Temp\\AndroidEmulator\emu-crash-37.1.11.db, detection is enabled for process: 5452
+INFO         | Initializing gfxstream backend
+INFO         | startOpenglesRendererImpl: gpu info
+INFO         | GPU #1
+  Make: 10de
+  Model: NVIDIA GeForce RTX 4050 Laptop GPU
+  Device ID: 28e1
+
+INFO         | Graphics Adapter Vendor Google (Google Inc.)
+INFO         | Graphics Adapter Android Emulator OpenGL ES Translator (Google SwiftShader)
+INFO         | Graphics API Version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
+INFO         | Graphics API Extensions GL_OES_EGL_sync GL_OES_EGL_image GL_OES_EGL_image_external GL_OES_depth24 GL_OES_depth32 GL_OES_element_index_uint GL_OES_texture_float GL_OES_texture_float_linear GL_OES_compressed_paletted_texture GL_OES_compressed_ETC1_RGB8_texture GL_OES_depth_texture GL_OES_texture_half_float GL_OES_texture_half_float_linear GL_OES_packed_depth_stencil GL_OES_vertex_half_float GL_OES_standard_derivatives GL_OES_texture_npot GL_OES_rgb8_rgba8 GL_EXT_color_buffer_float GL_EXT_color_buffer_half_float GL_EXT_texture_format_BGRA8888 GL_APPLE_texture_format_BGRA8888 
+INFO         | Graphics Device Extensions N/A
+INFO         | Sending adb public key [QAAAAGXkL86T0sEN7zs8+/65Y/ojRgf/8x85WOS5cU3uWecOmLpdP9Zw5/v+gcT+J6MbMyLbojOh5PS+TWNtF83MysbRKtv/c1It3C5oVvFSmBHJfSF8BvYpzCaRXTvkqFVQjraTovxfxyvn8wK/KULNFQXz7sUBIH3GeV9CvaRozEN24HGuRuf0I2B0/E17O3xEknkyEJr5SgI97AjaXYct3TlCIElv9br7/AiRlacOu4lHPJ+F2Mqe/w4a84Jx/wal/fpAcHJGkz1rrwiR89CwsG0cqG0wHcYSJFFWtMcd6cfrjCSRifyFNCmYTfjoR1v2mlNmwCUEhWKf93xm4d5WfbRXguWqvjK/qq41C8qez/0cw9Y9T1EoISGPxj4rS9No5lP5FxLBDcAEKUhBlpj9C4K3UqASOWh8SpwnnNkgyU2jONaTa/wS0jUnWmaX7R66SeRUcKmSI+FAhGdVp8TstpfA55NvwWM9u/hjHPz1w62nvoKE9e6UPc7BS+lmdMiFdcwfzKUeyke0CzcL8hSp79sNXLfK9JkpMbSpZXlPlpN8Seyzam7r3DcZwZ9Qr55eQO3LoHP1MqSGckTG6ZHKE6CyfGf2p22vM8vONeEStoHK/dAY9gQ1MGNLUFKFJQl0j1c72JCzk24FO5wwzZiU4IjvLEWr4n/myhviI/hqy5qVGnOplgEAAQA= @unknown]
+INFO         | Userspace boot properties:
+INFO         |   androidboot.boot_devices=pci0000:00/0000:00:03.0 pci0000:00/0000:00:06.0
+INFO         |   androidboot.dalvik.vm.heapsize=512m
+INFO         |   androidboot.debug.sf.nobootanimation=1
+INFO         |   androidboot.hardware=ranchu
+INFO         |   androidboot.hardware.gltransport=pipe
+INFO         |   androidboot.logcat=*:V
+INFO         |   androidboot.opengles.version=131072
+INFO         |   androidboot.qemu=1
+INFO         |   androidboot.qemu.adb.pubkey=QAAAAGXkL86T0sEN7zs8+/65Y/ojRgf/8x85WOS5cU3uWecOmLpdP9Zw5/v+gcT+J6MbMyLbojOh5PS+TWNtF83MysbRKtv/c1It3C5oVvFSmBHJfSF8BvYpzCaRXTvkqFVQjraTovxfxyvn8wK/KULNFQXz7sUBIH3GeV9CvaRozEN24HGuRuf0I2B0/E17O3xEknkyEJr5SgI97AjaXYct3TlCIElv9br7/AiRlacOu4lHPJ+F2Mqe/w4a84Jx/wal/fpAcHJGkz1rrwiR89CwsG0cqG0wHcYSJFFWtMcd6cfrjCSRifyFNCmYTfjoR1v2mlNmwCUEhWKf93xm4d5WfbRXguWqvjK/qq41C8qez/0cw9Y9T1EoISGPxj4rS9No5lP5FxLBDcAEKUhBlpj9C4K3UqASOWh8SpwnnNkgyU2jONaTa/wS0jUnWmaX7R66SeRUcKmSI+FAhGdVp8TstpfA55NvwWM9u/hjHPz1w62nvoKE9e6UPc7BS+lmdMiFdcwfzKUeyke0CzcL8hSp79sNXLfK9JkpMbSpZXlPlpN8Seyzam7r3DcZwZ9Qr55eQO3LoHP1MqSGckTG6ZHKE6CyfGf2p22vM8vONeEStoHK/dAY9gQ1MGNLUFKFJQl0j1c72JCzk24FO5wwzZiU4IjvLEWr4n/myhviI/hqy5qVGnOplgEAAQA= @unknown
+INFO         |   androidboot.qemu.avd_name=CompanionOS_QA
+INFO         |   androidboot.qemu.camera_hq_edge_processing=0
+INFO         |   androidboot.qemu.cpuvulkan.version=4202496
+INFO         |   androidboot.qemu.gltransport.drawFlushInterval=800
+INFO         |   androidboot.qemu.gltransport.name=pipe
+INFO         |   androidboot.qemu.hwcodec.avcdec=2
+INFO         |   androidboot.qemu.hwcodec.hevcdec=2
+INFO         |   androidboot.qemu.hwcodec.vpxdec=2
+INFO         |   androidboot.qemu.settings.system.screen_off_timeout=2147483647
+INFO         |   androidboot.qemu.skin=1080x2400
+INFO         |   androidboot.qemu.virtiowifi=1
+INFO         |   androidboot.qemu.vsync=60
+INFO         |   androidboot.serialno=EMULATOR37X1X11X0
+INFO         |   androidboot.vbmeta.digest=f424461a0a397fda72fd179bc94e871022314ef1502d4ea1133175a87b4746ed
+INFO         |   androidboot.vbmeta.hash_alg=sha256
+INFO         |   androidboot.vbmeta.size=6720
+WHPX on Windows 10.0.26200 detected.
+Windows Hypervisor Platform accelerator is operational
+INFO         | Monitoring duration of emulator setup.
+INFO         | Activated packet streamer for uwb emulation
+INFO         | Activated packet streamer for bluetooth emulation
+INFO         | Successfully initialized netsim WiFi
+INFO         | Setting display: 0 configuration to: 1080x2400, dpi: 420x420 
+INFO         | setDisplayActiveConfig: id:0, 1080x2400
+INFO         | emulatorSetupEnvironment: Environment scene is not required
+USER_INFO    | Emulator is performing a full startup. This may take upto two minutes, or more.
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: 50a9:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 50a9:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 50a9:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 40af:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 40af:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 40af:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 30b5:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 30b5:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 30b5:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 38bb:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 38bb:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 38bb:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 50c1:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 50c1:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 50c1:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: f8d0:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: f8d0:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: f8d0:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 18d7:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 18d7:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 18d7:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: 50a9:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 50a9:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 50a9:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 40af:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 40af:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 40af:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 30b5:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 30b5:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 30b5:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 38bb:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 38bb:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 38bb:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 50c1:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 50c1:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 50c1:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: f8d0:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: f8d0:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: f8d0:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 18d7:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 18d7:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 18d7:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: 50a9:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 50a9:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 50a9:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 40af:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 40af:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 40af:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 30b5:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 30b5:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 30b5:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 38bb:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 38bb:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 38bb:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 50c1:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 50c1:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 50c1:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: f8d0:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: f8d0:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: f8d0:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 18d7:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 18d7:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Ignore IPv6 address: 18d7:9a82:ed01:0:50a9:9a82:ed01:0
+INFO         | Boot completed in 76387 ms
+INFO         | Increasing screen off timeout, logcat buffer size to 2M.
+WARNING      | adb command 'C:\Users\shaan\AppData\Local\Android\Sdk\platform-tools\adb.exe -s emulator-5580 shell settings put system screen_off_timeout 2147483647 ' failed: 'adb.exe: device offline'
+WARNING      | adb command 'C:\Users\shaan\AppData\Local\Android\Sdk\platform-tools\adb.exe -s emulator-5580 shell settings put system screen_off_timeout 2147483647 ' failed: 'adb.exe: device offline'
+WARNING      | adb command 'C:\Users\shaan\AppData\Local\Android\Sdk\platform-tools\adb.exe -s emulator-5580 shell settings put system screen_off_timeout 2147483647 ' failed: 'cmd: Failure calling service settings: Broken pipe (32)'
+WARNING      | adb command 'C:\Users\shaan\AppData\Local\Android\Sdk\platform-tools\adb.exe -s emulator-5580 shell settings put system screen_off_timeout 2147483647 ' failed: 'cmd: Can't find service: settings'
+WARNING      | adb command 'C:\Users\shaan\AppData\Local\Android\Sdk\platform-tools\adb.exe -s emulator-5580 shell settings put system screen_off_timeout 2147483647 ' failed: 'cmd: Can't find service: settings'
+WARNING      | adb command 'C:\Users\shaan\AppData\Local\Android\Sdk\platform-tools\adb.exe -s emulator-5580 shell settings put system screen_off_timeout 2147483647 ' failed: 'cmd: Can't find service: settings'
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: 3090:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: 3090:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: 3090:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: 2096:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: 2096:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: 2096:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: 109c:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: 109c:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: 109c:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: 18a2:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: 18a2:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: 18a2:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: 30a8:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: 30a8:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: 30a8:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: d8b7:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: d8b7:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: d8b7:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: f8bd:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: f8bd:9183:ed01:0:3090:9183:ed01:0
+INFO         | Ignore IPv6 address: f8bd:9183:ed01:0:3090:9183:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: 30db:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 30db:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 30db:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 20e1:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 20e1:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 20e1:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 10e7:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 10e7:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 10e7:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 18ed:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 18ed:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 18ed:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 30f3:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 30f3:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 30f3:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: d802:3ebe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: d802:3ebe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: d802:3ebe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: f808:3ebe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: f808:3ebe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: f808:3ebe:ed01:0:30db:3dbe:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: 30db:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 30db:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 30db:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 20e1:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 20e1:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 20e1:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 10e7:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 10e7:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 10e7:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 18ed:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 18ed:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 18ed:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 30f3:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 30f3:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: 30f3:3dbe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: d802:3ebe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: d802:3ebe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: d802:3ebe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: f808:3ebe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: f808:3ebe:ed01:0:30db:3dbe:ed01:0
+INFO         | Ignore IPv6 address: f808:3ebe:ed01:0:30db:3dbe:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: a054:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: a054:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: a054:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 905a:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 905a:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 905a:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8060:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8060:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8060:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8866:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8866:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8866:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: a06c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: a06c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: a06c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 487c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 487c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 487c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 6882:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 6882:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 6882:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: a054:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: a054:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: a054:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 905a:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 905a:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 905a:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8060:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8060:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8060:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8866:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8866:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8866:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: a06c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: a06c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: a06c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 487c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 487c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 487c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 6882:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 6882:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 6882:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: a054:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: a054:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: a054:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 905a:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 905a:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 905a:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8060:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8060:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8060:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8866:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8866:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 8866:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: a06c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: a06c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: a06c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 487c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 487c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 487c:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 6882:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 6882:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | Ignore IPv6 address: 6882:29c2:ed01:0:a054:29c2:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: c0ad:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: c0ad:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: c0ad:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: b0b3:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: b0b3:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: b0b3:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a0b9:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a0b9:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a0b9:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a8bf:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a8bf:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a8bf:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: c0c5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: c0c5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: c0c5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 68d5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 68d5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 68d5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 88db:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 88db:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 88db:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: c0ad:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: c0ad:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: c0ad:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: b0b3:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: b0b3:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: b0b3:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a0b9:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a0b9:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a0b9:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a8bf:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a8bf:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a8bf:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: c0c5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: c0c5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: c0c5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 68d5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 68d5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 68d5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 88db:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 88db:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 88db:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: c0ad:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: c0ad:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: c0ad:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: b0b3:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: b0b3:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: b0b3:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a0b9:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a0b9:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a0b9:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a8bf:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a8bf:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: a8bf:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: c0c5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: c0c5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: c0c5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 68d5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 68d5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 68d5:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 88db:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 88db:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | Ignore IPv6 address: 88db:c495:ed01:0:c0ad:c495:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: 10f9:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: 10f9:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: 10f9:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: ff:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: ff:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: ff:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f004:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f004:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f004:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f80a:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f80a:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f80a:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: 1011:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: 1011:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: 1011:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: b820:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: b820:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: b820:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: d826:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: d826:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: d826:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: 10f9:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: 10f9:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: 10f9:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: ff:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: ff:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: ff:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f004:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f004:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f004:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f80a:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f80a:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f80a:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: 1011:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: 1011:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: 1011:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: b820:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: b820:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: b820:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: d826:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: d826:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: d826:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: 10f9:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: 10f9:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: 10f9:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: ff:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: ff:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: ff:9f9e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f004:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f004:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f004:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f80a:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f80a:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: f80a:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: 1011:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: 1011:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: 1011:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: b820:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: b820:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: b820:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: d826:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: d826:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | Ignore IPv6 address: d826:a09e:ed01:0:10f9:9f9e:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: cc:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: cc:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: cc:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: f0d1:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: f0d1:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: f0d1:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e0d7:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e0d7:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e0d7:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e8dd:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e8dd:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e8dd:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e4:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e4:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e4:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: a8f3:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: a8f3:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: a8f3:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: c8f9:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: c8f9:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: c8f9:f882:ed01:0:cc:f882:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: cc:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: cc:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: cc:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: f0d1:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: f0d1:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: f0d1:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e0d7:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e0d7:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e0d7:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e8dd:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e8dd:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e8dd:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e4:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e4:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e4:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: a8f3:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: a8f3:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: a8f3:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: c8f9:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: c8f9:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: c8f9:f882:ed01:0:cc:f882:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: cc:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: cc:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: cc:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: f0d1:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: f0d1:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: f0d1:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e0d7:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e0d7:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e0d7:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e8dd:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e8dd:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e8dd:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e4:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e4:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: e4:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: a8f3:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: a8f3:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: a8f3:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: c8f9:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: c8f9:f882:ed01:0:cc:f882:ed01:0
+INFO         | Ignore IPv6 address: c8f9:f882:ed01:0:cc:f882:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: 2080:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 2080:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 2080:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 1086:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 1086:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 1086:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 8c:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 8c:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 8c:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 892:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 892:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 892:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 2098:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 2098:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 2098:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: c8a7:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: c8a7:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: c8a7:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: e8ad:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: e8ad:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: e8ad:619b:ed01:0:2080:619b:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: 2080:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 2080:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 2080:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 1086:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 1086:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 1086:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 8c:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 8c:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 8c:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 892:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 892:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 892:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 2098:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 2098:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: 2098:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: c8a7:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: c8a7:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: c8a7:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: e8ad:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: e8ad:619b:ed01:0:2080:619b:ed01:0
+INFO         | Ignore IPv6 address: e8ad:619b:ed01:0:2080:619b:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: 708f:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 708f:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 708f:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 6095:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 6095:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 6095:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 509b:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 509b:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 509b:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 58a1:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 58a1:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 58a1:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 70a7:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 70a7:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 70a7:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 18b7:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 18b7:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 18b7:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 38bd:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 38bd:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | Ignore IPv6 address: 38bd:ab98:ed01:0:708f:ab98:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: 40e0:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 40e0:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 40e0:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 30e6:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 30e6:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 30e6:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 20ec:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 20ec:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 20ec:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 28f2:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 28f2:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 28f2:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 40f8:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 40f8:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 40f8:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: e807:cc92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: e807:cc92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: e807:cc92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 80e:cc92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 80e:cc92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 80e:cc92:ed01:0:40e0:cb92:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: 40e0:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 40e0:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 40e0:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 30e6:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 30e6:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 30e6:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 20ec:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 20ec:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 20ec:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 28f2:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 28f2:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 28f2:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 40f8:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 40f8:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 40f8:cb92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: e807:cc92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: e807:cc92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: e807:cc92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 80e:cc92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 80e:cc92:ed01:0:40e0:cb92:ed01:0
+INFO         | Ignore IPv6 address: 80e:cc92:ed01:0:40e0:cb92:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: 3080:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: 3080:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: 3080:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: 2086:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: 2086:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: 2086:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: 108c:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: 108c:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: 108c:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: 1892:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: 1892:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: 1892:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: 3098:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: 3098:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: 3098:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: d8a7:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: d8a7:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: d8a7:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: f8ad:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: f8ad:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | Ignore IPv6 address: f8ad:d3a9:ed01:0:3080:d3a9:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: b000:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b000:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b000:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: a006:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: a006:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: a006:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 900c:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 900c:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 900c:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 9812:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 9812:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 9812:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b018:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b018:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b018:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 5828:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 5828:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 5828:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 782e:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 782e:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 782e:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: b000:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b000:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b000:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: a006:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: a006:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: a006:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 900c:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 900c:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 900c:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 9812:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 9812:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 9812:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b018:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b018:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b018:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 5828:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 5828:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 5828:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 782e:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 782e:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 782e:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: b000:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b000:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b000:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: a006:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: a006:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: a006:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 900c:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 900c:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 900c:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 9812:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 9812:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 9812:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b018:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b018:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b018:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 5828:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 5828:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 5828:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 782e:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 782e:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 782e:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: b000:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b000:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b000:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: a006:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: a006:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: a006:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 900c:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 900c:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 900c:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 9812:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 9812:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 9812:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b018:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b018:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b018:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 5828:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 5828:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 5828:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 782e:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 782e:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 782e:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: b000:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b000:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b000:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: a006:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: a006:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: a006:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 900c:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 900c:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 900c:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 9812:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 9812:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 9812:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b018:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b018:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: b018:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 5828:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 5828:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 5828:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 782e:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 782e:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | Ignore IPv6 address: 782e:6f8b:ed01:0:b000:6f8b:ed01:0
+INFO         | IPv4 server found: 192.168.1.1
+INFO         | Ignore IPv6 address: 2040:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: 2040:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: 2040:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: 1046:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: 1046:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: 1046:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: 4c:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: 4c:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: 4c:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: 852:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: 852:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: 852:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: 2058:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: 2058:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: 2058:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: c867:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: c867:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: c867:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: e86d:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: e86d:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Ignore IPv6 address: e86d:58a9:ed01:0:2040:58a9:ed01:0
+INFO         | Wait for emulator (pid 5452) 20 seconds to shutdown gracefully before kill;you can set environment variable ANDROID_EMULATOR_WAIT_TIME_BEFORE_KILL(in seconds) to change the default value (20 seconds)
+
+WARNING      | Not saving state: RAM not mapped as shared
+INFO         | Saving snapshot 'default_boot' using 3 ms
+WARNING      | Emulator client has not yet been configured.. Call configure me first!
+INFO         | removeAll
+WARNING      | Netsim Wifi dns:///localhost:56772 is gone due to Stream removed (CANCELLED)

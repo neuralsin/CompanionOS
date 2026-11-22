@@ -3,6 +3,9 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Keep generated intermediates outside OneDrive when its indexer locks mapped files.
+providers.gradleProperty("companionBuildDir").orNull?.let { layout.buildDirectory.set(file(it)) }
+
 android {
     namespace = "com.companionos.app"
     compileSdk = 35
@@ -11,8 +14,8 @@ android {
         applicationId = "com.companionos.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "7.1.0"
+        versionCode = 4
+        versionName = "7.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -56,6 +59,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")

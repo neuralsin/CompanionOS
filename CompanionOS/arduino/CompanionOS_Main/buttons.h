@@ -137,7 +137,7 @@ void handleButtons() {
 
   // ── Long press actions (Hold > 800ms) ──
   if (consumeLong(btnLeft)) {
-    if (currentState == STATE_SPOTIFY) {
+    if ((currentState == STATE_SPOTIFY || currentState == STATE_LYRICS)) {
       extern void sendCommand(String cmd);
       sendCommand("PREV");
     } else if (currentState != STATE_EYES) {
@@ -148,7 +148,7 @@ void handleButtons() {
   }
 
   if (consumeLong(btnRight)) {
-    if (currentState == STATE_SPOTIFY) {
+    if ((currentState == STATE_SPOTIFY || currentState == STATE_LYRICS)) {
       extern void sendCommand(String cmd);
       sendCommand("NEXT");
     } else if (currentState != STATE_SETTINGS) {
@@ -160,6 +160,8 @@ void handleButtons() {
   }
 
   if (consumeLong(btnSelect)) {
+    extern bool dismissEyesOverlays();
+    if (currentState == STATE_EYES && dismissEyesOverlays()) return;
     if (currentState == STATE_DR_HACK) {
       extern DrHackSubState dhCurrentState;
       if (dhCurrentState != DH_MENU) {
@@ -174,7 +176,7 @@ void handleButtons() {
       if (activeTheme == 2) t3_setEmotion(next);
       else if (activeTheme == 1) t2_setEmotion(next);
       else setEmotion(next);
-    } else if (currentState == STATE_SPOTIFY) {
+    } else if ((currentState == STATE_SPOTIFY || currentState == STATE_LYRICS)) {
       extern void sendCommand(String cmd);
       sendCommand("SHUFFLE:TOGGLE");
     } else if (currentState == STATE_POMODORO) {
@@ -211,6 +213,8 @@ void handleButtons() {
   }
 
   if (consumePress(btnSelect)) {
+    extern bool plannerButton(int step);
+    if (plannerButton(1)) return;
     if (currentState == STATE_DR_HACK) {
       extern void dhSelect();
       dhSelect();
@@ -231,7 +235,7 @@ void handleButtons() {
         setEmotion((Emotion)((currentEmotion + 1) % EMO_COUNT));
       }
     }
-    else if (currentState == STATE_SPOTIFY) {
+    else if ((currentState == STATE_SPOTIFY || currentState == STATE_LYRICS)) {
       extern void sendCommand(String cmd);
       sendCommand("PLAY_PAUSE");
     }
@@ -250,6 +254,7 @@ void handleButtons() {
     else if (currentState == STATE_SETTINGS) {
       // Cycle activeTheme
       activeTheme = (activeTheme + 1) % THEME_COUNT;
+      wakeForManualAppearance();
       EEPROM.begin(EEPROM_SIZE);
       EEPROM.write(EEPROM_ACTIVE_THEME_ADDR, activeTheme);
       EEPROM.commit();

@@ -44,10 +44,10 @@ current_state = {
 }
 
 PAGE_NAMES = [
-    "Eyes", "Spotify", "Pomodoro", "Weather",
+    "Eyes", "Spotify", "Lyrics", "Pomodoro", "Weather",
     "Notifications", "Notes", "Stocks", "Gaming",
     "Social", "Productivity", "Network", "Settings",
-    "PC Dashboard", "RuView", "Clock Dashboard", "Retro Watch", "Dr.Hack"
+    "PC Dashboard", "RuView", "Clock Dashboard", "Retro Watch", "Dr.Hack", "Calendar", "Timetable"
 ]
 
 # ═══════════════════════════════════════════════════════════
@@ -130,7 +130,7 @@ def index():
 @app.route("/api/btn/<button>", methods=["POST"])
 def press_button(button):
     """Simulate a physical button press."""
-    valid = ["LEFT", "RIGHT", "SELECT", "HOME", "LEFT_LONG", "RIGHT_LONG", "SELECT_LONG", "UP", "DOWN"]
+    valid = ["LEFT", "RIGHT", "SELECT", "HOME", "LEFT_LONG", "RIGHT_LONG", "SELECT_LONG", "UP", "DOWN", "DISMISS"]
     button_clean = button.strip().upper()
     if button_clean in valid:
         send_to_esp(f"BTN:{button_clean}")

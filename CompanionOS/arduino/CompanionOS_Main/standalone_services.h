@@ -8,6 +8,8 @@
 // Public, main-task-only status for the parent's lyrics/status fallback.
 String standaloneSpotifyStatus;
 String standaloneWeatherStatus;
+String standaloneLyricsStatus;
+bool standaloneLyricsSynced = true;
 
 #ifdef ESP32
 #include <HTTPClient.h>
@@ -22,8 +24,10 @@ String standaloneWeatherStatus;
 #include <math.h>
 #include <stdlib.h>
 #include "standalone_services_detail.h"
+#include "memory_policy.h"
+extern void prepareStandaloneMemory(bool needsWorkerStack);
 #if ENABLE_SPOTIFY
-#include <TJpg_Decoder.h>
+#include <tjpgd.h>
 #include <Preferences.h>
 #include <utility>
 #if JD_FORMAT != 1
@@ -41,8 +45,9 @@ extern void resetSpotifyDrawState();
 
 namespace standalone_services {
 using namespace standalone_detail;
+struct HeapFree { void operator()(void* pointer) const { free(pointer); } };
 
-enum Kind : uint8_t { Weather, Playback, Control, Cover };
+enum Kind : uint8_t { Weather, Playback, Control, Cover, Lyrics };
 struct Job {
   Kind kind = Weather;
   Command command = None;
@@ -57,11 +62,11 @@ struct Job {
   char refresh[1024] = {};
   char clientId[128] = {};
   char secret[256] = {};
-  char track[256] = {};
-  char artist[256] = {};
   uint64_t trackFingerprint = 0, artistFingerprint = 0;
   char itemId[256] = {};
   char url[512] = {};
+  char lyricTrack[256] = {}, lyricArtist[256] = {};
+  int lyricDuration = 0;
 };
 struct Result {
   int status = -1;
@@ -82,15 +87,19 @@ struct Result {
   char artist[256] = {};
   char itemId[256] = {};
   char url[512] = {};
+  char album[192] = {};
   int temp = 0, feels = 0, humidity = 0, wind = 0, high = 0, low = 0, wmo = 0;
   char sunrise[6] = {}, sunset[6] = {};
 #if ENABLE_SPOTIFY
-  uint16_t pixels[64 * 64] = {};
+  std::unique_ptr<uint16_t, HeapFree> pixels;
+  std::unique_ptr<char, HeapFree> lyrics;
+  bool lyricsSynced = false, instrumental = false;
 #endif
 };
 
 // Queue operations transfer exclusive ownership of this slot. Neither side touches
-// it after publishing until the other side returns it. No String crosses tasks.
+// it after publishing until the other side returns it. No String crosses tasks;
+// cover storage is allocated after HTTPS closes and handed back in the same slot.
 static Job job;
 static Result result;
 static QueueHandle_t jobs = nullptr, results = nullptr;
@@ -103,6 +112,14 @@ static uint8_t owner = 255;
 static bool spotifyDue = true;
 #if ENABLE_SPOTIFY
 static uint32_t lastPoll = 0;
+static Gate lyricGate;
+static uint8_t lyricFailures = 0;
+static String albumName, lyricCompletedId;
+static std::unique_ptr<char, HeapFree> lyricCache;
+static uint64_t lyricTrackHash = 0, lyricArtistHash = 0;
+static uint32_t lyricReadAt = 0;
+static bool lyricCacheSynced = false;
+static bool lyricWithoutAlbum = false;
 #endif
 static int spotifyError = 0, weatherError = 0;
 #if ENABLE_SPOTIFY
@@ -186,8 +203,9 @@ static uint8_t pendingHead = 0, pendingCount = 0;
 struct Response {
   int status = -1;
   uint32_t retryMs = 0;
+  uint32_t receivedAt = 0;
   size_t size = 0;
-  std::unique_ptr<uint8_t[]> body;
+  std::unique_ptr<uint8_t, HeapFree> body;
 };
 
 #if ARDUINOJSON_VERSION_MAJOR >= 7
@@ -195,8 +213,9 @@ struct Response {
 class JsonBudget : public ArduinoJson::Allocator {
   struct alignas(max_align_t) Block { size_t size; };
   size_t used = 0;
-  static constexpr size_t limit = 8192;
+  size_t limit;
  public:
+  explicit JsonBudget(size_t bytes = 8192) : limit(bytes) {}
   void* allocate(size_t size) override {
     if (size > limit - used) return nullptr;
     Block* block = static_cast<Block*>(malloc(sizeof(Block) + size));
@@ -224,18 +243,34 @@ class JsonBudget : public ArduinoJson::Allocator {
 struct Document {
   JsonBudget allocator;
   JsonDocument value;
-  Document() : value(&allocator) {}
+  explicit Document(size_t bytes = 8192) : allocator(bytes), value(&allocator) {}
 };
 #else
-struct Document { DynamicJsonDocument value; Document() : value(8192) {} };
+struct Document { DynamicJsonDocument value; explicit Document(size_t bytes = 8192) : value(bytes) {} };
 #endif
 
 class BodySink : public Stream {
+  Response& response;
+  size_t allocated = 0;
  public:
   BoundedBody buffer;
-  BodySink(uint8_t* bytes, size_t cap) : buffer(bytes, cap, millis()) {}
+  BodySink(Response& dest, size_t cap) : response(dest), buffer(nullptr, cap, millis()) {}
   size_t write(uint8_t byte) override { return write(&byte, 1); }
   size_t write(const uint8_t* bytes, size_t size) override {
+    if (buffer.error) return 0;
+    if (size > buffer.capacity - buffer.size) { buffer.error = TooLarge; setWriteError(); return 0; }
+    size_t needed = buffer.size + size + 1;
+    if (needed > allocated) {
+      size_t next = allocated ? allocated : 1024;
+      while (next < needed && next < buffer.capacity + 1) next *= 2;
+      if (next > buffer.capacity + 1) next = buffer.capacity + 1;
+      void* grown = realloc(response.body.get(), next);
+      if (!grown) { buffer.error = NoMemory; setWriteError(); return 0; }
+      response.body.release();
+      response.body.reset(static_cast<uint8_t*>(grown));
+      allocated = next;
+      buffer.bytes = response.body.get();
+    }
     size_t written = buffer.append(bytes, size, millis());
     if (buffer.error) setWriteError();
     return written;
@@ -250,16 +285,17 @@ class BodySink : public Stream {
 // Stop it from the same worker (no cross-task TLS teardown), even without writes.
 class DeadlineClient : public WiFiClientSecure {
   uint32_t started = 0;
+  uint32_t limit = 25000;
   bool armed = false;
   bool expired() {
-    if (armed && uint32_t(millis() - started) >= 25000) {
+    if (armed && uint32_t(millis() - started) >= limit) {
       timedOut = true; armed = false; WiFiClientSecure::stop();
     }
     return timedOut;
   }
  public:
   bool timedOut = false;
-  void arm() { started = millis(); armed = true; }
+  void arm(uint32_t duration = 25000) { started = millis(); limit = duration; armed = true; }
   int available() override { return expired() ? 0 : WiFiClientSecure::available(); }
   uint8_t connected() override { return expired() ? 0 : WiFiClientSecure::connected(); }
   int read() override { return expired() ? -1 : WiFiClientSecure::read(); }
@@ -269,7 +305,7 @@ class DeadlineClient : public WiFiClientSecure {
 };
 
 static const char* serviceName() {
-  return job.kind == Weather ? "weather" : (job.kind == Cover ? "cover" : "spotify");
+  return job.kind == Weather ? "weather" : (job.kind == Cover ? "cover" : (job.kind == Lyrics ? "lyrics" : "spotify"));
 }
 static void logHttpFailure(HTTPClient& http, int code, int tlsError = 0, const char* tlsDesc = nullptr) {
   // Only constant labels, numeric codes, and native error descriptions.
@@ -298,30 +334,27 @@ static Response request(const String& url, const char* method, const String& aut
   for (unsigned hop = 0; hop <= 3; ++hop) {
     DeadlineClient client;
     client.setInsecure();  // Existing debt: server certificates are NOT verified.
-    client.setHandshakeTimeout(15);
+    client.setHandshakeTimeout(job.kind == Lyrics ? 5 : 15);
     HTTPClient http;
     http.useHTTP10(false);
     http.setReuse(false);
-    http.setConnectTimeout(8000);
-    http.setTimeout(8000);
+    http.setConnectTimeout(job.kind == Lyrics ? 3000 : 8000);
+    http.setTimeout(job.kind == Lyrics ? 3000 : 8000);
     http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
     if (!httpsOriginLength(target.c_str())) { response.status = UnsafeRedirect; break; }
-    int hostEnd = target.indexOf('/', 8);
-    String host = hostEnd > 0 ? target.substring(8, hostEnd) : target.substring(8);
-    int colonIdx = host.indexOf(':');
-    if (colonIdx > 0) host = host.substring(0, colonIdx);
-    IPAddress resolvedIP;
-    if (!WiFi.hostByName(host.c_str(), resolvedIP)) {
-      Serial.printf("[standalone:%s] DNS failed for %s\n", serviceName(), host.c_str());
-    }
+    // HTTPClient resolves the hostname and preserves TLS SNI. A second DNS
+    // lookup here wasted time and did not affect the connection it actually used.
+    companion_memory::Snapshot before = companion_memory::snapshot();
     if (!http.begin(client, target)) { response.status = -1; logHttpFailure(http, response.status); break; }
     const char* headers[] = {"Retry-After", "Content-Encoding", "Location"};
     http.collectHeaders(headers, 3);
     if (auth.length()) http.addHeader("Authorization", auth);
+    if (job.kind == Lyrics) http.addHeader("User-Agent", "CompanionOS/7.0 (ESP32 lyrics)");
     http.addHeader("Accept-Encoding", "identity");
     if (form) http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-    client.arm();
+    client.arm(job.kind == Lyrics ? 8000 : 25000);
     response.status = http.sendRequest(method, body);
+    response.receivedAt = millis();
     bool redirect = response.status == 301 || response.status == 302 || response.status == 303 ||
                     response.status == 307 || response.status == 308;
     if (redirect && !strcmp(method, "GET")) {
@@ -340,13 +373,11 @@ static Response request(const String& url, const char* method, const String& aut
       if (http.getSize() > int(cap)) response.status = TooLarge;
       else if (encoding.length() && encoding != "identity") response.status = Encoding;
       else {
-        response.body.reset(new (std::nothrow) uint8_t[cap + 1]);
-        if (!response.body) response.status = NoMemory;
-        else {
-          BodySink sink(response.body.get(), cap);
+        {
+          BodySink sink(response, cap);
           int written = http.writeToStream(&sink);
           response.size = sink.buffer.size;
-          response.body[response.size] = 0;
+          if (response.body) response.body.get()[response.size] = 0;
           if (sink.buffer.error) response.status = sink.buffer.error;
           else if (written < 0) { response.status = written; nativeError = written; }
           else if (size_t(written) != response.size ||
@@ -358,9 +389,12 @@ static Response request(const String& url, const char* method, const String& aut
     int tlsError = nativeError ? client.lastError(tlsText, sizeof(tlsText)) : 0;
     if (nativeError) {
       logHttpFailure(http, nativeError, tlsError, tlsText);
-      if (nativeError == HTTPC_ERROR_TOO_LESS_RAM) response.status = NoMemory;
+      companion_memory::Snapshot after = companion_memory::snapshot();
+      Serial.printf("[standalone:%s] RAM before=%u largest=%u; after=%u largest=%u\n", serviceName(),
+                    unsigned(before.free), unsigned(before.largest), unsigned(after.free), unsigned(after.largest));
+      if (nativeError == HTTPC_ERROR_TOO_LESS_RAM || tlsAllocationFailed(tlsError)) response.status = NoMemory;
       else if (nativeError == HTTPC_ERROR_READ_TIMEOUT) response.status = TimedOut;
-      else if (tlsError) response.status = TlsFailure;
+      else if (tlsError && tlsError != -1) response.status = TlsFailure;
     }
     if (client.timedOut) response.status = TimedOut;
     if (response.status < -1000 || response.status >= 300) logHttpFailure(http, response.status, tlsError, tlsText);
@@ -442,7 +476,7 @@ static bool readPlayback(String& access, bool& refreshed) {
   Response response = spotifyRequest("", "GET", access, refreshed, 24576);
   if (response.status == 204) {
     result.valid = true;
-    result.sampledAt = millis();
+    result.sampledAt = response.receivedAt;
     return true;
   }
   if (response.status != 200 || !response.body) return false;
@@ -459,6 +493,7 @@ static bool readPlayback(String& access, bool& refreshed) {
   filter["item"]["artists"][0]["name"] = true;
   filter["item"]["album"]["images"][0]["url"] = true;
   filter["item"]["album"]["images"][0]["width"] = true;
+  filter["item"]["album"]["name"] = true;
   filter["item"]["images"][0]["url"] = true;
   filter["item"]["images"][0]["width"] = true;
   filter["item"]["show"]["publisher"] = true;
@@ -469,7 +504,7 @@ static bool readPlayback(String& access, bool& refreshed) {
   if (error || !doc["is_playing"].is<bool>()) {
     result.status = error == DeserializationError::NoMemory ? NoMemory : InvalidJson; return false;
   }
-  result.sampledAt = millis();
+  result.sampledAt = response.receivedAt;
   result.shuffle = doc["shuffle_state"] | false;
   result.playing = doc["is_playing"] | false;
   if (job.kind == Control) { result.valid = true; return true; }
@@ -483,6 +518,7 @@ static bool readPlayback(String& access, bool& refreshed) {
     const char* artist = entry["artists"][0]["name"] | (entry["show"]["publisher"] | "");
     copyDisplay(result.track, entry["name"] | "");
     copyDisplay(result.artist, artist);
+    copyDisplay(result.album, entry["album"]["name"] | "");
     if (!copy(result.itemId, entry["uri"] | "")) { result.status = InvalidJson; return false; }
     result.duration = entry["duration_ms"] | 0;
     result.playing = doc["is_playing"] | false;
@@ -551,8 +587,9 @@ static void cover() {
   noteResponse(response);
   if (response.status != 200 || !response.body) return;
   std::unique_ptr<uint8_t[]> workspace(new (std::nothrow) uint8_t[TJPGD_WORKSPACE_SIZE]);
-  if (!workspace) { result.status = NoMemory; return; }
-  DecodeContext context = {response.body.get(), response.size, 0, 0, 0, result.pixels, millis()};
+  result.pixels.reset(static_cast<uint16_t*>(calloc(64 * 64, sizeof(uint16_t))));
+  if (!workspace || !result.pixels) { result.status = NoMemory; return; }
+  DecodeContext context = {response.body.get(), response.size, 0, 0, 0, result.pixels.get(), millis()};
   JDEC decoder = {};
   // Native RGB565, matching host art and the existing setSwapBytes(true) draws.
   decoder.swap = 0;
@@ -566,6 +603,55 @@ static void cover() {
   context.height = decoder.height >> scale;
   result.valid = jd_decomp(&decoder, jpegOutput, scale) == JDR_OK;
   if (!result.valid) result.status = InvalidJpeg;
+}
+
+static String lyricEscape(const char* text) {
+  String encoded;
+  const char hex[] = "0123456789ABCDEF";
+  for (const uint8_t* p = reinterpret_cast<const uint8_t*>(text); *p; ++p) {
+    uint8_t c = *p;
+    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+        (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') encoded += char(c);
+    else { char escaped[] = {'%', hex[c >> 4], hex[c & 15], 0}; encoded += escaped; }
+  }
+  return encoded;
+}
+static void lyrics() {
+  if (!job.lyricTrack[0] || !job.lyricArtist[0] || job.lyricDuration <= 0 || job.lyricDuration > 3600000) {
+    result.valid = true; result.status = 404; return;
+  }
+  char seconds[24];
+  snprintf(seconds, sizeof(seconds), "%d.%03d", job.lyricDuration / 1000, job.lyricDuration % 1000);
+  String url = "https://lrclib.net/api/get?track_name=" + lyricEscape(job.lyricTrack) +
+      "&artist_name=" + lyricEscape(job.lyricArtist) + "&duration=" + seconds;
+  if (job.url[0]) url += "&album_name=" + lyricEscape(job.url);
+  // Public metadata only. Never send the Spotify bearer token to this provider.
+  Response response = request(url, "GET", "", "", 24576);
+  result.status = response.status; result.retryMs = response.retryMs;
+  if (response.status == 404) { result.valid = true; return; }
+  if (response.status != 200 || !response.body) return;
+  StaticJsonDocument<256> filter;
+  filter["syncedLyrics"] = filter["plainLyrics"] = filter["instrumental"] = true;
+  Document document(16384);
+  auto error = deserializeJson(document.value, response.body.get(), response.size, DeserializationOption::Filter(filter));
+  if (error) { result.status = error == DeserializationError::NoMemory ? NoMemory : InvalidJson; return; }
+  result.instrumental = document.value["instrumental"] | false;
+  const char* text = document.value["syncedLyrics"] | "";
+  char current[4], next[4];
+  result.lyricsSynced = text[0] && lyricLines(text, true, 0, current, next);
+  if (!result.lyricsSynced) text = document.value["plainLyrics"] | "";
+  size_t length = strlen(text);
+  if (length > 8192) { result.status = TooLarge; return; }
+  if (length && !result.instrumental) {
+    // Compact the decoded text into the response allocation after TLS closes.
+    // No second full lyrics buffer or timestamp table is retained by main.
+    memmove(response.body.get(), text, length + 1);
+    void* smaller = realloc(response.body.get(), length + 1);
+    if (!smaller) { result.status = NoMemory; return; }
+    response.body.release(); response.body.reset(static_cast<uint8_t*>(smaller));
+    result.lyrics.reset(reinterpret_cast<char*>(response.body.release()));
+  }
+  result.valid = true;
 }
 #endif  // ENABLE_SPOTIFY
 
@@ -619,9 +705,8 @@ static void worker(void*) {
     else if (job.kind == Playback) { String access(job.access); bool refreshed = false; readPlayback(access, refreshed); }
     else if (job.kind == Control) control();
     else if (job.kind == Cover) cover();
+    else if (job.kind == Lyrics) lyrics();
 #endif
-    if (!result.valid && result.status <= -1000)
-      Serial.printf("[standalone:%s] %s\n", serviceName(), failureName(result.status));
     xQueueSend(results, &ticket, portMAX_DELAY);
   }
 }
@@ -641,7 +726,7 @@ static bool start(uint32_t now) {
 }
 
 static bool spotifyAllowed() {
-  return ENABLE_SPOTIFY && wifiConnected && !dhNetPaused && (!isHostPlaybackActive() || isHostAndroid);
+  return ENABLE_SPOTIFY && !companion_memory::radioWorkspace() && wifiConnected && !dhNetPaused && (!isHostPlaybackActive() || isHostAndroid);
 }
 static bool spotifyConfigured() {
 #if ENABLE_SPOTIFY
@@ -650,7 +735,11 @@ static bool spotifyConfigured() {
   return false;
 #endif
 }
-static bool weatherAllowed() { return wifiConnected && !dhNetPaused && !isHostWeatherActive(); }
+static bool weatherAllowed() {
+  return currentState != STATE_LYRICS && !companion_memory::radioWorkspace() && wifiConnected && !dhNetPaused && !isHostWeatherActive() &&
+         (companion_memory::nearby(int(currentState), int(STATE_WEATHER), int(STATE_COUNT)) ||
+          currentState == STATE_CLOCK_DASHBOARD || currentState == STATE_RETRO_WATCH);
+}
 static void observeOwner() {
   uint8_t current = (wifiConnected ? 1 : 0) | (isHostActive() ? 2 : 0) |
                     (isHostAndroid ? 4 : 0) | (dhNetPaused ? 8 : 0) | (isHostPlaybackActive() ? 16 : 0) |
@@ -712,12 +801,46 @@ static void resetArt() {
   resetSpotifyDrawState();
   t2_resetSpotifyDrawState();
 }
+static void releaseLyrics(bool clearDisplay = true) {
+  bool hadNativeLyrics = bool(lyricCache) || lyricCompletedId.length();
+  lyricCache.reset(); lyricCompletedId = ""; lyricFailures = 0; lyricGate = Gate();
+  lyricWithoutAlbum = false;
+  if (clearDisplay) {
+    standaloneLyricsStatus = ""; standaloneLyricsSynced = true;
+    companion_lyrics::timing() = companion_lyrics::Timing();
+    if (hadNativeLyrics) currentLyrics = currentLyricsLine2 = prevLyricsLine = "";
+  }
+}
+static void tickLyrics(uint32_t now, bool force = false) {
+  bool hostOwns = isHostPlaybackActive() && !isHostAndroid;
+  if (!albumArtPageNearby() || hostOwns ||
+      (lyricCache && (lyricTrackHash != textFingerprint(currentTrack.c_str()) ||
+                      lyricArtistHash != textFingerprint(currentArtist.c_str())))) {
+    releaseLyrics(!hostOwns); return;
+  }
+  if (!lyricCache) return;
+  static uint32_t lastRead = 0, lastPosition = 0;
+  static bool lastPlaying = false;
+  char line[256], next[256];
+  uint32_t position = lyricCacheSynced ? uint32_t(progressAt(playProgress, playDuration, isPlaying,
+      uint32_t(now - spotifyProgressUpdatedAt))) : uint32_t(now - lyricReadAt);
+  int64_t delta = int64_t(position) - lastPosition;
+  bool seek = delta < 0 || delta > 1000 || lastPlaying != isPlaying;
+  if (!force && !seek && uint32_t(now - lastRead) < 50) return;
+  lastRead = now; lastPosition = position; lastPlaying = isPlaying;
+  lyricLines(lyricCache.get(), lyricCacheSynced, position, line, next, &companion_lyrics::timing());
+  if (currentLyrics != line || currentLyricsLine2 != next) {
+    prevLyricsLine = currentLyrics; currentLyrics = line; currentLyricsLine2 = next;
+    redrawPlayback();
+  }
+}
 #endif
 
 static void consume(uint32_t now) {
   uint8_t ticket;
   if (!busy || xQueueReceive(results, &ticket, 0) != pdTRUE) return;
   busy = false;
+  companion_memory::networkBusy.store(false, std::memory_order_relaxed);
   bool owned = job.epoch == epoch;
   if (job.kind == Weather) {
     if (owned && weatherAllowed()) {
@@ -740,7 +863,7 @@ static void consume(uint32_t now) {
   }
 #if ENABLE_SPOTIFY
   else if (owned && spotifyAllowed() && credentialsMatch()) {
-    updateStatus();
+    if (job.kind == Playback || job.kind == Control) updateStatus();
     if (result.tokenChanged) {
       spotifyAccessToken = result.access;
       spotifyRefreshToken = result.refresh;
@@ -749,8 +872,8 @@ static void consume(uint32_t now) {
     if (job.kind == Cover) {
       backoff(coverGate, coverFailures, now);
       if (result.valid && mediaMatches() && job.artRevision == albumArtRevision && itemId == job.itemId &&
-          !receivingArt && albumArt) {
-        if (albumArt) memcpy(albumArt, result.pixels, sizeof(result.pixels));
+          !receivingArt && albumArtPageNearby() && result.pixels) {
+        free(albumArt); albumArt = result.pixels.release(); galleryImage = albumArt;
         memset(albumArtRowsReceived, 1, sizeof(albumArtRowsReceived));
         albumArtRowsComplete = ALBUM_ART_H;
         albumArtReady = true; artDrawn = false;
@@ -758,6 +881,27 @@ static void consume(uint32_t now) {
         ++albumArtRevision;
         resetSpotifyDrawState(); t2_resetSpotifyDrawState();
         coveredId = itemId;
+        redrawPlayback();
+      }
+    } else if (job.kind == Lyrics) {
+      if (mediaMatches() && itemId == job.itemId && albumArtPageNearby()) {
+        backoff(lyricGate, lyricFailures, now);
+        if (result.valid) {
+          bool retryWithoutAlbum = result.status == 404 && job.url[0];
+          if (retryWithoutAlbum) { lyricWithoutAlbum = true; lyricGate.defer(now, 1000); }
+          else lyricCompletedId = itemId;
+          lyricCache = std::move(result.lyrics);
+          lyricCacheSynced = standaloneLyricsSynced = result.lyricsSynced;
+          lyricTrackHash = textFingerprint(currentTrack.c_str());
+          lyricArtistHash = textFingerprint(currentArtist.c_str()); lyricReadAt = now;
+          standaloneLyricsStatus = result.instrumental ? "Instrumental" : (lyricCache || retryWithoutAlbum ? "" : "Lyrics unavailable");
+          tickLyrics(now, true);
+        } else {
+          if (!result.retryMs && lyricGate.wait < 30000) lyricGate.defer(now, 30000);
+          if (result.status == TooLarge || result.status == InvalidJson) {
+            lyricCompletedId = itemId; standaloneLyricsStatus = "Lyrics unavailable";
+          } else standaloneLyricsStatus = "Lyrics temporarily unavailable";
+        }
         redrawPlayback();
       }
     } else {
@@ -770,12 +914,14 @@ static void consume(uint32_t now) {
       } else if (result.valid && mediaMatches()) {
         bool changed = itemId != result.itemId || currentTrack != result.track || currentArtist != result.artist;
         if (changed) {
+          releaseLyrics();
           currentLyrics = currentLyricsLine2 = prevLyricsLine = "";
           resetArt(); coveredId = ""; ++mediaEpoch;
         }
         currentTrack = result.track; currentArtist = result.artist;
         nativeTrack = currentTrack; nativeArtist = currentArtist;
         itemId = result.itemId; coverUrl = result.url;
+        albumName = result.album;
         isPlaying = musicPlaying = result.playing;
         playDuration = result.duration;
         playProgress = progressAt(result.progress, playDuration, isPlaying, uint32_t(now - result.sampledAt));
@@ -792,6 +938,10 @@ static void consume(uint32_t now) {
   memset(job.access, 0, sizeof(job.access)); memset(job.refresh, 0, sizeof(job.refresh));
   memset(job.secret, 0, sizeof(job.secret));
   memset(result.access, 0, sizeof(result.access)); memset(result.refresh, 0, sizeof(result.refresh));
+#if ENABLE_SPOTIFY
+  result.pixels.reset();  // Discard stale/failed cover jobs immediately, not at the next request.
+  result.lyrics.reset();
+#endif
 }
 
 static bool dispatch(Kind kind, Command command, uint32_t now) {
@@ -802,7 +952,10 @@ static bool dispatch(Kind kind, Command command, uint32_t now) {
   if (kind != Weather && !spotifyConfigured()) {
     standaloneSpotifyStatus = failureName(NotConfigured); return false;
   }
+  companion_memory::networkBusy.store(true, std::memory_order_relaxed);
+  prepareStandaloneMemory(task == nullptr);
   if (!start(now)) {
+    companion_memory::networkBusy.store(false, std::memory_order_relaxed);
     if (kind != Weather) {
       spotifyError = NoMemory; spotifyGate.defer(now, 30000);
       standaloneSpotifyStatus = "Spotify worker unavailable";
@@ -819,7 +972,7 @@ static bool dispatch(Kind kind, Command command, uint32_t now) {
   job.trackFingerprint = textFingerprint(currentTrack.c_str());
   job.artistFingerprint = textFingerprint(currentArtist.c_str());
   job.hostActive = isHostActive(); job.hostAndroid = isHostAndroid;
-  job.spotifyPage = currentState == STATE_SPOTIFY; job.playing = isPlaying;
+  job.spotifyPage = currentState == STATE_SPOTIFY || currentState == STATE_LYRICS; job.playing = isPlaying;
 #if ENABLE_SPOTIFY
   if (kind != Weather) {
     if (!copy(job.access, spotifyAccessToken.c_str()) || !copy(job.refresh, spotifyRefreshToken.c_str()) ||
@@ -828,14 +981,22 @@ static bool dispatch(Kind kind, Command command, uint32_t now) {
       memset(job.access, 0, sizeof(job.access)); memset(job.refresh, 0, sizeof(job.refresh));
       memset(job.secret, 0, sizeof(job.secret));
       standaloneSpotifyStatus = "Spotify fields too long";
+      companion_memory::networkBusy.store(false, std::memory_order_relaxed);
       spotifyGate.defer(now, 60000); return false;
+    }
+    if (kind == Lyrics) {
+      copyDisplay(job.lyricTrack, currentTrack.c_str()); copyDisplay(job.lyricArtist, currentArtist.c_str());
+      copyDisplay(job.url, lyricWithoutAlbum ? "" : albumName.c_str()); copyDisplay(job.itemId, itemId.c_str());
+      job.lyricDuration = playDuration;
     }
   }
 #endif
   uint8_t ticket = 1;
   busy = xQueueSend(jobs, &ticket, 0) == pdTRUE;
+  if (!busy) companion_memory::networkBusy.store(false, std::memory_order_relaxed);
   if (busy && kind == Weather) standaloneWeatherStatus = "Updating";
-  else if (busy && kind != Cover) standaloneSpotifyStatus = "Updating";
+  // Ordinary Spotify/cover/lyrics refreshes never replace the content with a
+  // loading label. Explicit commands and real failures retain their own status.
   return busy;
 }
 
@@ -904,6 +1065,9 @@ inline void notifyStandaloneCredentialsChanged() {
 }
 
 inline void setupStandaloneServices() {
+  companion_memory::Snapshot ram = companion_memory::snapshot();
+  Serial.printf("[memory:LYRICS-UI-v3] internal free=%u largest=%u; graphics reserve=%u\n",
+                unsigned(ram.free), unsigned(ram.largest), unsigned(companion_memory::tlsReserve));
 #if ENABLE_SPOTIFY
   standalone_services::loadCredentialsOnce();
 #endif
@@ -949,6 +1113,7 @@ inline bool queueStandaloneCommand(const String& text) {
 }
 
 inline void tickStandaloneServices() {
+  if (!companion_startup::gate.shown || uint32_t(millis() - companion_startup::gate.shownAt) < companion_startup::apiDelay) return;
   using namespace standalone_services;
 #if ENABLE_SPOTIFY
   loadCredentialsOnce();
@@ -956,6 +1121,11 @@ inline void tickStandaloneServices() {
   uint32_t now = millis();
   observeOwner();
   consume(now);
+#if ENABLE_SPOTIFY
+  tickLyrics(now);
+#endif
+  if (!busy) companion_memory::networkBusy.store(false, std::memory_order_relaxed);
+  if (!companion_startup::gate.apis(now)) return;
 #if ENABLE_SPOTIFY
   if (spotifyAllowed() && (!spotifyConfigured() || authFailure(spotifyError))) requestAuthorization(false);
 #endif
@@ -967,7 +1137,7 @@ inline void tickStandaloneServices() {
   }
   while (pendingCount) {
     Pending p = pending[pendingHead];
-    if (uint32_t(now - p.at) > 3000 || !spotifyAllowed()) {
+    if (uint32_t(now - p.at) > (job.kind == Lyrics ? 10000U : 3000U) || !spotifyAllowed()) {
       standaloneSpotifyStatus = "Spotify command expired";
       pendingHead = (pendingHead + 1) % 4; --pendingCount;
       continue;
@@ -977,19 +1147,28 @@ inline void tickStandaloneServices() {
     if (dispatch(Control, p.command, now)) return;
   }
 #endif
-  if (weatherAllowed() && weatherGate.ready(now)) {
-    if (dispatch(Weather, None, now)) return;
-  }
 #if ENABLE_SPOTIFY
-  if (!spotifyAllowed() || !spotifyConfigured()) return;
-  uint32_t interval = (currentState == STATE_SPOTIFY || isPlaying) ?
-      SPOTIFY_POLL_INTERVAL_ACTIVE_MS : SPOTIFY_POLL_INTERVAL_IDLE_MS;
-  if (spotifyGate.ready(now) && (spotifyDue || uint32_t(now - lastPoll) >= interval)) {
-    if (dispatch(Playback, None, now)) return;
+  if (spotifyAllowed() && spotifyConfigured()) {
+    uint32_t interval = currentState == STATE_LYRICS ? SPOTIFY_POLL_INTERVAL_LYRICS_MS :
+        ((currentState == STATE_SPOTIFY || isPlaying) ? SPOTIFY_POLL_INTERVAL_ACTIVE_MS : SPOTIFY_POLL_INTERVAL_IDLE_MS);
+    if (spotifyGate.ready(now) && (spotifyDue || uint32_t(now - lastPoll) >= interval)) {
+      if (dispatch(Playback, None, now)) return;
+    }
+    if (currentState == STATE_LYRICS && !strncmp(itemId.c_str(), "spotify:track:", 14) &&
+        lyricCompletedId != itemId && lyricGate.ready(now) && !receivingArt) {
+      if (dispatch(Lyrics, None, now)) return;
+    }
+    if (albumArtPageNearby() && itemId.length() && coverUrl.length() &&
+        (coveredId != itemId || !albumArtReady) && coverGate.ready(now) && !receivingArt) {
+      if (dispatch(Cover, None, now)) return;
+    }
+    if (albumArtPageNearby() && !strncmp(itemId.c_str(), "spotify:track:", 14) &&
+        lyricCompletedId != itemId && lyricGate.ready(now) && !receivingArt) {
+      if (dispatch(Lyrics, None, now)) return;
+    }
   }
-  if (itemId.length() && coverUrl.length() && coveredId != itemId && coverGate.ready(now) && !receivingArt)
-    dispatch(Cover, None, now);
 #endif
+  if (weatherAllowed() && weatherGate.ready(now)) dispatch(Weather, None, now);
 }
 
 #else  // Not ESP32: deliberately do not fall back to blocking network calls.

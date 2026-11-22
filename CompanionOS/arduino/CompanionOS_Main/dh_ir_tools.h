@@ -781,60 +781,33 @@ static void dhRunIrSaved() {
 // ═══════════════════════════════════════════════════════════
 
 static void dhRunHwDiag() {
-  tft.fillScreen(CLR_BG);
-  drawGradientCard(0, 0, SCR_W, SCALE_Y(14), CLR_PRIMARY, darkenColor(CLR_PRIMARY, 40), 0);
-  tft.setTextColor(CLR_TEXT_HI);
-  tft.drawString("HW DIAG", SCALE_X(4), SCALE_Y(2), 1);
+  dhDiagnosticHeader("HARDWARE", CLR_PRIMARY);
+  // Deselect every shared SPI device before probing. No radio payload is sent.
+  const int selects[] = {TFT_CS, NRF1_CSN_PIN, NRF2_CSN_PIN, CC1101_CSN_PIN};
+  for (int pin : selects) { pinMode(pin, OUTPUT); digitalWrite(pin, HIGH); }
+  pinMode(NRF1_CE_PIN, OUTPUT); digitalWrite(NRF1_CE_PIN, LOW);
+  pinMode(NRF2_CE_PIN, OUTPUT); digitalWrite(NRF2_CE_PIN, LOW);
+  pinMode(IR_RX_PIN, INPUT); pinMode(CC1101_GDO0_PIN, INPUT);
+  RF24 radio1(NRF1_CE_PIN, NRF1_CSN_PIN), radio2(NRF2_CE_PIN, NRF2_CSN_PIN);
+  bool nrf1 = radio1.begin();
+  if (nrf1) { nrf1 = radio1.isChipConnected(); radio1.powerDown(); }
+  digitalWrite(NRF1_CSN_PIN, HIGH);
+  bool nrf2 = radio2.begin();
+  if (nrf2) { nrf2 = radio2.isChipConnected(); radio2.powerDown(); }
+  digitalWrite(NRF2_CSN_PIN, HIGH);
+  const bool cc = dhProbeCc1101();
+  for (int pin : selects) digitalWrite(pin, HIGH);
 
-  int y = SCALE_Y(20);
-  int lineH = SCALE_Y(12);
-
-  // IR TX
-  tft.setTextColor(CLR_TEXT_LO); tft.drawString("IR TX:", SCALE_X(4), y, 1);
-  tft.setTextColor(CLR_SUCCESS);
-  char buf[24]; sprintf(buf, "GPIO%d", IR_TX_PIN);
-  tft.drawString(buf, SCALE_X(50), y, 1); y += lineH;
-
-  // IR RX
-  tft.setTextColor(CLR_TEXT_LO); tft.drawString("IR RX:", SCALE_X(4), y, 1);
-  bool irRxState = digitalRead(IR_RX_PIN);
-  tft.setTextColor(irRxState ? CLR_TEXT_MED : CLR_SUCCESS);
-  sprintf(buf, "GPIO%d %s", IR_RX_PIN, irRxState ? "HIGH" : "LOW");
-  tft.drawString(buf, SCALE_X(50), y, 1); y += lineH;
-
-  // nRF24 #1
-  tft.setTextColor(CLR_TEXT_LO); tft.drawString("nRF1:", SCALE_X(4), y, 1);
-  RF24 t_jam1(NRF1_CE_PIN, NRF1_CSN_PIN);
-  bool t_jam1Ok = t_jam1.begin();
-  sprintf(buf, "CE%d CS%d %s", NRF1_CE_PIN, NRF1_CSN_PIN, t_jam1Ok ? "OK" : "FAIL");
-  tft.setTextColor(t_jam1Ok ? CLR_SUCCESS : CLR_SECONDARY); tft.drawString(buf, SCALE_X(50), y, 1); y += lineH;
-
-  // nRF24 #2
-  tft.setTextColor(CLR_TEXT_LO); tft.drawString("nRF2:", SCALE_X(4), y, 1);
-  RF24 t_jam2(NRF2_CE_PIN, NRF2_CSN_PIN);
-  bool t_jam2Ok = t_jam2.begin();
-  sprintf(buf, "CE%d CS%d %s", NRF2_CE_PIN, NRF2_CSN_PIN, t_jam2Ok ? "OK" : "FAIL");
-  tft.setTextColor(t_jam2Ok ? CLR_SUCCESS : CLR_SECONDARY); tft.drawString(buf, SCALE_X(50), y, 1); y += lineH;
-
-  // CC1101
-  tft.setTextColor(CLR_TEXT_LO); tft.drawString("CC1101:", SCALE_X(4), y, 1);
-  sprintf(buf, "CS%d G0:%d", CC1101_CSN_PIN, CC1101_GDO0_PIN);
-  tft.setTextColor(CLR_WARNING); tft.drawString(buf, SCALE_X(50), y, 1); y += lineH;
-
-  // GDO0 state
-  bool gdo0 = digitalRead(CC1101_GDO0_PIN);
-  tft.setTextColor(CLR_TEXT_LO); tft.drawString("GDO0:", SCALE_X(4), y, 1);
-  tft.setTextColor(gdo0 ? CLR_SUCCESS : CLR_TEXT_MED);
-  tft.drawString(gdo0 ? "HIGH" : "LOW", SCALE_X(50), y, 1); y += lineH;
-
-  // Free heap
-  sprintf(buf, "Heap: %dKB", ESP.getFreeHeap() / 1024);
-  tft.setTextColor(CLR_TEXT_LO); tft.drawString(buf, SCALE_X(4), y, 1);
-
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
-  dhWaitSelectPress();
-  delay(200);
+  int y = dhDiagnosticTop();
+  const int lineH = max(11, (dhDiagnosticBottom() - y) / 7);
+  dhDiagnosticRow("nRF1", nrf1 ? "SPI detected" : "Not detected", y, nrf1 ? CLR_SUCCESS : CLR_WARNING); y += lineH;
+  dhDiagnosticRow("nRF2", nrf2 ? "SPI detected" : "Not detected", y, nrf2 ? CLR_SUCCESS : CLR_TEXT_LO); y += lineH;
+  dhDiagnosticRow("CC1101", cc ? "SPI detected" : "Not detected", y, cc ? CLR_SUCCESS : CLR_TEXT_LO); y += lineH;
+  dhDiagnosticRow("IR TX", String("GPIO") + IR_TX_PIN, y, CLR_TEXT_MED); y += lineH;
+  dhDiagnosticRow("IR RX", digitalRead(IR_RX_PIN) ? "HIGH" : "LOW", y, CLR_TEXT_MED); y += lineH;
+  dhDiagnosticRow("GDO0", digitalRead(CC1101_GDO0_PIN) ? "HIGH" : "LOW", y, CLR_TEXT_MED); y += lineH;
+  dhDiagnosticRow("Heap", String(ESP.getFreeHeap() / 1024) + " KB", y, CLR_TEXT_MED);
+  dhDiagnosticFooter("GPIO levels are not presence tests");
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -846,18 +819,24 @@ static void dhRunInputMonitor() {
   pinMode(CC1101_GDO0_PIN, INPUT);
 
   unsigned long holdStart = 0; bool holding = false;
-  int irEvents = 0, ccEvents = 0;
-  bool lastIR = HIGH, lastCC = HIGH;
+  uint32_t irEvents = 0, ccEvents = 0;
+  bool lastIR = digitalRead(IR_RX_PIN), lastCC = digitalRead(CC1101_GDO0_PIN);
+  bool dirty = true;
+  unsigned long lastDraw = millis() - 151;
+  extern unsigned long virtualSelectHoldUntil;
 
-  while (true) {
+  while (currentState == STATE_DR_HACK) {
     extern void handleNetwork(); handleNetwork();
+    if (currentState != STATE_DR_HACK || virtualSelectPressed) {
+      virtualSelectPressed = false; virtualSelectHoldUntil = 0;
+      break;
+    }
     bool ir = digitalRead(IR_RX_PIN);
     bool cc = digitalRead(CC1101_GDO0_PIN);
-    if (ir != lastIR) { irEvents++; lastIR = ir; }
-    if (cc != lastCC) { ccEvents++; lastCC = cc; }
+    if (ir != lastIR) { irEvents++; lastIR = ir; dirty = true; }
+    if (cc != lastCC) { ccEvents++; lastCC = cc; dirty = true; }
 
-    static unsigned long lastDraw = 0;
-    if (millis() - lastDraw > 150) {
+    if (dirty && millis() - lastDraw > 150) {
       tft.fillScreen(CLR_BG);
       drawGradientCard(0, 0, SCR_W, SCALE_Y(14), CLR_PRIMARY, darkenColor(CLR_PRIMARY, 40), 0);
       tft.setTextColor(CLR_TEXT_HI);
@@ -867,9 +846,9 @@ static void dhRunInputMonitor() {
       // IR section
       tft.setTextColor(CLR_TEXT_LO); tft.drawString("IR RX:", SCALE_X(4), y, 1);
       tft.setTextColor(ir ? CLR_TEXT_MED : CLR_SUCCESS);
-      tft.drawString(ir ? "IDLE" : "ACTIVE", SCALE_X(60), y, 1); y += SCALE_Y(12);
+      tft.drawString(ir ? "HIGH" : "LOW", SCALE_X(60), y, 1); y += SCALE_Y(12);
 
-      char buf[24]; sprintf(buf, "Events: %d", irEvents);
+      char buf[32]; snprintf(buf, sizeof(buf), "Changes: %lu", (unsigned long)irEvents);
       tft.setTextColor(CLR_TEXT_MED); tft.drawString(buf, SCALE_X(8), y, 1); y += SCALE_Y(12);
 
       // IR activity bar
@@ -882,7 +861,7 @@ static void dhRunInputMonitor() {
       tft.setTextColor(cc ? CLR_WARNING : CLR_TEXT_MED);
       tft.drawString(cc ? "HIGH" : "LOW", SCALE_X(60), y, 1); y += SCALE_Y(12);
 
-      sprintf(buf, "Events: %d", ccEvents);
+      snprintf(buf, sizeof(buf), "Changes: %lu", (unsigned long)ccEvents);
       tft.setTextColor(CLR_TEXT_MED); tft.drawString(buf, SCALE_X(8), y, 1); y += SCALE_Y(12);
 
       tft.fillRect(SCALE_X(8), y, SCR_W - SCALE_X(16), SCALE_Y(6), CLR_SURFACE);
@@ -891,14 +870,17 @@ static void dhRunInputMonitor() {
       tft.setTextColor(CLR_TEXT_LO);
       tft.drawString("HOLD SEL: exit", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
       lastDraw = millis();
+      dirty = false;
     }
 
-    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
+    if (digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL) {
       if (!holding) { holdStart = millis(); holding = true; }
       if (millis() - holdStart > 800) break;
     } else { holding = false; }
     delay(2);
   }
+  virtualLeftPressed = virtualRightPressed = false;
+  virtualSelectHoldUntil = 0;
 }
 
 #endif // ESP32

@@ -7,6 +7,7 @@
 #define DH_BLE_TOOLS_H
 
 #ifdef ESP32
+#if ENABLE_BLE_TOOLS
 
 #include "globals.h"
 #include "ui_components.h"
@@ -39,6 +40,7 @@ struct DH_BiiDevice {
 static DH_BiiDevice dhBiiDevs[DH_BII_MAX];
 static int dhBiiCount = 0;
 static int dhBiiCursor = 0, dhBiiScroll = 0;
+static bool dhBiiDetail = false;
 
 static String dhBiiCompanyName(uint16_t id) {
   switch (id) {
@@ -54,7 +56,7 @@ static String dhBiiCompanyName(uint16_t id) {
     case 0x0157: return "Xiaomi";
     case 0x038F: return "JBL";
     case 0x0310: return "Bose";
-    default: return id != 0xFFFF ? "0x" + String(id, HEX) : "N/A";
+    default: { char code[8]; snprintf(code, sizeof(code), "0x%04X", unsigned(id)); return id != 0xFFFF ? String(code) : String("N/A"); }
   }
 }
 
@@ -79,11 +81,17 @@ static String dhBiiAppearanceName(uint16_t app) {
     case 0x04C0: return "HeartRate";
     case 0x0540: return "Glucose";
     case 0x0CC0: return "Hearing Aid";
-    default: return "0x" + String(app, HEX);
+    default: { char code[8]; snprintf(code, sizeof(code), "0x%04X", unsigned(app)); return String(code); }
   }
 }
 
 static void dhBiiDrawList() {
+  dhBiiCount = constrain(dhBiiCount, 0, DH_BII_MAX);
+  dhBiiCursor = constrain(dhBiiCursor, 0, max(0, dhBiiCount - 1));
+  dhBiiScroll = constrain(dhBiiScroll, 0, max(0, dhBiiCount - DH_BII_VIS));
+  if (dhBiiCursor < dhBiiScroll) dhBiiScroll = dhBiiCursor;
+  if (dhBiiCursor >= dhBiiScroll + DH_BII_VIS) dhBiiScroll = dhBiiCursor - DH_BII_VIS + 1;
+  tft.setTextDatum(TL_DATUM); tft.setTextSize(1); tft.setTextPadding(0);
   tft.fillScreen(CLR_BG);
   drawGradientCard(0, 0, SCR_W, SCALE_Y(14), 0x001F, darkenColor(0x001F, 40), 0);
   tft.setTextColor(CLR_TEXT_HI);
@@ -108,18 +116,18 @@ static void dhBiiDrawList() {
 
     String label = d.name.length() > 0 ? d.name : d.address;
     tft.setTextColor(sel ? CLR_TEXT_HI : CLR_TEXT_MED);
-    drawTruncatedText(SCALE_X(4), y + SCALE_Y(1), label.c_str(), SCALE_X(85), sel ? CLR_TEXT_HI : CLR_TEXT_MED, 1);
-
-    char rssi[10]; sprintf(rssi, "%ddB", d.rssi);
+    char rssi[16]; snprintf(rssi, sizeof(rssi), "%ddBm", constrain(d.rssi, -127, 0));
+    int signalW = tft.textWidth(rssi, 1);
+    drawTruncatedText(SCALE_X(4), y + SCALE_Y(1), label.c_str(), SCR_W - signalW - SCALE_X(12), sel ? CLR_TEXT_HI : CLR_TEXT_MED, 1);
     tft.setTextColor(d.rssi > -65 ? CLR_SUCCESS : CLR_WARNING);
-    tft.drawString(rssi, SCR_W - SCALE_X(28), y + SCALE_Y(1), 1);
+    tft.drawRightString(rssi, SCR_W - SCALE_X(4), y + SCALE_Y(1), 1);
 
     String company = dhBiiCompanyName(d.companyId);
     tft.setTextColor(CLR_TEXT_LO);
     drawTruncatedText(SCALE_X(4), y + SCALE_Y(10), company.c_str(), SCALE_X(60), CLR_TEXT_LO, 1);
 
-    char svcs[10]; sprintf(svcs, "S:%d", d.serviceCount);
-    tft.drawString(svcs, SCR_W - SCALE_X(28), y + SCALE_Y(10), 1);
+    char svcs[12]; snprintf(svcs, sizeof(svcs), "U:%d", constrain(d.serviceCount, 0, 255));
+    tft.drawRightString(svcs, SCR_W - SCALE_X(4), y + SCALE_Y(10), 1);
   }
 
   tft.setTextColor(CLR_TEXT_LO);
@@ -127,6 +135,8 @@ static void dhBiiDrawList() {
 }
 
 static void dhBiiDrawDetail(int idx) {
+  if (idx < 0 || idx >= dhBiiCount) { dhDiagnosticStatus("BLE INSPECT", "No selected device"); return; }
+  tft.setTextDatum(TL_DATUM); tft.setTextSize(1); tft.setTextPadding(0);
   DH_BiiDevice& d = dhBiiDevs[idx];
   tft.fillScreen(CLR_BG);
   drawGradientCard(0, 0, SCR_W, SCALE_Y(14), 0x001F, darkenColor(0x001F, 40), 0);
@@ -146,12 +156,12 @@ static void dhBiiDrawDetail(int idx) {
   // MAC
   tft.setTextColor(CLR_TEXT_LO); tft.drawString("MAC:", SCALE_X(4), y, 1);
   tft.setTextColor(CLR_WARNING);
-  tft.drawString(d.address.c_str(), SCALE_X(28), y, 1);
+  drawTruncatedText(SCALE_X(28), y, d.address.c_str(), SCR_W - SCALE_X(32), CLR_WARNING, 1);
   y += lineH;
 
   // RSSI
   tft.setTextColor(CLR_TEXT_LO); tft.drawString("RSSI:", SCALE_X(4), y, 1);
-  char rssi[12]; sprintf(rssi, "%ddBm", d.rssi);
+  char rssi[16]; snprintf(rssi, sizeof(rssi), "%ddBm", constrain(d.rssi, -127, 0));
   tft.setTextColor(d.rssi > -65 ? CLR_SUCCESS : CLR_WARNING);
   tft.drawString(rssi, SCALE_X(34), y, 1);
   y += lineH;
@@ -169,52 +179,33 @@ static void dhBiiDrawDetail(int idx) {
   y += lineH;
 
   // Services
-  char svcs[16]; sprintf(svcs, "%d services", d.serviceCount);
-  tft.setTextColor(CLR_TEXT_LO); tft.drawString("Svcs:", SCALE_X(4), y, 1);
+  char svcs[24]; snprintf(svcs, sizeof(svcs), "%d advertised", constrain(d.serviceCount, 0, 255));
+  tft.setTextColor(CLR_TEXT_LO); tft.drawString("UUID:", SCALE_X(4), y, 1);
   tft.setTextColor(CLR_TEXT_MED);
   tft.drawString(svcs, SCALE_X(34), y, 1);
 
   tft.setTextColor(CLR_TEXT_LO);
   tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
-
-  dhWaitSelectPress();
-  delay(200);
 }
 
 static void dhRunBleInspector() {
-  tft.fillScreen(CLR_BG);
-  tft.setTextColor(0x001F);
-  tft.drawCentreString("Scanning BLE...", SCR_CX, SCR_CY, 1);
-
-  BLEDevice::init("");
-  BLEScan* scan = BLEDevice::getScan();
-  if (!scan) return;
-  scan->setActiveScan(true);
-  scan->setInterval(100);
-  scan->setWindow(80);
-
-  BLEScanResults* results = scan->start(6, false);
-  int n = results->getCount();
-  dhBiiCount = 0;
-
-  for (int i = 0; i < n && dhBiiCount < DH_BII_MAX; i++) {
-    BLEAdvertisedDevice d = results->getDevice(i);
-    DH_BiiDevice& out = dhBiiDevs[dhBiiCount++];
-    out.name = d.haveName() ? String(d.getName().c_str()) : "";
-    out.address = String(d.getAddress().toString().c_str());
-    out.rssi = d.getRSSI();
-    out.companyId = 0xFFFF;
-    if (d.haveManufacturerData()) {
-      String data = d.getManufacturerData();
-      if (data.length() >= 2) {
-        out.companyId = (uint8_t)data[0] | ((uint16_t)(uint8_t)data[1] << 8);
-      }
-    }
-    out.appearance = d.haveAppearance() ? dhBiiAppearanceName(d.getAppearance()) : "Unknown";
-    out.serviceCount = d.getServiceUUIDCount();
+  dhBiiCount = dhBiiCursor = dhBiiScroll = 0; dhBiiDetail = false;
+  dhDiagnosticHeader("BLE INSPECT", 0x001F);
+  drawTruncatedText(8, dhDiagnosticTop() + 8, "Scanning...", SCR_W - 16, CLR_TEXT_MED, 1);
+  DhBleRecord records[DH_BII_MAX];
+  int n = dhPassiveBleScan(records, DH_BII_MAX);
+  if (n < 0) {
+    if (currentState == STATE_DR_HACK && dhCurrentState == DH_BLE_INSPECTOR)
+      dhDiagnosticStatus("BLE INSPECT", dhDiscoveryErrorText(n));
+    return;
   }
-
-  scan->clearResults();
+  for (int i = 0; i < n; i++) {
+    DH_BiiDevice& out = dhBiiDevs[dhBiiCount++];
+    out.name = records[i].name; out.address = records[i].address;
+    out.rssi = records[i].rssi; out.companyId = records[i].company;
+    out.appearance = records[i].appearance != 0xFFFF ? dhBiiAppearanceName(records[i].appearance) : String("Unknown");
+    out.serviceCount = records[i].services;
+  }
 
   // Sort by RSSI
   for (int i = 0; i < dhBiiCount - 1; i++)
@@ -226,34 +217,20 @@ static void dhRunBleInspector() {
   dhBiiCursor = 0; dhBiiScroll = 0;
   dhBiiDrawList();
 
-  unsigned long holdStart = 0; bool holding = false;
-  while (true) {
-    extern void handleNetwork(); handleNetwork();
-    if ((digitalRead(BTN_LEFT) == BTN_ACTIVE_LEVEL || (virtualLeftPressed ? (virtualLeftPressed=false, true) : false))) {
-      dhBiiCursor = (dhBiiCursor + dhBiiCount - 1) % max(dhBiiCount, 1);
-      if (dhBiiCursor < dhBiiScroll) dhBiiScroll = dhBiiCursor;
-      if (dhBiiCursor >= dhBiiScroll + DH_BII_VIS) dhBiiScroll = dhBiiCursor - DH_BII_VIS + 1;
-      dhBiiDrawList(); delay(180);
-    }
-    if ((digitalRead(BTN_RIGHT) == BTN_ACTIVE_LEVEL || (virtualRightPressed ? (virtualRightPressed=false, true) : false))) {
-      dhBiiCursor = (dhBiiCursor + 1) % max(dhBiiCount, 1);
-      if (dhBiiCursor < dhBiiScroll) dhBiiScroll = dhBiiCursor;
-      if (dhBiiCursor >= dhBiiScroll + DH_BII_VIS) dhBiiScroll = dhBiiCursor - DH_BII_VIS + 1;
-      dhBiiDrawList(); delay(180);
-    }
-    if ((digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false))) {
-      if (!holding) { holdStart = millis(); holding = true; }
-      if (millis() - holdStart > 800) break;
-    } else {
-      if (holding && millis() - holdStart < 800 && dhBiiCount > 0) {
-        dhBiiDrawDetail(dhBiiCursor);
-        dhBiiDrawList();
-      }
-      holding = false;
-    }
-    delay(10);
-  }
-  // BLEDevice::deinit(false); // Removed to prevent crashes when btSerial is active
+}
+
+static void dhBiiNavigate(int delta) {
+  if (!dhBiiCount) return;
+  dhBiiCursor = ((dhBiiCursor + delta) % dhBiiCount + dhBiiCount) % dhBiiCount;
+  if (dhBiiCursor < dhBiiScroll) dhBiiScroll = dhBiiCursor;
+  if (dhBiiCursor >= dhBiiScroll + DH_BII_VIS) dhBiiScroll = dhBiiCursor - DH_BII_VIS + 1;
+  if (dhBiiDetail) dhBiiDrawDetail(dhBiiCursor); else dhBiiDrawList();
+}
+static bool dhBiiSelect() {
+  if (!dhBiiCount) return false;
+  dhBiiDetail = !dhBiiDetail;
+  if (dhBiiDetail) dhBiiDrawDetail(dhBiiCursor); else dhBiiDrawList();
+  return true;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1098,5 +1075,14 @@ static void dhRunBtJammer() {
   }
 }
 
+#else
+static void dhRunBleInspector() { dhDiagnosticStatus("BLUETOOTH", "Disabled"); }
+static void dhRunBleSpam() { dhDiagnosticStatus("BLUETOOTH", "Disabled"); }
+static void dhRunBtDisruptor() { dhDiagnosticStatus("BLUETOOTH", "Disabled"); }
+static void dhRunBtJammer() { dhDiagnosticStatus("BLUETOOTH", "Disabled"); }
+static void dhRunIphoneRemote() { dhDiagnosticStatus("BLUETOOTH", "Disabled"); }
+static void dhBiiNavigate(int) {}
+static bool dhBiiSelect() { return false; }
+#endif
 #endif // ESP32
 #endif // DH_BLE_TOOLS_H

@@ -1,7 +1,7 @@
 """
 spotify_integration.py
 Modular logic for handling Spotify API, playback state, and lyrics processing.
-Lyrics are fetched from a local Spotify Lyrics API proxy (akashrchandran/spotify-lyrics-api).
+Lyrics are fetched from LRCLIB, independently of Spotify authorization.
 """
 
 import os
@@ -122,10 +122,12 @@ class SpotifyIntegration:
         return None
 
     def get_current_track(self) -> dict | None:
+        self.playback_sample_valid = False
         if not self.enabled or self.client is None:
             return None
         try:
             current = self.client.current_playback()
+            self.playback_sample_valid = True
             if not current or not current.get("item"):
                 return None
             track = current["item"]
@@ -144,6 +146,7 @@ class SpotifyIntegration:
                 ),
             }
         except Exception as e:
+            self.playback_sample_valid = False
             print(f"Spotify Track Error: {e}")
             return None
 
@@ -176,25 +179,40 @@ class SpotifyIntegration:
     def get_lyrics(
         self, track_name: str, artist_name: str, track_id: str | None = None
     ) -> list[dict]:
-        """Fetch lyrics dynamically from the public LRCLIB network with fuzzy search fallback."""
+        """Fetch LRCLIB lyrics; search fallback must match both title and artist."""
         import re
+
+        def _decode(data: dict) -> list[dict]:
+            if data.get("instrumental") is True:
+                return [{"time": 0, "words": "", "status": "Instrumental"}]
+            synced = data.get("syncedLyrics")
+            if isinstance(synced, str) and synced:
+                parsed = _parse_synced(synced)
+                if parsed:
+                    return parsed
+            plain = data.get("plainLyrics")
+            if isinstance(plain, str) and plain:
+                return [{"time": i * 6000, "words": line, "synced": False}
+                        for i, line in enumerate(line for line in plain.splitlines() if line.strip())]
+            return []
 
         def _parse_synced(synced: str) -> list[dict]:
             parsed = []
-            for l in synced.split("\n"):
-                if l.startswith("[") and "]" in l:
-                    parts = l.split("]", 1)
-                    time_str = parts[0][1:]
-                    words = parts[1].strip()
-                    if words:
-                        try:
-                            m, s = time_str.split(":")
-                            sec, ms_val = s.split(".") if "." in s else (s, "0")
-                            time_ms = int(m)*60000 + int(sec)*1000 + int(str(ms_val).ljust(3, "0")[:3])
-                            parsed.append({"time": time_ms, "words": words})
-                        except Exception:
-                            pass
-            return parsed
+            offset_tag = re.search(r"(?m)^\[offset:([+-]?\d{1,7})\]", synced)
+            offset = int(offset_tag[1]) if offset_tag else 0
+            tag = re.compile(r"\[(\d{1,3}):([0-5]\d)(?:\.(\d{1,3})\d*)?\]")
+            for line in synced.splitlines():
+                times, end = [], 0
+                match = tag.match(line, end)
+                while match:
+                    times.append(int(match[1]) * 60000 + int(match[2]) * 1000 +
+                                 int((match[3] or '0').ljust(3, '0')) - offset)
+                    end = match.end()
+                    match = tag.match(line, end)
+                # Empty lines are real timed breaks, not missing lyrics.
+                words = re.sub(r'<\d{1,3}:[0-5]\d(?:\.\d+)?>', '', line[end:]).strip()
+                parsed.extend({'time': time_ms, 'words': words} for time_ms in times)
+            return sorted(parsed, key=lambda line: line['time'])
 
         # Clean track title: strip (feat. ...), - Remastered, etc.
         clean_title = re.sub(r"\(feat\..*?\)", "", track_name, flags=re.IGNORECASE)
@@ -210,17 +228,15 @@ class SpotifyIntegration:
             try:
                 url = "https://lrclib.net/api/get"
                 params = {"track_name": query_title, "artist_name": artist_name}
-                response = requests.get(url, params=params, timeout=10)
+                response = requests.get(url, params=params, timeout=10,
+                                        headers={'User-Agent': 'CompanionOS/7.0 (lyrics bridge)'})
 
                 if response.status_code == 200:
                     data = response.json()
-                    synced = data.get("syncedLyrics")
-                    if synced:
-                        parsed = _parse_synced(synced)
+                    if isinstance(data, dict):
+                        parsed = _decode(data)
                         if parsed:
                             return parsed
-                    elif data.get("plainLyrics"):
-                        return [{"time": 0, "words": "♪ Unsynced lyrics available ♪"}]
             except Exception:
                 pass
 
@@ -228,23 +244,27 @@ class SpotifyIntegration:
         try:
             url = "https://lrclib.net/api/search"
             params = {"q": f"{clean_title} {artist_name}"}
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, timeout=10,
+                                    headers={'User-Agent': 'CompanionOS/7.0 (lyrics bridge)'})
             if response.status_code == 200:
                 results = response.json()
                 if isinstance(results, list):
+                    def normalize(text):
+                        return re.sub(r"[^\w]", "", str(text).casefold())
                     for item in results:
-                        synced = item.get("syncedLyrics")
-                        if synced:
-                            parsed = _parse_synced(synced)
-                            if parsed:
-                                return parsed
-                    for item in results:
-                        if item.get("plainLyrics"):
-                            return [{"time": 0, "words": "♪ Unsynced lyrics available ♪"}]
+                        if not isinstance(item, dict):
+                            continue
+                        if normalize(item.get('artistName')) != normalize(artist_name):
+                            continue
+                        if normalize(item.get('trackName')) not in {normalize(track_name), normalize(clean_title)}:
+                            continue
+                        parsed = _decode(item)
+                        if parsed:
+                            return parsed
         except Exception as e:
             print(f"LRCLIB Search Fallback Error: {e}")
 
-        return [{"time": 0, "words": "♪ Instrumental ♪"}]
+        return [{"time": 0, "words": "", "status": "Lyrics unavailable"}]
 
     def process_album_art(self, image_url: str, size: int = 96) -> list[int] | None:
         """Returns a list of RGB565 integer pixels."""

@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════
 // COMPANION OS v7.0 — DR. HACK MODE (ESP32 ONLY)
-// Full hacking suite with 7 sub-tools adapted for 128×160.
+// 48-entry toolkit adapted for 160x128 and 320x240 displays.
 // Source: ESP32-TOOLS-PRO by pepeangell5, adapted for CompanionOS.
 // ═══════════════════════════════════════════════════════════
 #ifndef PAGE_DR_HACK_H
@@ -20,15 +20,15 @@
 
 #include "globals.h"
 #include "ui_components.h"
+#include "dh_diagnostic_ui.h"
 #include <WiFi.h>
 #include "esp_wifi.h"
-#include <BLEDevice.h>
-#include <BLEScan.h>
-#include <BLEAdvertisedDevice.h>
 #include <RF24.h>
+#include "dh_discovery.h"
 
 // DR. HACK TOOL MODULES
 static void dhShowError(const char* errMsg);
+static bool dhProbeCc1101();
 #include "dh_wifi_tools.h"
 #include "dh_evil_portal.h"
 #include "dh_ble_tools.h"
@@ -56,7 +56,7 @@ static const char* DH_TOOL_NAMES[DH_TOTAL_TOOLS] = {
   "WiFi Scan", "CH Scan", "WiFi Radar", "Direction",
   "Beacon", "Deauth", "Evil Portal", "Probe Sniff",
   // Page 2: WiFi+ & BLE
-  "KARMA", "WiFi Config", "BLE Scan", "BLE Inspect",
+  "KARMA", "WiFi Status", "BLE Scan", "BLE Inspect",
   "BLE Spam", "BT Disrupt", "iOS Remote", "BT Jammer",
   // Page 3: Radio & IR
   "2.4G Jammer", "Radio Scan", "IR Capture", "IR Replay",
@@ -94,16 +94,8 @@ static const uint16_t DH_TOOL_COLORS[DH_TOTAL_TOOLS] = {
 };
 
 // ═══════════════════════════════════════════════════════════
-// ENTRY ANIMATION — Red scanline sweep
+// EXIT ANIMATION
 // ═══════════════════════════════════════════════════════════
-
-static void dhEntryScanline() {
-  for (int y = 0; y < SCR_H; y += 2) {
-    tft.drawFastHLine(0, y, SCR_W, CLR_SECONDARY);
-    delay(5);
-    tft.drawFastHLine(0, y, SCR_W, CLR_BG);
-  }
-}
 
 static void dhExitScanline() {
   for (int y = SCR_H - 1; y >= 0; y -= 2) {
@@ -118,20 +110,10 @@ static void dhExitScanline() {
 // ═══════════════════════════════════════════════════════════
 
 static void dhShowError(const char* msg) {
-  tft.fillScreen(CLR_BG);
-  tft.drawRect(0, 0, SCR_W, SCR_H, CLR_SECONDARY);
-  
-  drawGradientCard(2, 2, SCR_W - 4, SCALE_Y(14), CLR_SECONDARY, darkenColor(CLR_SECONDARY, 40), 0);
-  tft.setTextColor(CLR_TEXT_HI);
-  tft.drawString("HARDWARE ERROR", SCALE_X(4), SCALE_Y(2), 1);
-  
-  tft.setTextColor(CLR_TEXT_MED);
-  // Center multiline text approximation
-  tft.drawCentreString(msg, SCR_CX, SCALE_Y(40), 1);
-  
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawCentreString("Check wiring & pins", SCR_CX, SCALE_Y(60), 1);
-  tft.drawCentreString("Press SEL to exit", SCR_CX, SCR_H - SCALE_Y(20), 1);
+  dhDiagnosticHeader("HARDWARE ERROR", CLR_SECONDARY);
+  drawWrappedText(8, dhDiagnosticTop() + 4, msg && *msg ? msg : "No device response",
+                  SCR_W - 16, dhDiagnosticBottom() - dhDiagnosticTop() - 8, CLR_TEXT_HI, 1);
+  dhDiagnosticFooter("Unavailable");
   
   // Wait for user acknowledgment
   dhWaitSelectPress();
@@ -144,10 +126,8 @@ static void dhShowError(const char* msg) {
 
 void drawDrHackTile() {
   // Bottom-right corner — ultra-subtle indicator
-  int tx = SCR_W - SCALE_X(18);
-  int ty = SCR_H - SCALE_Y(14);
-  int tw = SCALE_X(15);
-  int th = SCALE_Y(10);
+  const int tw = 12, th = UI_FOOTER_H;
+  const int tx = SCR_W - tw - 2, ty = SCR_H - th;
 
   // Nearly invisible dark tile (blends with background)
   tft.fillRoundRect(tx, ty, tw, th, 2, CLR_SURFACE);
@@ -164,26 +144,18 @@ void drawDrHackTile() {
 // ═══════════════════════════════════════════════════════════
 
 static void dhDrawMenu() {
-  tft.fillScreen(CLR_BG);
+  dhMenuPage = constrain(dhMenuPage, 0, DH_MENU_PAGES - 1);
+  dhCursorIndex = constrain(dhCursorIndex, 0, DH_TOOLS_PER_PAGE - 1);
+  dhDiagnosticHeader("DR.HACK", CLR_SECONDARY);
+  char pgBuf[32];
+  snprintf(pgBuf, sizeof(pgBuf), "%d/%d %s", dhMenuPage + 1, DH_MENU_PAGES, DH_PAGE_TITLES[dhMenuPage]);
+  String pageLabel = fitUiText(pgBuf, SCR_W - 64, 1);
+  tft.setTextColor(CLR_TEXT_MED, CLR_SURFACE);
+  tft.drawRightString(pageLabel, SCR_W - 4, (dhDiagnosticTop() - 4 - tft.fontHeight(1)) / 2, 1);
 
-  // Header bar: red gradient, "DR.HACK" + page indicator
-  drawGradientCard(0, 0, SCR_W, SCALE_Y(14), CLR_SECONDARY, darkenColor(CLR_SECONDARY, 40), 0);
-  tft.setTextColor(CLR_TEXT_HI);
-  tft.drawString("DR.HACK", SCALE_X(4), SCALE_Y(2), 1);
-
-  // Page indicator: "1/6 WiFi"
-  char pgBuf[20];
-  sprintf(pgBuf, "%d/%d %s", dhMenuPage + 1, DH_MENU_PAGES, DH_PAGE_TITLES[dhMenuPage]);
-  tft.setTextColor(CLR_PRIMARY);
-  tft.drawString(pgBuf, SCR_W - SCALE_X(54), SCALE_Y(2), 1);
-
-  // Tool grid: 2 columns × 4 rows - properly centered
-  int gridX = SCALE_X(8);
-  int gridY = SCALE_Y(20);
-  int gapX = SCALE_X(6);
-  int gapY = SCALE_Y(4);
-  int tileW = (SCR_W - (gridX * 2) - gapX) / 2;
-  int tileH = SCALE_Y(20);
+  const int gridX = 4, gridY = dhDiagnosticTop(), gapX = 4, gapY = 3;
+  const int tileW = (SCR_W - gridX * 2 - gapX) / 2;
+  const int tileH = (dhDiagnosticBottom() - gridY - gapY * 3 - 2) / 4;
 
   int pageStart = dhMenuPage * DH_TOOLS_PER_PAGE;
 
@@ -206,26 +178,13 @@ static void dhDrawMenu() {
       tft.drawRoundRect(x, y, tileW, tileH, 3, CLR_BORDER);
     }
 
-    // Tool color dot
-    tft.fillCircle(x + SCALE_X(6), y + tileH / 2, 2, DH_TOOL_COLORS[globalIdx]);
-
-    // Tool name
-    tft.setTextColor(selected ? CLR_TEXT_HI : CLR_TEXT_MED);
-    tft.drawString(DH_TOOL_NAMES[globalIdx], x + SCALE_X(12), y + SCALE_Y(6), 1);
-
-    // Tool index (top right)
-    char idxBuf[4]; sprintf(idxBuf, "%d", globalIdx + 1);
-    tft.setTextColor(CLR_TEXT_LO);
-    tft.drawRightString(idxBuf, x + tileW - SCALE_X(4), y + SCALE_Y(6), 1);
+    const uint16_t bg = selected ? darkenColor(CLR_SECONDARY, 70) : CLR_SURFACE;
+    tft.fillRect(x + 3, y + 3, 2, tileH - 6, DH_TOOL_COLORS[globalIdx]);
+    drawWrappedText(x + 8, y + max(1, (tileH - 18) / 2), DH_TOOL_NAMES[globalIdx], tileW - 12, 20,
+                    selected ? CLR_TEXT_HI : CLR_TEXT_MED, 1, bg);
   }
 
-  // Page navigation arrows + exit
-  int footY = SCR_H - SCALE_Y(12);
-  tft.setTextColor(CLR_TEXT_LO);
-  if (dhMenuPage > 0) tft.drawString("<", SCALE_X(4), footY, 1);
-  if (dhMenuPage < DH_MENU_PAGES - 1) tft.drawString(">", SCR_W - SCALE_X(10), footY, 1);
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawCentreString("HOLD SEL:Exit", SCR_CX, footY, 1);
+  dhDiagnosticFooter(DH_TOOL_NAMES[pageStart + dhCursorIndex]);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -234,7 +193,7 @@ static void dhDrawMenu() {
 // ═══════════════════════════════════════════════════════════
 
 #define DH_MAX_NETWORKS 20
-#define DH_VISIBLE_LINES 5
+#define DH_VISIBLE_LINES max(1, (SCR_H - 12 - SCALE_Y(18)) / SCALE_Y(24))
 
 struct DH_NetInfo {
   String ssid;
@@ -295,6 +254,10 @@ static void dhDrawSignalBars(int x, int y, int bars) {
 }
 
 static void dhDrawNetList() {
+  dhNetCount = constrain(dhNetCount, 0, DH_MAX_NETWORKS);
+  dhNetCursor = constrain(dhNetCursor, 0, max(0, dhNetCount - 1));
+  dhNetScroll = constrain(dhNetScroll, 0, max(0, dhNetCount - DH_VISIBLE_LINES));
+  tft.setTextSize(1); tft.setTextDatum(TL_DATUM); tft.setTextPadding(0);
   tft.fillScreen(CLR_BG);
 
   // Header
@@ -340,10 +303,10 @@ static void dhDrawNetList() {
     tft.drawString(dhAuthStr(net.authType).c_str(), SCR_W - SCALE_X(24), y + SCALE_Y(2), 1);
 
     // Channel + RSSI on second line
-    char meta[20];
-    sprintf(meta, "CH%d %ddBm", net.channel, net.rssi);
+    char meta[40];
+    snprintf(meta, sizeof(meta), "CH%d %ddBm", net.channel, net.rssi);
     tft.setTextColor(CLR_TEXT_LO);
-    tft.drawString(meta, SCALE_X(20), y + SCALE_Y(12), 1);
+    drawTruncatedText(SCALE_X(20), y + SCALE_Y(12), meta, SCR_W - SCALE_X(24), CLR_TEXT_LO, 1);
   }
 
   // Footer
@@ -362,10 +325,7 @@ static void dhRunWifiScan() {
   tft.drawRect(barX, barY, barW, barH, CLR_BORDER);
 
   WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
-  delay(100);
-
-  int n = WiFi.scanNetworks(false, true);  // sync, show hidden
+  int n = WiFi.scanNetworks(false, true, true);  // Passive scan; retain the associated network.
   if (n < 0) n = 0;
 
   // Fill progress
@@ -384,8 +344,8 @@ static void dhRunWifiScan() {
   WiFi.scanDelete();
 
   // Sort by RSSI desc
-  for (int i = 0; i < n - 1; i++) {
-    for (int j = 0; j < n - 1 - i; j++) {
+  for (int i = 0; i < dhNetCount - 1; i++) {
+    for (int j = 0; j < dhNetCount - 1 - i; j++) {
       if (dhNetworks[j].rssi < dhNetworks[j + 1].rssi) {
         DH_NetInfo tmp = dhNetworks[j];
         dhNetworks[j] = dhNetworks[j + 1];
@@ -396,6 +356,27 @@ static void dhRunWifiScan() {
 
   dhNetCursor = 0;
   dhNetScroll = 0;
+  dhDrawNetList();
+}
+
+static void dhRunWifiDiscovery() {
+  dhNetCount = dhNetCursor = dhNetScroll = 0;
+  dhDiagnosticHeader("WIFI SCAN", CLR_PRIMARY);
+  drawTruncatedText(8, dhDiagnosticTop() + 8, "Scanning...", SCR_W - 16, CLR_TEXT_MED, 1);
+  int count = dhPassiveWifiScan();
+  if (count < 0) {
+    if (currentState == STATE_DR_HACK && dhCurrentState == DH_WIFI_SCANNER)
+      dhDiagnosticStatus("WIFI SCAN", dhDiscoveryErrorText(count));
+    return;
+  }
+  for (int i = 0; i < min(count, DH_MAX_NETWORKS); ++i) {
+    DH_NetInfo& net = dhNetworks[dhNetCount++];
+    net.ssid = WiFi.SSID(i); net.channel = WiFi.channel(i);
+    net.rssi = WiFi.RSSI(i); net.bssid = WiFi.BSSIDstr(i); net.authType = WiFi.encryptionType(i);
+  }
+  WiFi.scanDelete();
+  for (int i = 0; i < dhNetCount; ++i) for (int j = i + 1; j < dhNetCount; ++j)
+    if (dhNetworks[j].rssi > dhNetworks[i].rssi) { DH_NetInfo temp = dhNetworks[i]; dhNetworks[i] = dhNetworks[j]; dhNetworks[j] = temp; }
   dhDrawNetList();
 }
 
@@ -900,7 +881,7 @@ void dhRunPacketMonitor() {
 // ═══════════════════════════════════════════════════════════
 
 #define DH_BLE_MAX 16
-#define DH_BLE_VISIBLE 5
+#define DH_BLE_VISIBLE max(1, (SCR_H - 12 - SCALE_Y(18)) / SCALE_Y(24))
 
 struct DH_BleDevice {
   String name;
@@ -929,6 +910,10 @@ static String dhCompanyName(uint16_t id) {
 }
 
 static void dhDrawBleList() {
+  dhBleCount = constrain(dhBleCount, 0, DH_BLE_MAX);
+  dhBleCursor = constrain(dhBleCursor, 0, max(0, dhBleCount - 1));
+  dhBleScroll = constrain(dhBleScroll, 0, max(0, dhBleCount - DH_BLE_VISIBLE));
+  tft.setTextSize(1); tft.setTextDatum(TL_DATUM); tft.setTextPadding(0);
   tft.fillScreen(CLR_BG);
   drawGradientCard(0, 0, SCR_W, SCALE_Y(14), 0x051F, darkenColor(0x051F, 40), 0);
   tft.setTextColor(CLR_TEXT_HI);
@@ -943,7 +928,7 @@ static void dhDrawBleList() {
   }
 
   int listY = SCALE_Y(18);
-  int rowH = SCALE_Y(26);
+  int rowH = SCALE_Y(24);
 
   for (int i = 0; i < DH_BLE_VISIBLE; i++) {
     int idx = i + dhBleScroll;
@@ -961,18 +946,18 @@ static void dhDrawBleList() {
     // Name or address
     String label = dev.name.length() > 0 ? dev.name : dev.address;
     tft.setTextColor(sel ? CLR_TEXT_HI : CLR_TEXT_MED);
-    drawTruncatedText(SCALE_X(4), y + SCALE_Y(2), label.c_str(), SCR_W - SCALE_X(40), 
+    // Reserve the measured signal width before fitting the name.
+    char rssiStr[24];
+    snprintf(rssiStr, sizeof(rssiStr), "%ddBm", constrain(dev.rssi, -127, 0));
+    const int signalW = tft.textWidth(rssiStr, 1);
+    drawTruncatedText(SCALE_X(4), y + SCALE_Y(2), label.c_str(), SCR_W - signalW - SCALE_X(12),
                       sel ? CLR_TEXT_HI : CLR_TEXT_MED, 1);
-
-    // RSSI
-    char rssiStr[10];
-    sprintf(rssiStr, "%ddBm", dev.rssi);
     tft.setTextColor(dev.rssi > -65 ? CLR_SUCCESS : CLR_WARNING);
-    tft.drawString(rssiStr, SCR_W - SCALE_X(36), y + SCALE_Y(2), 1);
+    tft.drawRightString(rssiStr, SCR_W - SCALE_X(4), y + SCALE_Y(2), 1);
 
     // Company + address on second line
     String company = dhCompanyName(dev.companyId);
-    String meta = company.length() > 0 ? company : dev.address.substring(dev.address.length() - 8);
+    String meta = company.length() > 0 ? company : dev.address.substring(dev.address.length() > 8 ? dev.address.length() - 8 : 0);
     tft.setTextColor(CLR_TEXT_LO);
     drawTruncatedText(SCALE_X(4), y + SCALE_Y(14), meta.c_str(), SCR_W - SCALE_X(8), CLR_TEXT_LO, 1);
   }
@@ -982,38 +967,21 @@ static void dhDrawBleList() {
 }
 
 static void dhRunBleScan() {
-  tft.fillScreen(CLR_BG);
-  tft.setTextColor(0x051F);
-  tft.drawCentreString("Scanning BLE...", SCR_CX, SCR_CY - 10, 1);
-
-  BLEDevice::init("");
-  BLEScan* scan = BLEDevice::getScan();
-  if (!scan) return;
-  scan->setActiveScan(true);
-  scan->setInterval(100);
-  scan->setWindow(80);
-
-  BLEScanResults* results = scan->start(5, false);  // 5 second scan
-  int n = results->getCount();
-
-  dhBleCount = 0;
-  for (int i = 0; i < n; i++) {
-    if (dhBleCount >= DH_BLE_MAX) break;
-    BLEAdvertisedDevice d = results->getDevice(i);
-    DH_BleDevice& out = dhBleDevices[dhBleCount++];
-    out.name = d.haveName() ? String(d.getName().c_str()) : "";
-    out.address = String(d.getAddress().toString().c_str());
-    out.rssi = d.getRSSI();
-    out.companyId = 0xFFFF;
-    if (d.haveManufacturerData()) {
-      String data = d.getManufacturerData();
-      if (data.length() >= 2) {
-        out.companyId = (uint8_t)data[0] | ((uint16_t)(uint8_t)data[1] << 8);
-      }
-    }
+  dhBleCount = dhBleCursor = dhBleScroll = 0;
+  dhDiagnosticHeader("BLE SCAN", 0x051F);
+  drawTruncatedText(8, dhDiagnosticTop() + 8, "Scanning...", SCR_W - 16, CLR_TEXT_MED, 1);
+  DhBleRecord records[DH_BLE_MAX];
+  int n = dhPassiveBleScan(records, DH_BLE_MAX);
+  if (n < 0) {
+    if (currentState == STATE_DR_HACK && dhCurrentState == DH_BT_SCANNER)
+      dhDiagnosticStatus("BLE SCAN", dhDiscoveryErrorText(n));
+    return;
   }
-
-  scan->clearResults();
+  for (int i = 0; i < n; i++) {
+    DH_BleDevice& out = dhBleDevices[dhBleCount++];
+    out.name = records[i].name; out.address = records[i].address;
+    out.rssi = records[i].rssi; out.companyId = records[i].company;
+  }
 
   // Sort by RSSI
   for (int i = 0; i < dhBleCount - 1; i++) {
@@ -1038,88 +1006,25 @@ static void dhRunBleScan() {
 
 // Duplicate dhRunHwDiag() removed. It is in dh_ir_tools.h
 static void dhDrawSysInfo() {
-  tft.fillScreen(CLR_BG);
-  drawGradientCard(0, 0, SCR_W, SCALE_Y(14), CLR_TEXT_MED, CLR_TEXT_LO, 0);
-  tft.setTextColor(CLR_TEXT_HI);
-  tft.drawString("SYSTEM INFO", SCALE_X(4), SCALE_Y(2), 1);
-
-  int y = SCALE_Y(20);
-  int lineH = SCALE_Y(14);
+  dhDiagnosticHeader("SYSTEM INFO", CLR_PRIMARY);
+  int y = dhDiagnosticTop();
+  const int lineH = max(10, (dhDiagnosticBottom() - y) / 9);
   char buf[40];
-
-  // Chip ID
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawString("Chip:", SCALE_X(4), y, 1);
-  tft.setTextColor(CLR_TEXT_HI);
   uint64_t chipId = ESP.getEfuseMac();
-  sprintf(buf, "%04X%08X", (uint16_t)(chipId >> 32), (uint32_t)chipId);
-  tft.drawString(buf, SCALE_X(40), y, 1);
-  y += lineH;
-
-  // CPU
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawString("CPU:", SCALE_X(4), y, 1);
-  tft.setTextColor(CLR_PRIMARY);
-  sprintf(buf, "%d MHz", ESP.getCpuFreqMHz());
-  tft.drawString(buf, SCALE_X(40), y, 1);
-  y += lineH;
-
-  // Free Heap
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawString("Heap:", SCALE_X(4), y, 1);
-  tft.setTextColor(CLR_SUCCESS);
-  sprintf(buf, "%d KB", ESP.getFreeHeap() / 1024);
-  tft.drawString(buf, SCALE_X(40), y, 1);
-  y += lineH;
-
-  // Flash
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawString("Flash:", SCALE_X(4), y, 1);
-  tft.setTextColor(CLR_TEXT_MED);
-  sprintf(buf, "%d KB", ESP.getFlashChipSize() / 1024);
-  tft.drawString(buf, SCALE_X(40), y, 1);
-  y += lineH;
-
-  // WiFi MAC
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawString("MAC:", SCALE_X(4), y, 1);
-  tft.setTextColor(CLR_WARNING);
-  tft.drawString(WiFi.macAddress().c_str(), SCALE_X(30), y, 1);
-  y += lineH;
-
-  // IP
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawString("IP:", SCALE_X(4), y, 1);
-  tft.setTextColor(CLR_PRIMARY);
-  tft.drawString(WiFi.localIP().toString().c_str(), SCALE_X(30), y, 1);
-  y += lineH;
-
-  // Uptime
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawString("Up:", SCALE_X(4), y, 1);
-  tft.setTextColor(CLR_TEXT_MED);
+  snprintf(buf, sizeof(buf), "%04X%08lX", unsigned((chipId >> 32) & 0xFFFF), (unsigned long)(uint32_t)chipId);
+  dhDiagnosticRow("Chip", buf, y, CLR_TEXT_HI); y += lineH;
+  dhDiagnosticRow("CPU", String(ESP.getCpuFreqMHz()) + " MHz", y, CLR_PRIMARY); y += lineH;
+  dhDiagnosticRow("Heap", String(ESP.getFreeHeap() / 1024) + " KB", y, CLR_SUCCESS); y += lineH;
+  dhDiagnosticRow("Flash", String(ESP.getFlashChipSize() / 1024) + " KB", y, CLR_TEXT_MED); y += lineH;
+  dhDiagnosticRow("MAC", WiFi.macAddress(), y, CLR_TEXT_MED); y += lineH;
+  dhDiagnosticRow("IP", WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : String("Offline"), y, CLR_PRIMARY); y += lineH;
   unsigned long sec = millis() / 1000;
-  sprintf(buf, "%luh %lum %lus", sec / 3600, (sec % 3600) / 60, sec % 60);
-  tft.drawString(buf, SCALE_X(30), y, 1);
-  y += lineH;
-
-  // Platform
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawString("Board:", SCALE_X(4), y, 1);
-  tft.setTextColor(CLR_SUCCESS);
-  tft.drawString(PLATFORM_NAME, SCALE_X(40), y, 1);
-  y += lineH;
-
-  // Display
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawString("Disp:", SCALE_X(4), y, 1);
-  tft.setTextColor(CLR_TEXT_MED);
-  sprintf(buf, "%dx%d ST7735R", SCREEN_W, SCREEN_H);
-  tft.drawString(buf, SCALE_X(40), y, 1);
-
-  // Footer
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
+  snprintf(buf, sizeof(buf), "%luh %02lum %02lus", sec / 3600, (sec % 3600) / 60, sec % 60);
+  dhDiagnosticRow("Uptime", buf, y, CLR_TEXT_MED); y += lineH;
+  dhDiagnosticRow("Board", PLATFORM_NAME, y, CLR_TEXT_MED); y += lineH;
+  snprintf(buf, sizeof(buf), "%d x %d", SCREEN_W, SCREEN_H);
+  dhDiagnosticRow("Display", buf, y, CLR_TEXT_MED);
+  dhDiagnosticFooter("System");
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1132,42 +1037,14 @@ static void dhDrawSysInfo() {
 // ═══════════════════════════════════════════════════════════
 
 static void dhDrawAbout() {
-  tft.fillScreen(CLR_BG);
-  drawGradientCard(0, 0, SCR_W, SCALE_Y(14), CLR_PRIMARY, darkenColor(CLR_PRIMARY, 40), 0);
-  tft.setTextColor(CLR_TEXT_HI);
-  tft.drawString("ABOUT", SCALE_X(4), SCALE_Y(2), 1);
-
-  int y = SCALE_Y(22);
-  int lineH = SCALE_Y(14);
-
-  tft.setTextColor(CLR_PRIMARY);
-  tft.drawCentreString("DR.HACK", SCR_CX, y, 2);
-  y += SCALE_Y(20);
-
-  tft.setTextColor(CLR_TEXT_MED);
-  tft.drawCentreString("CompanionOS v7.0", SCR_CX, y, 1);
-  y += lineH;
-
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawCentreString("Security Toolkit", SCR_CX, y, 1);
-  y += lineH;
-
-  drawSeparator(SCALE_X(10), y, SCR_W - SCALE_X(20), CLR_BORDER);
-  y += SCALE_Y(8);
-
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawString("Tools: 48", SCALE_X(8), y, 1); y += lineH;
-  tft.drawString("Platform: ESP32", SCALE_X(8), y, 1); y += lineH;
-
-  char heapBuf[24];
-  sprintf(heapBuf, "Free heap: %dKB", ESP.getFreeHeap() / 1024);
-  tft.drawString(heapBuf, SCALE_X(8), y, 1); y += lineH;
-
-  tft.setTextColor(CLR_WARNING);
-  tft.drawCentreString("Use responsibly!", SCR_CX, y, 1);
-
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawString("SEL: back", SCALE_X(4), SCR_H - SCALE_Y(10), 1);
+  dhDiagnosticHeader("ABOUT DR.HACK", CLR_PRIMARY);
+  int y = dhDiagnosticTop() + 4;
+  drawTruncatedText(8, y, "CompanionOS", SCR_W - 16, CLR_TEXT_HI, 2);
+  y += tft.fontHeight(2) + 8;
+  dhDiagnosticRow("Board", PLATFORM_NAME, y, CLR_TEXT_MED); y += 14;
+  dhDiagnosticRow("Entries", String(DH_TOTAL_TOOLS), y, CLR_TEXT_MED); y += 14;
+  dhDiagnosticRow("Heap", String(ESP.getFreeHeap() / 1024) + " KB", y, CLR_TEXT_MED);
+  dhDiagnosticFooter("Diagnostics");
 }
 
 void dhNavigate(int delta) {
@@ -1202,60 +1079,32 @@ void dhNavigate(int delta) {
     if (dhBleCursor >= dhBleScroll + DH_BLE_VISIBLE) dhBleScroll = dhBleCursor - DH_BLE_VISIBLE + 1;
     dhDrawBleList();
   }
+  else if (dhCurrentState == DH_BLE_INSPECTOR) {
+    dhBiiNavigate(delta);
+  }
 }
 
 // Macro: run tool, return to menu
 #define DH_RUN_TOOL(state, func) \
-  dhCurrentState = state; func; dhCurrentState = DH_MENU; dhDrawMenu(); break;
+  dhCurrentState = state; func; dhCurrentState = DH_MENU; if (currentState == STATE_DR_HACK) dhDrawMenu(); break;
 
 // Macro: enter tool with own loop (user navigates within)
 #define DH_ENTER_TOOL(state, func) \
   dhCurrentState = state; func; break;
 
-static void dhRunInfo() {
-  tft.fillScreen(CLR_BG);
-  tft.setTextColor(CLR_PRIMARY);
-  tft.drawCentreString("SYSTEM INFO", SCR_CX, SCALE_Y(30), 2);
-  tft.setTextColor(CLR_TEXT_MED);
-  tft.drawCentreString(String("CPU: ") + ESP.getCpuFreqMHz() + "MHz", SCR_CX, SCALE_Y(50), 1);
-  tft.drawCentreString(String("RAM: ") + (ESP.getFreeHeap() / 1024) + "KB", SCR_CX, SCALE_Y(65), 1);
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawCentreString("Press SELECT to exit", SCR_CX, SCR_H - SCALE_Y(20), 1);
-  
-  while (true) {
-    extern void handleNetwork(); handleNetwork();
-    if (digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
-      break;
-    }
-    delay(10);
-  }
-}
-
-static void dhAbout() {
-  tft.fillScreen(CLR_BG);
-  tft.setTextColor(CLR_SECONDARY);
-  tft.drawCentreString("DR. HACK", SCR_CX, SCALE_Y(30), 2);
-  tft.setTextColor(CLR_TEXT_MED);
-  tft.drawCentreString("Security Module v1.0", SCR_CX, SCALE_Y(50), 1);
-  tft.setTextColor(CLR_TEXT_LO);
-  tft.drawCentreString("Press SELECT to exit", SCR_CX, SCR_H - SCALE_Y(20), 1);
-  
-  while (true) {
-    extern void handleNetwork(); handleNetwork();
-
-    if (digitalRead(BTN_SELECT) == BTN_ACTIVE_LEVEL || (virtualSelectPressed ? (virtualSelectPressed=false, true) : false)) {
-      break;
-    }
-    delay(10);
-  }
-}
-
 void dhSelect() {
   if (dhCurrentState == DH_MENU) {
     int globalIdx = dhMenuPage * DH_TOOLS_PER_PAGE + dhCursorIndex;
+#if !ENABLE_BLE_TOOLS
+    if (globalIdx >= 10 && globalIdx <= 15) {
+      dhShowError("Bluetooth disabled in this firmware");
+      if (currentState == STATE_DR_HACK) dhDrawMenu();
+      return;
+    }
+#endif
     switch (globalIdx) {
       // Page 1: WiFi Tools
-      case 0:  DH_ENTER_TOOL(DH_WIFI_SCANNER, dhRunWifiScan())
+      case 0:  virtualSelectPressed = false; DH_ENTER_TOOL(DH_WIFI_SCANNER, dhRunWifiDiscovery())
       case 1:  DH_RUN_TOOL(DH_CHANNEL_SCAN, dhRunChannelScan())
       case 2:  DH_RUN_TOOL(DH_WIFI_RADAR, dhRunWifiRadar())
       case 3:  DH_RUN_TOOL(DH_WIFI_DIRECTION, dhRunWifiDirection())
@@ -1266,9 +1115,9 @@ void dhSelect() {
 
       // Page 2: WiFi+ & BLE
       case 8:  DH_RUN_TOOL(DH_KARMA, dhRunKarma())
-      case 9:  DH_RUN_TOOL(DH_WIFI_CONFIG, dhRunWifiConfig())
-      case 10: DH_ENTER_TOOL(DH_BT_SCANNER, dhRunBleScan())
-      case 11: DH_RUN_TOOL(DH_BLE_INSPECTOR, dhRunBleInspector())
+      case 9:  virtualSelectPressed = false; DH_ENTER_TOOL(DH_WIFI_CONFIG, dhRunWifiConfig())
+      case 10: virtualSelectPressed = false; DH_ENTER_TOOL(DH_BT_SCANNER, dhRunBleScan())
+      case 11: virtualSelectPressed = false; DH_ENTER_TOOL(DH_BLE_INSPECTOR, dhRunBleInspector())
       case 12: DH_RUN_TOOL(DH_BLE_SPAM, dhRunBleSpam())
       case 13: DH_RUN_TOOL(DH_BT_DISRUPTOR, dhRunBtDisruptor())
       case 14: DH_RUN_TOOL(DH_IPHONE_REMOTE, dhRunIphoneRemote())
@@ -1276,7 +1125,7 @@ void dhSelect() {
 
       // Page 3: Radio & IR
       case 16: DH_RUN_TOOL(DH_JAMMER_24, dhRunJammer24())
-      case 17: DH_RUN_TOOL(DH_RADIO_SCANNER, dhRunRadioScanner())
+      case 17: virtualSelectPressed = false; DH_RUN_TOOL(DH_RADIO_SCANNER, dhRunRadioScanner())
       case 18: DH_RUN_TOOL(DH_IR_CAPTURE, dhRunIrCapture())
       case 19: DH_RUN_TOOL(DH_IR_REPLAY, dhRunIrReplay())
       case 20: DH_RUN_TOOL(DH_IR_TX_TEST, dhRunIrTxTest())
@@ -1307,15 +1156,16 @@ void dhSelect() {
       // Page 6: System
       case 40: DH_RUN_TOOL(DH_PORT_SCANNER, dhRunPortScan())
       case 41: DH_RUN_TOOL(DH_PACKET_MONITOR, dhRunPacketMonitor())
-      case 42: DH_RUN_TOOL(DH_INFO, dhRunInfo())
+      case 42: virtualSelectPressed = false; DH_ENTER_TOOL(DH_INFO, dhDrawSysInfo())
       case 43: DH_RUN_TOOL(DH_WEB_DASHBOARD, dhRunWebDashboard())
-      case 44: DH_ENTER_TOOL(DH_HW_DIAG, dhRunHwDiag())
-      case 45: DH_RUN_TOOL(DH_INPUT_MONITOR, dhRunInputMonitor())
-      case 46: DH_RUN_TOOL(DH_ABOUT, dhAbout())
+      case 44: virtualSelectPressed = false; DH_ENTER_TOOL(DH_HW_DIAG, dhRunHwDiag())
+      case 45: virtualSelectPressed = false; DH_RUN_TOOL(DH_INPUT_MONITOR, dhRunInputMonitor())
+      case 46: virtualSelectPressed = false; DH_ENTER_TOOL(DH_ABOUT, dhDrawAbout())
       case 47: DH_RUN_TOOL(DH_RFCLOWN_JAM, dhRunRfClownJammer())
     }
   }
   else {
+    if (dhCurrentState == DH_BLE_INSPECTOR && dhBiiSelect()) return;
     // SELECT in sub-tools returns to menu
     dhCurrentState = DH_MENU;
     dhDrawMenu();
@@ -1337,7 +1187,6 @@ void initDrHack() {
   dhCurrentState = DH_MENU;
   dhCursorIndex = 0;
   dhMenuPage = 0;
-  dhEntryScanline();
   dhDrawMenu();
 }
 

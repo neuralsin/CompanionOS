@@ -7,3 +7,5 @@ RfClown/
 __pycache__/
 .cache
 .env
+CompanionOS/arduino/CompanionOS_Main/spotify_credentials.local.h
+CompanionOS/OUTPUT/firmware/

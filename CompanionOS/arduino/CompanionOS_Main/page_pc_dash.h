@@ -645,7 +645,7 @@ void processPcDashPacket(const char* packet) {
       *comma = '\0';
       ptr = comma + 1;
     } while (count < 24);
-    if (count < 17) return;
+    if (count != 17 && count != 23) return;
     for (int i = 0; i < 23; ++i) {
       const char* token = i < count ? tokens[i] : nullptr;
       if (i == 14 || i == 16) {

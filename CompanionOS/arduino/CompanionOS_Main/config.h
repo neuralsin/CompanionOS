@@ -65,6 +65,7 @@ const int UDP_PORT_TX = 8889;
 #define NTP_OFFSET       19800   // IST UTC+5:30
 
 // Feature Toggles
+#define ENABLE_BLE_TOOLS 0 // Bluetooth is disabled, including on-demand tools.
 #define ENABLE_EYES true
 #define ENABLE_SPOTIFY true
 #define ENABLE_GALLERY true
@@ -83,8 +84,9 @@ const int UDP_PORT_TX = 8889;
 #define DEFAULT_SPOTIFY_REFRESH_TOKEN ""
 #define DEFAULT_SPOTIFY_ACCESS_TOKEN ""
 #endif
-#define SPOTIFY_POLL_INTERVAL_ACTIVE_MS   3500UL  // 3.5s when on Spotify page / playing
-#define SPOTIFY_POLL_INTERVAL_IDLE_MS     10000UL // 10s when idle on another page
+#define SPOTIFY_POLL_INTERVAL_ACTIVE_MS   2000UL // Playback reconciliation; local animation runs at 50ms
+#define SPOTIFY_POLL_INTERVAL_IDLE_MS     5000UL
+#define SPOTIFY_POLL_INTERVAL_LYRICS_MS   1000UL // Still respects HTTP 429 Retry-After
 
 // Standalone Weather (Open-Meteo API - No key required)
 #define WEATHER_CITY_NAME           "Delhi"
@@ -109,14 +111,14 @@ const int UDP_PORT_TX = 8889;
 // ═══════════════════════════════════════════════════════════
 
 // Primary palette (dark theme)
-#define CLR_BG         0x0841   // near-black with blue tint
+#define CLR_BG         0x0000   // neutral black
 #define CLR_SURFACE    0x1082   // card/panel background
 #define CLR_SURFACE_2  0x18A3   // elevated card
 #define CLR_BORDER     0x2104   // subtle borders
-#define CLR_PRIMARY    0x05FF   // cyan accent (brand)
+#define CLR_PRIMARY    0x347F   // restrained blue accent
 #define CLR_SECONDARY  0xF800   // red (danger/Dr.Hack)
 #define CLR_DANGER     0xF800   // red (danger alert)
-#define CLR_SUCCESS    0x07E0   // green
+#define CLR_SUCCESS    0x36E9   // readable green
 #define CLR_WARNING    0xFFE0   // yellow
 #define CLR_TEXT_HI    0xFFFF   // white (primary text)
 #define CLR_TEXT_MED   0xC618   // light gray (secondary)

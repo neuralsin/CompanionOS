@@ -15,6 +15,7 @@
 #include "theme2_eyes.h"
 #include "theme2_spotify.h"
 #include "page_retro_watch.h"
+#include "page_planner.h"
 #ifdef ESP32
 #include "page_dr_hack.h"
 #endif
@@ -112,6 +113,8 @@ void drawIconHeart(int cx, int cy, uint16_t color) {
   tft.fillTriangle(cx - 6, cy, cx + 6, cy, cx, cy + 6, color);
 }
 
+#include "page_lyrics.h"
+
 // ═══════════════════════════════════════════════════════════
 // SPOTIFY PAGE (Fixed layout)
 // ═══════════════════════════════════════════════════════════
@@ -165,19 +168,24 @@ void redrawSpotifyPartial() {
     tft.fillCircle(ax + 32, ay + 32, 2, CLR_PRIMARY);
     placeholder = true;
   }
-  bool lyricsChanged = currentLyrics != lastLyric1 || currentLyricsLine2 != lastLyric2 || forceSpotifyRedraw || changed || standaloneSpotifyStatus != lastServiceStatus || isPlaying != lastPlaying;
+  static String lastLyricStatus;
+  static bool lastSynced = true;
+  bool lyricsChanged = currentLyrics != lastLyric1 || currentLyricsLine2 != lastLyric2 || forceSpotifyRedraw || changed || standaloneSpotifyStatus != lastServiceStatus || standaloneLyricsStatus != lastLyricStatus || lastSynced != standaloneLyricsSynced;
   if (!cardDrawn || lyricsChanged) {
-    tft.fillRoundRect(cx, ay, cw, side, 4, CLR_SURFACE);
-    drawTruncatedText(cx + 4, ay + 4, currentLyrics.length() ? "LYRICS" : "SPOTIFY", cw - 8, CLR_PRIMARY, 1, CLR_SURFACE);
-    String text = currentLyrics.length() ? currentLyrics : (currentTrack.length() ? (isPlaying ? "Now playing" : "Paused") : (wifiConnected ? "Ready for music" : "Wi-Fi offline"));
-    if (!currentLyrics.length() && standaloneSpotifyStatus.length()) text = standaloneSpotifyStatus;
-    int used = drawWrappedText(cx + 4, ay + 18, text.c_str(), cw - 8, 30, CLR_TEXT_HI, 1, CLR_SURFACE);
+    tft.fillRect(cx, ay, cw, side, CLR_BG);
+    const bool hasLyrics = currentLyrics.length() || currentLyricsLine2.length();
+    if (hasLyrics) drawTruncatedText(cx + 2, ay + 2, standaloneLyricsSynced ? "LYRICS" : "TEXT", cw - 4, CLR_TEXT_LO, 1, CLR_BG);
+    String text = currentLyrics;
+    if (!hasLyrics) text = standaloneSpotifyStatus.length() ? standaloneSpotifyStatus : standaloneLyricsStatus;
+    int used = drawWrappedText(cx + 2, ay + 16, text.c_str(), cw - 4, 30, CLR_TEXT_HI, 1, CLR_BG);
     if (currentLyricsLine2.length())
-      drawWrappedText(cx + 4, ay + 18 + used * 10, currentLyricsLine2.c_str(), cw - 8, 42 - used * 10, CLR_TEXT_LO, 1, CLR_SURFACE);
+      drawWrappedText(cx + 2, ay + 16 + used * 10, currentLyricsLine2.c_str(), cw - 4, 46 - used * 10, CLR_TEXT_MED, 1, CLR_BG);
     cardDrawn = true;
     lastLyric1 = currentLyrics;
     lastLyric2 = currentLyricsLine2;
     lastServiceStatus = standaloneSpotifyStatus;
+    lastLyricStatus = standaloneLyricsStatus;
+    lastSynced = standaloneLyricsSynced;
   }
   if (changed || forceSpotifyRedraw) {
     tft.fillRect(4, 85, SCREEN_W - 8, 20, COLOR_BG);
@@ -230,24 +238,15 @@ void tickSpotifyVisuals() {
   }
   if (activeTheme == 1) {
     t2_redrawSpotifyPartial();
-    if (currentTrack.length())
+    if (currentTrack.length() && tft.textWidth(uiText(currentTrack.c_str()), 1) > SCREEN_W - 78)
       drawMarqueeText(74, 18, currentTrack.c_str(), SCREEN_W - 78, TFT_WHITE, 1, &scrollStart, T2S_BG);
   } else {
     redrawSpotifyPartial();
-    if (currentTrack.length())
+    if (currentTrack.length() && tft.textWidth(uiText(currentTrack.c_str()), 1) > SCREEN_W - 8)
       drawMarqueeText(4, 85, currentTrack.c_str(), SCREEN_W - 8, CLR_TEXT_HI, 1, &scrollStart);
   }
-  // A quiet playback indicator, not a fabricated audio spectrum.
-  if (currentLyrics.length() == 0) {
-    int x = SCREEN_W - 17;
-    int y = activeTheme == 1 ? 108 : 22;
-    uint16_t bg = activeTheme == 1 ? T2S_BG : CLR_SURFACE;
-    tft.fillRect(x, y, 10, 8, bg);
-    for (int i = 0; i < 3; i++) {
-      int h = isPlaying ? 2 + (int)(2.5f * (1.0f + sinf(millis() * 0.004f + i * 1.3f))) : 2;
-      tft.fillRect(x + i * 3, y + 7 - h, 2, h, isPlaying ? CLR_SUCCESS : CLR_TEXT_LO);
-    }
-  }
+  // No decorative spectrum or loading animation: artwork, transport and actual
+  // elapsed progress already communicate the playback state.
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -257,8 +256,8 @@ void tickSpotifyVisuals() {
 
 void completeAlbumArt() {
   if (albumArtRowsComplete != ALBUM_ART_H) return;
+  if (!commitIncomingArt()) return;
   receivingArt = false;
-  if (albumArt && albumArtIncoming) memcpy(albumArt, albumArtIncoming, ALBUM_ART_BYTES);
   albumArtRevision++;
   albumArtReady = true;
   artDrawn = false;
@@ -301,6 +300,7 @@ void redrawPomodoroPartial() {
   if (currentState != STATE_POMODORO) return;
   
   static int lastRemaining = -1;
+  static int lastTotal = -1;
   static bool lastIsBreak = false;
   static int lastSessions = -1;
   static bool lastActive = false;
@@ -312,49 +312,52 @@ void redrawPomodoroPartial() {
   }
   
   int cx = SCREEN_W / 2;
-  int cy = SCREEN_H / 2 - SCALE_Y(10);
+  int cy = (UI_HEADER_H + SCREEN_H - UI_FOOTER_H - 30) / 2;
+  int radius = SCALE_MIN(55);
   
   float progress = 0;
-  if (pomoTotal > 0 && pomoActive) {
-    progress = 1.0 - ((float)pomoRemaining / pomoTotal);
+  if (pomoTotal > 0) {
+    progress = constrain(1.0f - ((float)pomoRemaining / pomoTotal), 0.0f, 1.0f);
   }
   
   uint16_t ringColor = pomoIsBreak ? TFT_GREEN : 0xDF26; // Orange
   
-  if (lastRemaining != pomoRemaining || lastIsBreak != pomoIsBreak || lastActive != pomoActive || lastSessions != pomoSessions) {
+  if (lastRemaining != pomoRemaining || lastTotal != pomoTotal || lastIsBreak != pomoIsBreak || lastActive != pomoActive || lastSessions != pomoSessions) {
     // Only clear the text area inside the ring instead of a massive 160x160 rectangle
-    tft.fillRect(cx - SCALE_X(50), cy - SCALE_Y(30), SCALE_X(100), SCALE_Y(60), COLOR_BG);
-    drawSmoothRing(cx, cy, SCALE_MIN(55), SCALE_MIN(6), progress, ringColor, 0x18E3);
+    tft.fillRect(cx - radius + 4, cy - radius + 4, radius * 2 - 8, radius * 2 - 8, COLOR_BG);
+    drawSmoothRing(cx, cy, radius, SCALE_MIN(6), progress, ringColor, 0x18E3);
     
     // Center time display
-    int minutes = pomoRemaining / 60;
-    int seconds = pomoRemaining % 60;
-    char timeStr[8];
-    sprintf(timeStr, "%02d:%02d", minutes, seconds);
+    int remaining = constrain(pomoRemaining, 0, 86400);
+    int minutes = remaining / 60;
+    int seconds = remaining % 60;
+    char timeStr[12];
+    snprintf(timeStr, sizeof(timeStr), "%02d:%02d", minutes, seconds);
+    if (pomoTotal <= 0) strcpy(timeStr, "--:--");
+    int font = SCREEN_W > 200 ? 4 : 2;
+    while (font > 1 && tft.textWidth(timeStr, font) > radius * 2 - 10) font = font == 4 ? 2 : 1;
     
     tft.setTextColor(TFT_WHITE, COLOR_BG);
-    tft.drawCentreString(timeStr, cx, cy - SCALE_Y(12), (SCREEN_W > 200) ? 4 : 2);
+    tft.drawCentreString(timeStr, cx, cy - tft.fontHeight(font) + 5, font);
     
     // Label
     tft.setTextColor(pomoIsBreak ? TFT_GREEN : TFT_CYAN, COLOR_BG);
-    tft.drawCentreString(pomoIsBreak ? "BREAK" : "FOCUS", cx, cy + SCALE_Y(15), (SCREEN_W > 200) ? 2 : 1);
+    tft.drawCentreString(pomoIsBreak ? "BREAK" : "FOCUS", cx, cy + 10, 1);
     
     // Session count & Status (only clear their specific lines)
-    tft.fillRect(cx - SCALE_X(60), cy + SCALE_Y(55), SCALE_X(120), SCALE_Y(30), COLOR_BG);
+    int captionY = cy + radius + 8;
+    tft.fillRect(0, captionY, SCREEN_W, SCREEN_H - UI_FOOTER_H - captionY, COLOR_BG);
     tft.setTextColor(0x8410, COLOR_BG);
-    char sessStr[16];
-    sprintf(sessStr, "%d sessions", pomoSessions);
-    tft.drawCentreString(sessStr, cx, cy + SCALE_Y(55), 1);
-    
-    if (!pomoActive) {
-      tft.setTextColor(0x6B4D, COLOR_BG);
-      tft.drawCentreString("TAP TO START", cx, cy + SCALE_Y(70), 1);
-    } else {
-      tft.setTextColor(0x4208, COLOR_BG);
-      tft.drawCentreString("TAP TO PAUSE", cx, cy + SCALE_Y(70), 1);
-    }
+    char sessStr[24];
+    snprintf(sessStr, sizeof(sessStr), "%d sessions", constrain(pomoSessions, 0, 9999));
+    tft.drawCentreString(sessStr, cx, captionY, 1);
+    const char* status = pomoTotal > 0 && pomoRemaining <= 0 ? "COMPLETE" :
+      pomoActive ? "RUNNING" : pomoRemaining < pomoTotal ? "PAUSED" : "READY";
+    tft.setTextColor(CLR_TEXT_MED, COLOR_BG);
+    tft.drawCentreString(status, cx, captionY + 12, 1);
     
     lastRemaining = pomoRemaining;
+    lastTotal = pomoTotal;
     lastIsBreak = pomoIsBreak;
     lastActive = pomoActive;
     lastSessions = pomoSessions;
@@ -754,7 +757,131 @@ void drawRetroWatchPageFull() {
   drawStatusBar();
 }
 
+// Main task only. The worker must never free a canvas while it is being painted.
+void releaseEyeRenderingBuffers() {
+  if (currentState != STATE_EYES) releaseEyeStrips();
+  #ifdef ESP32
+  releaseClassicEyeSprites();
+  if (T2EyeDrawer::t2Canvas) {
+    T2EyeDrawer::t2Canvas->deleteSprite();
+    delete T2EyeDrawer::t2Canvas; t2CanvasSetNull();
+  }
+  if (t3_canvas) {
+    t3_canvas->deleteSprite(); delete t3_canvas; t3CanvasSetNull();
+  }
+  if (thoughtDirectCanvas) {
+    thoughtDirectCanvas->deleteSprite(); delete thoughtDirectCanvas; thoughtDirectCanvas = nullptr;
+    invalidateThoughtBubble();
+  }
+  #endif
+}
+
+void releaseDistantPageBuffers() {
+  releaseDistantAlbumArt();
+  if (!companion_memory::nearby(int(currentState), int(STATE_EYES), int(STATE_COUNT))) {
+    free(customEyeImg); customEyeImg = nullptr;
+    customEyeReady = customEyeActive = false;
+  }
+}
+
+bool prepareCustomEyeImage() {
+  if (!companion_memory::nearby(int(currentState), int(STATE_EYES), int(STATE_COUNT))) return false;
+  if (!customEyeImg) {
+    releaseEyeRenderingBuffers();
+    const size_t bytes = 160 * 128 * sizeof(uint16_t);
+    if (companion_memory::visualAllowed(bytes)) customEyeImg = static_cast<uint16_t*>(malloc(bytes));
+  }
+  return customEyeImg != nullptr;
+}
+
+void prepareStandaloneMemory(bool needsWorkerStack) {
+  releaseDistantPageBuffers();
+  auto ram = companion_memory::snapshot();
+  size_t needed = companion_memory::tlsReserve + (needsWorkerStack ? 12 * 1024 : 0);
+  // Keep an affordable active canvas: reallocating it on every playback poll
+  // causes unnecessary face/thought flicker even when there is ample SRAM.
+  if (ram.free >= needed && ram.largest >= companion_memory::tlsBlock) return;
+  releaseMarqueeBuffer();
+  releaseLyricsRenderingBuffers();
+  releaseStatusBarBuffer();
+  releaseEyeRenderingBuffers();
+  if (companion_memory::snapshot().free < needed && customEyeImg) {
+    free(customEyeImg); customEyeImg = nullptr;
+    customEyeReady = customEyeActive = false;
+  }
+}
+
+bool prepareWiFiMemory() {
+  #ifdef ESP32
+  // Check before freeing buffers: a damaged heap must not enter the driver.
+  if (!heap_caps_check_integrity_all(true)) {
+    Serial.println("[boot:wifi] Heap corruption detected before driver startup");
+    return false;
+  }
+  // This also covers retries after a page has allocated optional canvases.
+  releaseMarqueeBuffer();
+  releaseLyricsRenderingBuffers();
+  releaseStatusBarBuffer();
+  releaseEyeRenderingBuffers();
+  if (WiFi.getMode() == WIFI_MODE_NULL) {
+    auto ram = companion_memory::snapshot();
+    Serial.printf("[boot:wifi] free=%u largest=%u\n", unsigned(ram.free), unsigned(ram.largest));
+    return companion_memory::tlsReady(ram);
+  }
+  #endif
+  return true;
+}
+
 void renderCurrentPage() {
+#ifdef COMPANION_BOOT_HEALTH_H
+  if (boot_health::recovery) {
+    tft.resetViewport(); tft.fillScreen(CLR_BG);
+    drawWrappedText(8, 12, "Recovery mode", SCREEN_W - 16, 26, CLR_TEXT_HI, 2, CLR_BG);
+    #ifdef ESP32
+    drawTruncatedText(8, 30, boot_health::buildTag, SCREEN_W - 16, CLR_TEXT_MED, 1, CLR_BG);
+    drawWrappedText(8, 42, boot_health::reasonText(), SCREEN_W - 16, 22, CLR_WARNING, 1, CLR_BG);
+    char stage[40];
+    snprintf(stage, sizeof(stage), "Reset %d / stage %u", int(boot_health::lastReset), unsigned(boot_health::previousStage));
+    drawTruncatedText(8, 62, stage, SCREEN_W - 16, CLR_TEXT_MED, 1, CLR_BG);
+    snprintf(stage, sizeof(stage), "RAM %uk / max %uk", unsigned(boot_health::previousFreeHeap / 1024),
+             unsigned(boot_health::previousLargestBlock / 1024));
+    drawTruncatedText(8, 74, stage, SCREEN_W - 16, CLR_TEXT_MED, 1, CLR_BG);
+    snprintf(stage, sizeof(stage), "Stack %u / phase %u", unsigned(boot_health::previousStackFree),
+             unsigned(boot_health::previousMetricStage));
+    drawTruncatedText(8, 86, stage, SCREEN_W - 16, CLR_TEXT_MED, 1, CLR_BG);
+    #endif
+    drawWrappedText(8, 100, "Offline. Hold Select 2s to retry.", SCREEN_W - 16,
+                    SCREEN_H - 104, CLR_TEXT_MED, 1, CLR_BG);
+    return;
+  }
+#endif
+  #ifdef ESP32
+  if (switchMemoryWorkspace(int(currentState))) return;
+  static int renderedTheme = -1;
+  if (renderedTheme != activeTheme) {
+    releaseEyeRenderingBuffers();
+    t2_initialized = false; t3_initialized = false;
+    isBlinking = false; blinkPhase = 0; currentBlinkMod = 1.0f;
+    invalidateThoughtBubble();
+    renderedTheme = activeTheme;
+  }
+  #endif
+  releaseDistantPageBuffers();
+  releaseMarqueeBuffer();
+  if (currentState != STATE_LYRICS) releaseLyricsRenderingBuffers();
+  else releaseStatusBarBuffer();
+  #ifdef ESP32
+  if ((currentState == STATE_SPOTIFY || currentState == STATE_LYRICS) && !albumArtReady && !receivingArt &&
+      wifiConnected && isHostPlaybackActive() && !isHostAndroid) {
+    static bool requested = false;
+    static uint32_t lastRequest = 0;
+    uint32_t now = millis();
+    if (!requested || uint32_t(now - lastRequest) >= 5000) {
+      requested = true; lastRequest = now;
+      sendCommand("RESYNC");  // Controller refetches artwork discarded on distant pages.
+    }
+  }
+  #endif
   uiPageGeneration++;
   tft.resetViewport();
   tft.setTextSize(1);
@@ -762,24 +889,15 @@ void renderCurrentPage() {
   tft.setTextPadding(0);
   tft.setTextWrap(false, false);
   #ifdef ESP32
-  if (currentState != STATE_EYES) {
-    releaseClassicEyeSprites();
-    if (T2EyeDrawer::t2Canvas) {
-      T2EyeDrawer::t2Canvas->deleteSprite();
-      delete T2EyeDrawer::t2Canvas;
-      t2CanvasSetNull();
-    }
-    if (t3_canvas) {
-      t3_canvas->deleteSprite();
-      delete t3_canvas;
-      t3CanvasSetNull();
-    }
+  if (currentState != STATE_EYES || (customEyeActive && customEyeReady)) {
+    releaseEyeRenderingBuffers();
     setThoughtSpriteCompositing(true);
   }
   #endif
   switch(currentState) {
     case STATE_EYES: drawEyesPage(); break;
     case STATE_SPOTIFY: drawSpotifyPage(); break;
+    case STATE_LYRICS: drawLyricsPage(); break;
     case STATE_POMODORO: drawPomodoroPage(); break;
     case STATE_WEATHER: drawWeatherPage(); break;
     case STATE_NOTIFICATIONS: drawNotificationsPage(); break;
@@ -802,6 +920,8 @@ void renderCurrentPage() {
       break;
     case STATE_CLOCK_DASHBOARD: drawClockDashboardPageFull(); break;
     case STATE_RETRO_WATCH: drawRetroWatchPageFull(); break;
+    case STATE_CALENDAR: companion_planner::draw(false); break;
+    case STATE_TIMETABLE: companion_planner::draw(true); break;
     #ifdef ESP32
     case STATE_DR_HACK: initDrHack(); break;
     #endif
@@ -810,6 +930,8 @@ void renderCurrentPage() {
 }
 
 void changePage(int direction) {
+  if (isPlaying || companion_lyrics::navigation().session)
+    companion_lyrics::navigation().manual(false);
   #ifdef ESP32
   AppState prevState = currentState;
   #endif
@@ -822,6 +944,9 @@ void changePage(int direction) {
   #endif
   if (next >= maxPage) next = 0;
   if (next < 0) next = maxPage - 1;
+  #ifdef ESP32
+  if (switchMemoryWorkspace(next)) return;
+  #endif
   currentState = (AppState)next;
 
   if (currentState != STATE_EYES) {
@@ -851,23 +976,26 @@ void changePage(int direction) {
   }
   #endif
   
-  extern ThoughtBubble activeBubble;
-  activeBubble.active = false;
-  activeBubble.fadingOut = false;
-  activeBubble.fadeAlpha = 0;
+  companion_planner::alertVisible = false;
   // Explicit full screen clear on page transition
   tft.fillScreen(COLOR_BG);
   
   renderCurrentPage();
 }
 
+static bool lyricsAutomaticNavigation = false;
 void setPage(int targetPage) {
   int maxPage = STATE_COUNT;
   #ifndef ESP32
   maxPage = STATE_DR_HACK;
   #endif
   if (targetPage < 0 || targetPage >= maxPage) return;
+  if (!lyricsAutomaticNavigation && (isPlaying || companion_lyrics::navigation().session))
+    companion_lyrics::navigation().manual(targetPage == STATE_LYRICS);
   if (targetPage == (int)currentState) return;
+  #ifdef ESP32
+  if (switchMemoryWorkspace(targetPage)) return;
+  #endif
   if (targetPage != (int)STATE_EYES) {
     customEyeActive = false;
   }
@@ -896,12 +1024,32 @@ void setPage(int targetPage) {
     resumeCSICollector();
   }
   #endif
-  extern ThoughtBubble activeBubble;
-  activeBubble.active = false;
-  activeBubble.fadingOut = false;
-  activeBubble.fadeAlpha = 0;
+  companion_planner::alertVisible = false;
   tft.fillScreen(COLOR_BG);
   renderCurrentPage();
+}
+
+void tickLyricsNavigation() {
+  using companion_lyrics::Navigation;
+  bool playing = isPlaying && currentTrack.length() && (playDuration <= 0 || playProgress < playDuration);
+  auto action = companion_lyrics::navigation().tick(millis(), playing, currentState == STATE_LYRICS,
+                                                   currentState != STATE_DR_HACK);
+  if (action == Navigation::None) return;
+  lyricsAutomaticNavigation = true;
+  setPage(action == Navigation::Open ? STATE_LYRICS : STATE_EYES);
+  lyricsAutomaticNavigation = false;
+}
+
+void tickRemoteLyrics() {
+  #ifdef ESP32
+  if (!isHostPlaybackActive() || isHostAndroid) return;
+  auto& timing = companion_lyrics::timing();
+  if (standaloneLyricsSynced && timing.next >= 0 && int64_t(playProgress) >= timing.next) {
+    prevLyricsLine = currentLyrics;
+    currentLyrics = currentLyricsLine2; currentLyricsLine2 = "";
+    timing.start = timing.next; timing.next = -1;
+  }
+  #endif
 }
 
 #endif

@@ -102,11 +102,8 @@ class CompanionNotificationListenerService : NotificationListenerService() {
                 addAction("com.spotify.music.metadatachanged")
                 addAction("com.spotify.music.queuechanged")
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                registerReceiver(spotifyBroadcastReceiver, filter, Context.RECEIVER_EXPORTED)
-            } else {
-                registerReceiver(spotifyBroadcastReceiver, filter)
-            }
+            androidx.core.content.ContextCompat.registerReceiver(this, spotifyBroadcastReceiver, filter,
+                androidx.core.content.ContextCompat.RECEIVER_EXPORTED)
             isSpotifyReceiverRegistered = true
         } catch (e: Exception) {
             e.printStackTrace()
@@ -255,6 +252,7 @@ class CompanionNotificationListenerService : NotificationListenerService() {
     }
 
     private fun handleDirectTrackUpdate(track: String, artist: String, album: String, durationMs: Long, positionMs: Long, isPlaying: Boolean) {
+        if (!CompanionForegroundService.phoneRelays) return
         val spotifyPayload = JSONObject().apply {
             put("track", track)
             put("artist", artist)
@@ -293,6 +291,7 @@ class CompanionNotificationListenerService : NotificationListenerService() {
     }
 
     private fun processMediaMetadata(metadata: MediaMetadata?, state: PlaybackState?) {
+        if (!CompanionForegroundService.phoneRelays) return
         if (metadata == null) return
 
         val track = metadata.getString(MediaMetadata.METADATA_KEY_TITLE) ?: ""
@@ -381,7 +380,7 @@ class CompanionNotificationListenerService : NotificationListenerService() {
 
                     val controller = activeMediaController
                     val state = controller?.playbackState
-                    if (state != null && state.state == PlaybackState.STATE_PLAYING) {
+                    if (CompanionForegroundService.phoneRelays && state != null && state.state == PlaybackState.STATE_PLAYING) {
                         val basePos = state.position
                         val lastUpdate = state.lastPositionUpdateTime
                         val posMs = if (lastUpdate > 0) {
@@ -432,6 +431,7 @@ class CompanionNotificationListenerService : NotificationListenerService() {
                 pkg.contains("audio", ignoreCase = true) || pkg.contains("player", ignoreCase = true)
 
         if (isMedia) {
+            if (!CompanionForegroundService.phoneRelays) return
             scanAndBindActiveMediaController()
 
             val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""

@@ -17,12 +17,18 @@ extern bool flashNotifActive;
 // V7 STATUS BAR — Redesigned: clock, WiFi+BT, music, notif
 // ═══════════════════════════════════════════════════════════
 
+static TFT_eSprite statusBarCanvas(&tft);
+static bool statusBarBuffered = false;
+inline void releaseStatusBarBuffer() {
+  if (statusBarBuffered) statusBarCanvas.deleteSprite();
+  statusBarBuffered = false;
+}
 void drawStatusBar() {
   if (currentState == STATE_DR_HACK || currentState == STATE_RUVIEW ||
-      currentState == STATE_PC_DASH || (customEyeActive && customEyeReady)) return;
-  const char* titles[] = {"CompanionOS", "Spotify", "Focus", "Weather",
+      currentState == STATE_PC_DASH || currentState == STATE_LYRICS || (customEyeActive && customEyeReady)) return;
+  const char* titles[] = {"CompanionOS", "Spotify", "Lyrics", "Focus", "Weather",
     "Notifications", "Notes", "Stocks", "Gaming", "Social", "Schedule", "Network", "System",
-    "PC dashboard", "RuView", "Clock", "Watch", "Dr.Hack"};
+    "PC dashboard", "RuView", "Clock", "Watch", "Dr.Hack", "Calendar", "Timetable"};
   String title = (int)currentState < STATE_COUNT ? titles[(int)currentState] : "CompanionOS";
   const bool nowPlaying = currentState == STATE_EYES && musicPlaying && currentTrack.length();
   const bool night = timeReceived && (displayHour >= 20 || displayHour < 6);
@@ -46,12 +52,14 @@ void drawStatusBar() {
   static String previous;
   if (key == previous) return;
   previous = key;
-  static TFT_eSprite canvas(&tft);
-  static bool tried = false, buffered = false;
-  if (!tried) {
+  TFT_eSprite& canvas = statusBarCanvas;
+  bool& buffered = statusBarBuffered;
+  static bool tried = false;
+  static uint32_t lastAttempt = 0;
+  if (!buffered && (!tried || uint32_t(millis() - lastAttempt) >= 2000)) {
     tried = true;
-    canvas.setColorDepth(16);
-    buffered = canvas.createSprite(SCR_W, UI_HEADER_H) != nullptr;
+    lastAttempt = millis();
+    buffered = companion_memory::createSprite(canvas, SCR_W, UI_HEADER_H);
   }
   auto paint = [&](auto& target) {
     target.fillRect(0, 0, SCR_W, UI_HEADER_H, CLR_BG);

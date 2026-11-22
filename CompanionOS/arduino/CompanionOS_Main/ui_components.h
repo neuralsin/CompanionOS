@@ -7,6 +7,20 @@
 #define UI_COMPONENTS_H
 
 #include "globals.h"
+#include "memory_policy.h"
+
+struct MarqueeBuffer {
+  TFT_eSprite strip;
+  int w = 0, h = 0;
+  bool allocated = false;
+  uint32_t lastAttempt = 0;
+  MarqueeBuffer() : strip(&tft) {}
+};
+inline MarqueeBuffer& marqueeBuffer() { static MarqueeBuffer buffer; return buffer; }
+inline void releaseMarqueeBuffer() {
+  MarqueeBuffer& buffer = marqueeBuffer();
+  buffer.strip.deleteSprite(); buffer.w = buffer.h = 0; buffer.allocated = false;
+}
 
 // ── FW-06 FIX: Safe button wait with 30s timeout ────────
 // Replaces bare `while (digitalRead(BTN_SELECT) == HIGH) delay(20);`
@@ -71,12 +85,7 @@ uint16_t darkenColor(uint16_t color, int pct) {
 
 // Standard card with solid background, rounded corners, border
 void drawCard(int x, int y, int w, int h, uint16_t bgColor, uint16_t borderColor, int radius) {
-  // Fill with gradient (top lighter by ~10%)
-  uint16_t topColor = lightenColor(bgColor, 10);
   tft.fillRoundRect(x, y, w, h, radius, bgColor);
-  // Top highlight strip
-  tft.fillRoundRect(x, y, w, h / 3, radius, topColor);
-  tft.fillRect(x + radius, y + h / 3 - radius, w - 2 * radius, radius, topColor);
   // Border
   if (borderColor != bgColor) {
     tft.drawRoundRect(x, y, w, h, radius, borderColor);
@@ -315,19 +324,19 @@ bool drawMarqueeText(int x, int y, const char* text, int maxW, uint16_t color, i
   }
   const int height = tft.fontHeight(font);
   if (height <= 0) return false;
-  static TFT_eSprite strip(&tft);
-  static int stripW = 0, stripH = 0;
-  static bool allocated = false;
-  if (stripW != maxW || stripH != height) {
+  MarqueeBuffer& buffer = marqueeBuffer();
+  TFT_eSprite& strip = buffer.strip;
+  if (buffer.w != maxW || buffer.h != height ||
+      (!buffer.allocated && uint32_t(millis() - buffer.lastAttempt) >= 2000)) {
     strip.deleteSprite();
-    strip.setColorDepth(16);
-    allocated = strip.createSprite(maxW, height) != nullptr;
-    stripW = maxW;
-    stripH = height;
+    buffer.lastAttempt = millis();
+    buffer.allocated = companion_memory::createSprite(strip, maxW, height);
+    buffer.w = maxW;
+    buffer.h = height;
   }
   // A sprite clips the moving text without changing the caller's viewport.
   // TFT_eSPI's false-datum viewport getters cannot round-trip its clip bounds.
-  if (allocated) {
+  if (buffer.allocated) {
     strip.fillSprite(bg);
     strip.setTextDatum(TL_DATUM);
     strip.setTextSize(1);

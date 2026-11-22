@@ -1,5 +1,12 @@
 # CompanionOS — Comprehensive System Audit & Error Log
 
+> Current deskbot audit (2026-10-15): see
+> [rendering and standalone-services findings](OUTPUT/deskbot_ui_audit_2026-10-15.md).
+> The statuses below describe the June snapshot. They must not be interpreted
+> as current hardware verification or a production-readiness sign-off.
+> In particular, thought compositing, art completion, include-order scaling,
+> input polarity, and blocking standalone HTTP required further fixes.
+
 > Deep Kernal & System Audit — 2026-06-12
 > Severity: 🔴 Critical | 🟠 Major | 🟡 Minor | ⚪ Info
 

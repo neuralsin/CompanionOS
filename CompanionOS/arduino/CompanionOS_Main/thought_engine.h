@@ -222,6 +222,10 @@ extern String currentArtist;
 extern String weatherCondition;
 extern int weatherTemp;
 
+#include "thought_personality.h"
+#include "planner_core.h"
+#include "startup_policy.h"
+
 void generateThought() {
   activeBubble.text[0] = '\0';
 
@@ -237,51 +241,8 @@ void generateThought() {
     }
   }
 
-  // Weighted random category selection
-  // If no parent device connected (no time/weather/music), use ambient/teasing quotes
-  int roll = random(0, 100);
-
-  if (timeReceived && roll < 22) {
-    // Time-based: pick based on hour
-    int idx;
-    if (displayHour >= 0 && displayHour < 5) idx = random(0, 10);
-    else if (displayHour < 12) idx = random(10, 20);
-    else if (displayHour < 18) idx = random(20, 28);
-    else idx = random(28, THOUGHT_TIME_COUNT);
-    idx = constrain(idx, 0, THOUGHT_TIME_COUNT - 1);
-    strncpy(activeBubble.text, THOUGHTS_TIME[idx], 79);
-  }
-  else if (weatherCondition.length() > 0 && roll < 45) {
-    // Weather-based
-    int idx;
-    if (weatherTemp > 35) idx = random(1, 3);
-    else if (weatherCondition.indexOf("Rain") >= 0 || weatherCondition.indexOf("Drizzle") >= 0) idx = (random(0, 2) == 0) ? 0 : 25;
-    else if (weatherCondition.indexOf("Clear") >= 0 && displayHour > 18) idx = 2;
-    else if (weatherCondition.indexOf("Cloud") >= 0) idx = 3;
-    else if (weatherTemp < 15) idx = 4;
-    else if (weatherCondition.indexOf("Snow") >= 0) idx = 5;
-    else idx = random(6, THOUGHT_WEATHER_COUNT);
-    idx = constrain(idx, 0, THOUGHT_WEATHER_COUNT - 1);
-    strncpy(activeBubble.text, THOUGHTS_WEATHER[idx], 79);
-  }
-  else if (musicPlaying && roll < 70) {
-    // Music-based
-    int idx = random(0, THOUGHT_MUSIC_COUNT);
-    if (currentTrack.indexOf("love") >= 0) idx = 2;
-    idx = constrain(idx, 0, THOUGHT_MUSIC_COUNT - 1);
-    strncpy(activeBubble.text, THOUGHTS_MUSIC[idx], 79);
-  }
-  else if (roll < 85) {
-    // Teasing thoughts
-    int idx = random(0, THOUGHT_TEASING_COUNT);
-    strncpy(activeBubble.text, THOUGHTS_TEASING[idx], 79);
-  }
-  else {
-    // Ambient thoughts fallback (Always valid with zero dependencies)
-    int idx = random(0, THOUGHT_AMBIENT_COUNT);
-    strncpy(activeBubble.text, THOUGHTS_AMBIENT[idx], 79);
-  }
-
+  strncpy(activeBubble.text, thought_personality::choose(timeReceived, displayHour,
+      musicPlaying, weatherCondition.length() > 0, weatherTemp, unsigned(random(0, 120))), 79);
   activeBubble.text[79] = '\0';
 }
 
@@ -295,6 +256,7 @@ extern uint16_t blendColor(uint16_t c1, uint16_t c2, float t);
 static bool thoughtSpriteCompositing = false;
 static bool thoughtDirectDirty = true;
 static bool thoughtDirectVisible = false;
+static bool thoughtCompositedVisible = false;
 static uint8_t thoughtDirectAlpha = 0;
 static int thoughtDirectPage = -1;
 static char thoughtDirectText[80] = "";
@@ -306,6 +268,7 @@ static TFT_eSprite* thoughtDirectCanvas = nullptr;
 inline int eyeRenderBottom() {
   extern bool flashNotifActive;
   int bottom = SCREEN_H - UI_FOOTER_H;
+  if (companion_planner::overlayActive) return max(UI_HEADER_H, bottom - 28);
   if (flashNotifActive) bottom = min(bottom, SCREEN_H - 28);
   else if (agentOverlayActive) bottom = min(bottom, SCREEN_H - UI_FOOTER_H - 28);
   return max(UI_HEADER_H, bottom);
@@ -321,7 +284,65 @@ struct EyeRenderViewport {
   ~EyeRenderViewport() { tft.setViewport(x, y, w, h, datum); }
 };
 
+// The selected renderer uses identical local coordinates with or without RAM
+// for a canvas. Do not substitute another theme when optional allocation fails.
+struct EyeDrawSurface {
+  TFT_eSprite* canvas;
+  int originY;
+  explicit EyeDrawSurface(TFT_eSprite* target, int origin = 0) : canvas(target && target->created() ? target : nullptr), originY(origin) {}
+  void fillRect(int x, int y, int w, int h, uint16_t c) {
+    if (canvas) canvas->fillRect(x,y-originY,w,h,c); else tft.fillRect(x,y+UI_HEADER_H,w,h,c);
+  }
+  void fillRoundRect(int x, int y, int w, int h, int r, uint16_t c) {
+    if (canvas) canvas->fillRoundRect(x,y-originY,w,h,r,c); else tft.fillRoundRect(x,y+UI_HEADER_H,w,h,r,c);
+  }
+  void fillTriangle(int x, int y, int a, int b, int u, int v, uint16_t c) {
+    if (canvas) canvas->fillTriangle(x,y-originY,a,b-originY,u,v-originY,c);
+    else tft.fillTriangle(x,y+UI_HEADER_H,a,b+UI_HEADER_H,u,v+UI_HEADER_H,c);
+  }
+  void drawFastHLine(int x, int y, int w, uint16_t c) {
+    if (canvas) canvas->drawFastHLine(x,y-originY,w,c); else tft.drawFastHLine(x,y+UI_HEADER_H,w,c);
+  }
+};
+
+// An eight-row monochrome compositor needs only 160/320 bytes of pixel RAM.
+// Push finished strips instead of clearing the visible panel between eye shapes.
+static TFT_eSprite* eyeStripCanvas = nullptr;
+inline bool prepareEyeStrips() {
+  if (eyeStripCanvas && eyeStripCanvas->created()) return true;
+  if (companion_memory::snapshot().free < 4096) return false;
+  if (!eyeStripCanvas) eyeStripCanvas = new (std::nothrow) TFT_eSprite(&tft);
+  if (!eyeStripCanvas) return false;
+  eyeStripCanvas->setColorDepth(1);
+  return eyeStripCanvas->createSprite(SCREEN_W, 8) != nullptr;
+}
+inline void releaseEyeStrips() {
+  if (eyeStripCanvas) { eyeStripCanvas->deleteSprite(); delete eyeStripCanvas; eyeStripCanvas = nullptr; }
+}
+template<class Paint> void paintEyeStrips(int top, Paint paint) {
+  const uint16_t fg = tft.bitmap_fg, bg = tft.bitmap_bg;
+  tft.setBitmapColor(TFT_WHITE, COLOR_BG);
+  int bottom = eyeRenderBottom() - UI_HEADER_H;
+  for (int y = top; y < bottom; y += 8) {
+    eyeStripCanvas->fillSprite(0);
+    paint(eyeStripCanvas, y);
+    eyeStripCanvas->pushSprite(0, y + UI_HEADER_H, 0, 0, SCREEN_W, min(8, bottom - y));
+  }
+  tft.setBitmapColor(fg, bg);
+}
+
 inline void invalidateThoughtBubble() { thoughtDirectDirty = true; }
+inline bool beginEyeTheme(int theme) {
+  static int paintedTheme = activeTheme;
+  if (paintedTheme == theme) return false;
+  EyeRenderViewport viewport;
+  tft.fillRect(0, UI_HEADER_H, SCREEN_W, eyeRenderBottom() - UI_HEADER_H, COLOR_BG);
+  thoughtDirectVisible = false;
+  thoughtCompositedVisible = false;
+  invalidateThoughtBubble();
+  paintedTheme = theme;
+  return true;
+}
 inline void setThoughtSpriteCompositing(bool enabled) {
   if (enabled && thoughtDirectCanvas) {
     thoughtDirectCanvas->deleteSprite();
@@ -330,7 +351,8 @@ inline void setThoughtSpriteCompositing(bool enabled) {
   }
   if (thoughtSpriteCompositing != enabled) {
     thoughtDirectDirty = true;
-    thoughtDirectVisible = false;
+    thoughtDirectVisible = !enabled && thoughtCompositedVisible;
+    thoughtCompositedVisible = false;
   }
   thoughtSpriteCompositing = enabled;
 }
@@ -349,10 +371,7 @@ inline bool prepareEyeCanvas(TFT_eSprite*& canvas, int w, int h) {
   }
   if (!canvas) canvas = new (std::nothrow) TFT_eSprite(&tft);
   if (canvas) {
-    canvas->setColorDepth(16);
-    if (canvas->createSprite(w, h)) { failed = false; return true; }
-    canvas->setColorDepth(8);
-    if (canvas->createSprite(w, h)) { failed = false; return true; }
+    if (companion_memory::createSprite(*canvas, w, h)) { failed = false; return true; }
   }
   failed = true;
   lastFailure = now;
@@ -366,10 +385,15 @@ inline bool thoughtDeadlineReached(uint32_t now, uint32_t deadline) {
 
 static const uint32_t THOUGHT_FADE_MS = THOUGHT_FADE_STEPS * 50UL;
 static const uint32_t THOUGHT_PAGE_MS = 3000UL;
+inline uint32_t thoughtDisplayMs() { return 10UL * 60UL * 1000UL; }
+inline uint32_t thoughtIntervalMs() {
+  return thoughtDisplayMs() + THOUGHT_FADE_MS + 1000UL;
+}
 static const int THOUGHT_BOX_W = (SCR_W - 12 < 150 ? SCR_W - 12 : 150);
 static const int THOUGHT_BOX_H = 28;
 static const int THOUGHT_BOX_X = SCR_W - THOUGHT_BOX_W - 6;
 static const int THOUGHT_BOX_Y = UI_HEADER_H;
+static const int THOUGHT_FACE_TOP = THOUGHT_BOX_H + 9;
 
 // Theme 1 is partial-redraw: restore eyes/stars under an expired bubble.
 extern void drawEyes();
@@ -383,29 +407,29 @@ inline void clearThoughtBubbleArea() {
     delete thoughtDirectCanvas;
     thoughtDirectCanvas = nullptr;
   }
-  drawStarfield();
-  drawEyes();
+  if (activeTheme == 0) { drawStarfield(); drawEyes(); }
   thoughtDirectDirty = true;
 }
 
 inline void updateThoughtLifetime(uint32_t now) {
   if (!activeBubble.active) return;
   uint32_t elapsed = now - (uint32_t)activeBubble.shownAt;
-  if (elapsed < THOUGHT_DISPLAY_MS) {
+  const uint32_t displayMs = thoughtDisplayMs();
+  if (elapsed < displayMs) {
     activeBubble.fadeAlpha = 255;
     activeBubble.fadingIn = false;
     activeBubble.fadingOut = false;
     return;
   }
 
-  uint32_t fadeElapsed = elapsed - THOUGHT_DISPLAY_MS;
+  uint32_t fadeElapsed = elapsed - displayMs;
   if (fadeElapsed >= THOUGHT_FADE_MS) {
     activeBubble.fadeAlpha = 0;
     activeBubble.active = false;
     activeBubble.fadingIn = false;
     activeBubble.fadingOut = false;
   } else {
-    // Multiply only the bounded fade interval, never the five-minute lifetime.
+    // Multiply only the bounded fade interval, never the full lifetime.
     activeBubble.fadeAlpha = 255UL * (THOUGHT_FADE_MS - fadeElapsed) / THOUGHT_FADE_MS;
     activeBubble.fadingOut = true;
   }
@@ -439,6 +463,18 @@ inline int wrapThoughtLines(char lines[16][25]) {
   return count;
 }
 
+struct ThoughtPageLayout { int x, width, height; };
+inline ThoughtPageLayout thoughtPageLayout(char lines[16][25], int lineCount, int page) {
+  const int rows = min(3, max(0, lineCount - page * 3));
+  int longest = 0;
+  for (int i = 0; i < rows; ++i)
+    longest = max(longest, int(strlen(lines[page * 3 + i])) * 6);
+  const int width = min(THOUGHT_BOX_W, max(36, longest + 6));
+  const int x = constrain(SCREEN_W * 3 / 4 - width / 2,
+                          THOUGHT_BOX_X, SCREEN_W - 6 - width);
+  return {x, width, rows * 8 + 4};
+}
+
 template <typename T>
 void paintThoughtPage(T* display, int x, int y, char lines[16][25], int lineCount, int page) {
   float alpha = activeBubble.fadeAlpha / 255.0f;
@@ -446,11 +482,14 @@ void paintThoughtPage(T* display, int x, int y, char lines[16][25], int lineCoun
   uint16_t bgColor = blendColor(CLR_BG, CLR_SURFACE_2, alpha);
   uint16_t textColor = blendColor(CLR_BG, CLR_TEXT_HI, alpha);
 
-  // Clear the complete fixed footprint, including the tail and prior page.
+  // Clear the maximum footprint so a shorter thought cannot leave old pixels.
   display->fillRect(x, y, THOUGHT_BOX_W, THOUGHT_BOX_H + 9, CLR_BG);
-  display->fillRoundRect(x, y, THOUGHT_BOX_W, THOUGHT_BOX_H, 2, bgColor);
-  display->drawRoundRect(x, y, THOUGHT_BOX_W, THOUGHT_BOX_H, 2, borderColor);
-  int tailX = x + 8, tailY = y + THOUGHT_BOX_H;
+  const ThoughtPageLayout layout = thoughtPageLayout(lines, lineCount, page);
+  x += layout.x - THOUGHT_BOX_X;
+  display->fillRoundRect(x, y, layout.width, layout.height, 4, bgColor);
+  display->drawRoundRect(x, y, layout.width, layout.height, 4, borderColor);
+  int tailOffset = constrain(SCREEN_W * 3 / 4 - layout.x, 12, layout.width - 12);
+  int tailX = x + tailOffset, tailY = y + layout.height;
   display->fillTriangle(tailX, tailY, tailX + 4, tailY, tailX - 2, tailY + 4, bgColor);
   display->drawLine(tailX, tailY, tailX - 2, tailY + 4, borderColor);
   display->drawLine(tailX + 4, tailY, tailX - 2, tailY + 4, borderColor);
@@ -480,6 +519,7 @@ void renderThoughtBubble(T* display, bool isSprite) {
   activeBubble.text[sizeof(activeBubble.text) - 1] = '\0';
   updateThoughtLifetime((uint32_t)millis());
   if (!activeBubble.active) {
+    if (isSprite) thoughtCompositedVisible = false;
     if (!isSprite) clearThoughtBubbleArea();
     return;
   }
@@ -502,6 +542,7 @@ void renderThoughtBubble(T* display, bool isSprite) {
 
   if (isSprite) {
     paintThoughtPage(display, THOUGHT_BOX_X, 0, lines, lineCount, page);
+    thoughtCompositedVisible = true;
   } else if (prepareEyeCanvas(thoughtDirectCanvas, THOUGHT_BOX_W, THOUGHT_BOX_H + 9)) {
     thoughtDirectCanvas->fillSprite(CLR_BG);
     paintThoughtPage(thoughtDirectCanvas, 0, 0, lines, lineCount, page);
@@ -519,12 +560,26 @@ void renderThoughtBubble(T* display, bool isSprite) {
 }
 
 inline void startThought(uint32_t now) {
+  thought_personality::sanitize(activeBubble.text, sizeof(activeBubble.text));
+  if (!activeBubble.text[0]) strcpy(activeBubble.text, "One small step is enough to begin.");
   activeBubble.active = activeBubble.text[0] != '\0';
   activeBubble.shownAt = now;
   activeBubble.fadeAlpha = 255;
   activeBubble.fadingIn = false;
   activeBubble.fadingOut = false;
   invalidateThoughtBubble();
+}
+
+inline bool dismissThought() {
+  bool visible = activeBubble.active;
+  activeBubble.active = false;
+  activeBubble.fadeAlpha = 0;
+  activeBubble.fadingIn = activeBubble.fadingOut = false;
+  overrideThought[0] = 0;
+  nextThoughtTime = millis() + thoughtDisplayMs();
+  clearThoughtBubbleArea();
+  invalidateThoughtBubble();
+  return visible;
 }
 
 template <typename T>
@@ -540,6 +595,7 @@ void tickThoughtScheduler(T* display, bool isSprite) {
     activeBubble.fadeAlpha = 0;
     activeBubble.fadingIn = false;
     activeBubble.fadingOut = false;
+    if (isSprite) thoughtCompositedVisible = false;
     if (!isSprite) clearThoughtBubbleArea();
     return;
   }
@@ -556,12 +612,12 @@ void tickThoughtScheduler(T* display, bool isSprite) {
         activeBubble.text[sizeof(activeBubble.text) - 1] = '\0';
         strcpy(thoughtLastOverride, activeBubble.text);
         startThought(now);
-        nextThoughtTime = now + random(THOUGHT_MIN_INTERVAL_MS, THOUGHT_MAX_INTERVAL_MS);
+        nextThoughtTime = now + thoughtIntervalMs();
       } else {
         // The transport clears active on every push, even identical text.
         // Restore the original lifetime, without restarting an expired thought.
         activeBubble.active = (now - (uint32_t)activeBubble.shownAt) <
-                              THOUGHT_DISPLAY_MS + THOUGHT_FADE_MS;
+                              thoughtDisplayMs() + THOUGHT_FADE_MS;
       }
     }
   }
@@ -571,7 +627,7 @@ void tickThoughtScheduler(T* display, bool isSprite) {
   if (!activeBubble.active && !wasActive && thoughtDeadlineReached(now, (uint32_t)nextThoughtTime)) {
     generateThought();
     startThought(now);
-    nextThoughtTime = now + random(THOUGHT_MIN_INTERVAL_MS, THOUGHT_MAX_INTERVAL_MS);
+    nextThoughtTime = now + thoughtIntervalMs();
   }
   renderThoughtBubble(display, isSprite);
 }

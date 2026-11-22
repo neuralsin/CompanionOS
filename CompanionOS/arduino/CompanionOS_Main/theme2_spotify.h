@@ -21,8 +21,8 @@ extern void drawIconRepeat(int cx, int cy, uint16_t color);
 
 // ── T2 Spotify Color Palette ──
 #define T2S_BG          0x0000  // Black
-#define T2S_ACCENT      0x07E0  // Spotify Green
-#define T2S_DIM         0x4208  // Mid-dark grey
+#define T2S_ACCENT      0xFFFF  // Content and transport stay neutral
+#define T2S_DIM         0x94B2  // Readable secondary text on black
 #define T2S_FRAME       0x2104  // Dark grey border
 #define T2S_BLUE        0x0336  // ThingPulse blue
 #define T2S_GREEN       0x07E0  // Spotify green
@@ -53,7 +53,7 @@ extern bool forceSpotifyRedraw;
 
 void t2_redrawSpotifyPartial() {
   if (currentState != STATE_SPOTIFY || activeTheme != 1) return;
-  String incomingTitle = currentTrack.length() ? currentTrack : "No Active Media";
+  String incomingTitle = currentTrack.length() ? currentTrack : "Nothing playing";
   static uint32_t artVersion = 0;
   static bool placeholder = false;
   if (forceSpotifyRedraw || incomingTitle != t2s_lastTrack || artVersion != albumArtRevision) {
@@ -70,8 +70,7 @@ void t2_redrawSpotifyPartial() {
 
   // ── Album Art ──
   if (!t2s_artDrawn && albumArtReady && albumArt) {
-    tft.drawRect(T2S_ART_X - 2, T2S_ART_Y - 2, T2S_ART_SIZE + 4, T2S_ART_SIZE + 4, T2S_FRAME);
-    tft.drawRect(T2S_ART_X - 1, T2S_ART_Y - 1, T2S_ART_SIZE + 2, T2S_ART_SIZE + 2, T2S_DIM);
+    tft.drawRect(T2S_ART_X - 1, T2S_ART_Y - 1, T2S_ART_SIZE + 2, T2S_ART_SIZE + 2, T2S_FRAME);
     
     tft.setSwapBytes(true);
     tft.pushImage(T2S_ART_X, T2S_ART_Y, T2S_ART_SIZE, T2S_ART_SIZE, albumArt);
@@ -83,8 +82,8 @@ void t2_redrawSpotifyPartial() {
   // ── Track Info — Right of album art ──
   int infoX = T2S_ART_X + T2S_ART_SIZE + 6;
   int infoY = T2S_ART_Y;
-  String title = currentTrack.length() > 0 ? currentTrack : "No Active Media";
-  String artist = currentArtist.length() > 0 ? currentArtist : "CompanionOS";
+  String title = currentTrack.length() > 0 ? currentTrack : "Nothing playing";
+  String artist = currentArtist.length() > 0 ? currentArtist : "Spotify";
 
 
   if (forceSpotifyRedraw || title != t2s_lastTrack) {
@@ -118,7 +117,7 @@ void t2_redrawSpotifyPartial() {
       tft.fillCircle(progX + w, progY + 1, 3, T2S_ACCENT);
       t2s_lastProgW = w;
     }
-  } else {
+  } else if (t2s_lastProgW != -1 || forceSpotifyRedraw) {
     tft.fillRect(progX, progY, progW, 2, T2S_FRAME);
     t2s_lastProgW = -1;
   }
@@ -127,12 +126,14 @@ void t2_redrawSpotifyPartial() {
   char t1[12], t2[12];
   sprintf(t1, "%d:%02d", (playProgress/1000)/60, (playProgress/1000)%60);
   sprintf(t2, "%d:%02d", (playDuration/1000)/60, (playDuration/1000)%60);
-  tft.setTextColor(T2S_DIM, T2S_BG);
-  char pt1[12], pt2[12];
-  sprintf(pt1, "%-5s", t1);
-  sprintf(pt2, "%5s", t2);
-  tft.drawString(pt1, progX, progY + 5, 1);
-  tft.drawRightString(pt2, progX + progW, progY + 5, 1);
+  static String previousTime, previousDuration;
+  if (forceSpotifyRedraw || previousTime != t1 || previousDuration != t2) {
+    tft.fillRect(progX, progY + 5, progW, 8, T2S_BG);
+    tft.setTextColor(T2S_DIM, T2S_BG);
+    tft.drawString(t1, progX, progY + 5, 1);
+    tft.drawRightString(t2, progX + progW, progY + 5, 1);
+    previousTime = t1; previousDuration = t2;
+  }
 
   // ── Playback Controls Row ──
   int ctrlY = progY + 20;
@@ -158,17 +159,18 @@ void t2_redrawSpotifyPartial() {
   bool lyricsChanged = (currentLyrics != t2s_lastLyric ||
                         currentLyricsLine2 != t2s_lastLyric2 || forceSpotifyRedraw);
   static String lastServiceStatus;
-  static bool lastLyricPlaying = false;
-  lyricsChanged = lyricsChanged || standaloneSpotifyStatus != lastServiceStatus || lastLyricPlaying != isPlaying;
+  static String lastLyricStatus;
+  static bool lastSynced = true;
+  lyricsChanged = lyricsChanged || standaloneSpotifyStatus != lastServiceStatus || standaloneLyricsStatus != lastLyricStatus || lastSynced != standaloneLyricsSynced;
 
   if (lyricsChanged) {
     tft.fillRect(0, lyrY, SCREEN_W, 28, T2S_BG);
-    if (currentLyrics.length() > 0) {
+    if (currentLyrics.length() > 0 || currentLyricsLine2.length() > 0) {
       int yC = lyrY;
 
       // Current line (bright accent)
-      tft.setTextColor(T2S_ACCENT, T2S_BG);
-      drawTruncatedText(lyrX, yC, currentLyrics.c_str(), lyrW, T2S_ACCENT, 1, T2S_BG);
+      tft.setTextColor(TFT_WHITE, T2S_BG);
+      drawTruncatedText(lyrX, yC, currentLyrics.c_str(), lyrW, TFT_WHITE, 1, T2S_BG);
       yC += 10;
 
       // Next line (dim)
@@ -176,14 +178,17 @@ void t2_redrawSpotifyPartial() {
         tft.setTextColor(T2S_DIM, T2S_BG);
         drawTruncatedText(lyrX, yC, currentLyricsLine2.c_str(), lyrW, T2S_DIM, 1, T2S_BG);
       }
+      if (!standaloneLyricsSynced)
+        drawTruncatedText(lyrX, lyrY + 20, "TEXT", lyrW, T2S_DIM, 1, T2S_BG);
     } else {
-      String status = standaloneSpotifyStatus.length() ? standaloneSpotifyStatus : (currentTrack.length() ? (isPlaying ? "Now playing" : "Paused") : "Ready for music");
+      String status = standaloneSpotifyStatus.length() ? standaloneSpotifyStatus : standaloneLyricsStatus;
       drawWrappedText(lyrX, lyrY, status.c_str(), lyrW, 28, T2S_DIM, 1, T2S_BG);
     }
     t2s_lastLyric = currentLyrics;
     t2s_lastLyric2 = currentLyricsLine2;
     lastServiceStatus = standaloneSpotifyStatus;
-    lastLyricPlaying = isPlaying;
+    lastLyricStatus = standaloneLyricsStatus;
+    lastSynced = standaloneLyricsSynced;
   }
   forceSpotifyRedraw = false;
 }
